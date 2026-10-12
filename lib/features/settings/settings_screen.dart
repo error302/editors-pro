@@ -8,11 +8,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../core/theme/app_theme.dart';
-import '../../../core/extensions/context_extensions.dart';
-import '../../../core/constants/app_constants.dart';
-import '../../../core/services/database_provider.dart';
-import '../../../core/services/engine_service.dart';
+import '../../core/theme/app_theme.dart';
+import '../../core/extensions/context_extensions.dart';
+import '../../core/constants/app_constants.dart';
+import '../../core/constants/cloud_config.dart';
+import '../../core/services/database_provider.dart';
+import '../../core/services/engine_service.dart';
 import '../cloud/providers/cloud_provider.dart';
 import '../editor/providers/proxy_provider.dart';
 import 'providers/settings_provider.dart';
@@ -36,7 +37,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   bool _isClearingProxyCache = false;
   String? _proxyCacheSizeDisplay;
   String _cloudProvider = 'None';
-  bool _autoSyncEnabled = false;
 
   @override
   void initState() {
@@ -250,7 +250,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             children: [
               _SettingsSwitch(
                 label: 'Auto-Save',
-                subtitle: 'Automatically save project every $_autoSaveIntervalMinutes min',
+                subtitle:
+                    'Automatically save project every $_autoSaveIntervalMinutes min',
                 value: _autoSaveEnabled,
                 onChanged: (v) {
                   setState(() => _autoSaveEnabled = v);
@@ -336,14 +337,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 const Divider(height: 1),
                 _SettingsSwitch(
                   label: 'Auto-Generate Proxies',
-                  subtitle: 'Automatically create proxies when importing high-res media',
+                  subtitle:
+                      'Automatically create proxies when importing high-res media',
                   value: proxyState.autoProxyEnabled,
                   onChanged: (v) => proxyNotifier.setAutoProxy(v),
                 ),
                 const Divider(height: 1),
                 ListTile(
-                  leading: const Icon(Icons.video_settings_outlined, color: AppTheme.primary),
-                  title: Text('Proxy Cache', style: context.textTheme.bodyMedium),
+                  leading: const Icon(Icons.video_settings_outlined,
+                      color: AppTheme.primary),
+                  title:
+                      Text('Proxy Cache', style: context.textTheme.bodyMedium),
                   subtitle: Text(
                     proxyState.cacheSizeBytes > 0
                         ? '${_formatBytes(proxyState.cacheSizeBytes)} · ${proxyState.activeProxyCount} active prox${proxyState.activeProxyCount == 1 ? 'y' : 'ies'}'
@@ -365,7 +369,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 ),
                 const Divider(height: 1),
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   child: Text(
                     'Proxies are lower-resolution copies used for smooth editing. '
                     'The original full-resolution media is always used for export.',
@@ -394,7 +399,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               const Divider(height: 1),
               _SettingsSwitchWithBadge(
                 label: 'Hardware Encoding',
-                subtitle: 'Use hardware encoder (NVENC / VideoToolbox) for faster exports',
+                subtitle:
+                    'Use hardware encoder (NVENC / VideoToolbox) for faster exports',
                 value: settings.hardwareEncodingEnabled,
                 badgeLabel: 'GPU',
                 showBadge: settings.hardwareEncodingEnabled,
@@ -410,16 +416,22 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           _SettingsCard(
             children: [
               ListTile(
-                leading: const Icon(Icons.folder_outlined, color: AppTheme.primary),
-                title: Text('Clear Preview Cache', style: context.textTheme.bodyMedium),
-                subtitle: Text('Free up disk space used by cached frames', style: context.textTheme.bodySmall),
-                trailing: Icon(Icons.chevron_right, color: AppTheme.textDisabled),
+                leading:
+                    const Icon(Icons.folder_outlined, color: AppTheme.primary),
+                title: Text('Clear Preview Cache',
+                    style: context.textTheme.bodyMedium),
+                subtitle: Text('Free up disk space used by cached frames',
+                    style: context.textTheme.bodySmall),
+                trailing:
+                    Icon(Icons.chevron_right, color: AppTheme.textDisabled),
                 onTap: () => _showClearCacheDialog(context),
               ),
               const Divider(height: 1),
               ListTile(
-                leading: const Icon(Icons.video_settings_outlined, color: AppTheme.primary),
-                title: Text('Clear Proxy Cache', style: context.textTheme.bodyMedium),
+                leading: const Icon(Icons.video_settings_outlined,
+                    color: AppTheme.primary),
+                title: Text('Clear Proxy Cache',
+                    style: context.textTheme.bodyMedium),
                 subtitle: Text(
                   _proxyCacheSizeDisplay != null
                       ? 'Current size: $_proxyCacheSizeDisplay'
@@ -433,14 +445,20 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
                     : Icon(Icons.chevron_right, color: AppTheme.textDisabled),
-                onTap: _isClearingProxyCache ? null : () => _showClearProxyCacheDialog(context),
+                onTap: _isClearingProxyCache
+                    ? null
+                    : () => _showClearProxyCacheDialog(context),
               ),
               const Divider(height: 1),
               ListTile(
-                leading: const Icon(Icons.delete_sweep_outlined, color: AppTheme.error),
-                title: Text('Delete All Projects', style: context.textTheme.bodyMedium),
-                subtitle: Text('Permanently remove all projects and assets', style: context.textTheme.bodySmall),
-                trailing: Icon(Icons.chevron_right, color: AppTheme.textDisabled),
+                leading: const Icon(Icons.delete_sweep_outlined,
+                    color: AppTheme.error),
+                title: Text('Delete All Projects',
+                    style: context.textTheme.bodyMedium),
+                subtitle: Text('Permanently remove all projects and assets',
+                    style: context.textTheme.bodySmall),
+                trailing:
+                    Icon(Icons.chevron_right, color: AppTheme.textDisabled),
                 onTap: () => _showDeleteAllDialog(context),
               ),
             ],
@@ -448,91 +466,82 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
           const SizedBox(height: 24),
 
-          // ─── Cloud Sync (Phase B.7: gated behind experimental flag) ───
-          // The entire Cloud Sync section is hidden when the experimental
-          // flag is off, since the Rust backend is a placeholder.
+          // Cloud Sync stays opt-in. Sign-in is unavailable until OAuth is
+          // configured for this package and signing certificate.
           if (settings.experimentalCloudSync) ...[
             _SectionHeader(title: 'Cloud Sync'),
-          _SettingsCard(
-            children: [
-              _SettingsDropdown(
-                label: 'Cloud Provider',
-                value: _cloudProvider,
-                options: const ['None', 'Google Drive', 'Dropbox', 'Custom'],
-                onChanged: (v) {
-                  setState(() => _cloudProvider = v);
-                  _setPreference('cloud_provider', v);
-                  ref.read(cloudSyncProvider.notifier).setProvider(
-                        v == 'None' ? 'None' : v,
-                      );
-                },
-              ),
-              const Divider(height: 1),
-              _SettingsSwitch(
-                label: 'Auto-Sync',
-                subtitle: 'Automatically sync projects when changes are detected',
-                value: _autoSyncEnabled,
-                onChanged: (v) {
-                  setState(() => _autoSyncEnabled = v);
-                  _setPreference('auto_sync_enabled', v.toString());
-                },
-              ),
-              if (_cloudProvider != 'None') ...[
+            _SettingsCard(
+              children: [
+                _SettingsDropdown(
+                  label: 'Cloud Provider',
+                  value: _cloudProvider,
+                  options: const ['None', 'Google Drive'],
+                  onChanged: (v) {
+                    setState(() => _cloudProvider = v);
+                    _setPreference('cloud_provider', v);
+                    ref.read(cloudSyncProvider.notifier).setProvider(
+                          v == 'None' ? 'None' : v,
+                        );
+                  },
+                ),
+                if (_cloudProvider != 'None') ...[
+                  const Divider(height: 1),
+                  Consumer(builder: (context, ref, _) {
+                    final syncState = ref.watch(cloudSyncProvider);
+                    return ListTile(
+                      leading: Icon(
+                        syncState.isAuthenticated
+                            ? Icons.cloud_done
+                            : Icons.cloud_outlined,
+                        color: syncState.isAuthenticated
+                            ? AppTheme.success
+                            : AppTheme.textSecondary,
+                      ),
+                      title: Text(
+                        syncState.isAuthenticated ? 'Signed In' : 'Sign In',
+                        style: context.textTheme.bodyMedium,
+                      ),
+                      subtitle: syncState.isAuthenticated &&
+                              syncState.accountName != null
+                          ? Text(
+                              syncState.accountName!,
+                              style: context.textTheme.bodySmall,
+                            )
+                          : null,
+                      trailing: syncState.isAuthenticated
+                          ? TextButton(
+                              onPressed: () => ref
+                                  .read(cloudSyncProvider.notifier)
+                                  .signOut(),
+                              child: const Text('Sign Out'),
+                            )
+                          : ElevatedButton(
+                              onPressed: () => context.push('/cloud'),
+                              child: const Text('Sign In'),
+                            ),
+                    );
+                  }),
+                ],
                 const Divider(height: 1),
-                Consumer(builder: (context, ref, _) {
-                  final syncState = ref.watch(cloudSyncProvider);
-                  return ListTile(
-                    leading: Icon(
-                      syncState.isAuthenticated
-                          ? Icons.cloud_done
-                          : Icons.cloud_outlined,
-                      color: syncState.isAuthenticated
-                          ? AppTheme.success
-                          : AppTheme.textSecondary,
-                    ),
-                    title: Text(
-                      syncState.isAuthenticated ? 'Signed In' : 'Sign In',
-                      style: context.textTheme.bodyMedium,
-                    ),
-                    subtitle: syncState.isAuthenticated && syncState.accountName != null
-                        ? Text(
-                            syncState.accountName!,
-                            style: context.textTheme.bodySmall,
-                          )
-                        : null,
-                    trailing: syncState.isAuthenticated
-                        ? TextButton(
-                            onPressed: () =>
-                                ref.read(cloudSyncProvider.notifier).signOut(),
-                            child: const Text('Sign Out'),
-                          )
-                        : ElevatedButton(
-                            onPressed: () => context.push('/cloud'),
-                            child: const Text('Sign In'),
-                          ),
-                  );
-                }),
+                ListTile(
+                  leading: const Icon(
+                    Icons.cloud_sync_outlined,
+                    color: AppTheme.primary,
+                  ),
+                  title: Text(
+                    'Manage Cloud Sync',
+                    style: context.textTheme.bodyMedium,
+                  ),
+                  subtitle: Text(
+                    'View synced projects and resolve conflicts',
+                    style: context.textTheme.bodySmall,
+                  ),
+                  trailing:
+                      Icon(Icons.chevron_right, color: AppTheme.textDisabled),
+                  onTap: () => context.push('/cloud'),
+                ),
               ],
-              const Divider(height: 1),
-              ListTile(
-                leading: const Icon(
-                  Icons.cloud_sync_outlined,
-                  color: AppTheme.primary,
-                ),
-                title: Text(
-                  'Manage Cloud Sync',
-                  style: context.textTheme.bodyMedium,
-                ),
-                subtitle: Text(
-                  'View synced projects and resolve conflicts',
-                  style: context.textTheme.bodySmall,
-                ),
-                trailing: Icon(Icons.chevron_right, color: AppTheme.textDisabled),
-                onTap: () => context.push('/cloud'),
-              ),
-            ],
-          ),
-
+            ),
             const SizedBox(height: 24),
           ],
 
@@ -540,18 +549,26 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           _SectionHeader(title: 'Privacy & Data'),
           _SettingsCard(
             children: [
-              _SettingsSwitch(
-                label: 'Crash Reporting',
-                subtitle: 'Helps us improve the app by sending crash reports',
-                value: settings.crashReportingEnabled,
-                onChanged: (v) => settingsNotifier.setCrashReporting(v),
+              ListTile(
+                leading: const Icon(Icons.bug_report_outlined,
+                    color: AppTheme.textSecondary),
+                title: Text('Crash diagnostics',
+                    style: context.textTheme.bodyMedium),
+                subtitle: Text(
+                  'Kept in memory on this device. No external crash-reporting service is configured.',
+                  style: context.textTheme.bodySmall,
+                ),
               ),
               const Divider(height: 1),
-              _SettingsSwitch(
-                label: 'Anonymous Analytics',
-                subtitle: 'Share anonymous usage data to improve features',
-                value: settings.analyticsEnabled,
-                onChanged: (v) => settingsNotifier.setAnalytics(v),
+              ListTile(
+                leading: const Icon(Icons.insights_outlined,
+                    color: AppTheme.textSecondary),
+                title: Text('Usage analytics',
+                    style: context.textTheme.bodyMedium),
+                subtitle: Text(
+                  'This build does not collect or send usage analytics.',
+                  style: context.textTheme.bodySmall,
+                ),
               ),
             ],
           ),
@@ -570,13 +587,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 subtitle:
                     'Enable transcription UI (currently simulated; real Whisper coming in Phase D)',
                 value: settings.experimentalAutoCaptions,
-                onChanged: (v) => settingsNotifier.setExperimentalAutoCaptions(v),
+                onChanged: (v) =>
+                    settingsNotifier.setExperimentalAutoCaptions(v),
               ),
               const Divider(height: 1),
               _SettingsSwitch(
                 label: 'Cloud Sync',
-                subtitle:
-                    'Show the Cloud tab (placeholder backend; Google Drive coming in Phase D)',
+                subtitle: CloudConfig.isGoogleDriveConfigured
+                    ? 'Show the optional Google Drive sync screen'
+                    : 'Google Drive sync is unavailable until OAuth is configured',
                 value: settings.experimentalCloudSync,
                 onChanged: (v) => settingsNotifier.setExperimentalCloudSync(v),
               ),
@@ -599,39 +618,45 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           _SettingsCard(
             children: [
               ListTile(
-                leading: const Icon(Icons.info_outline, color: AppTheme.textSecondary),
+                leading: const Icon(Icons.info_outline,
+                    color: AppTheme.textSecondary),
                 title: Text('Version', style: context.textTheme.bodyMedium),
                 trailing: Text(
                   '${AppConstants.appVersion}',
-                  style: context.textTheme.bodySmall?.copyWith(color: AppTheme.textSecondary),
+                  style: context.textTheme.bodySmall
+                      ?.copyWith(color: AppTheme.textSecondary),
                 ),
               ),
               const Divider(height: 1),
               ListTile(
                 leading: const Icon(Icons.code, color: AppTheme.textSecondary),
-                title: Text('Architecture', style: context.textTheme.bodyMedium),
+                title:
+                    Text('Architecture', style: context.textTheme.bodyMedium),
                 trailing: Text(
                   'Flutter + Rust',
-                  style: context.textTheme.bodySmall?.copyWith(color: AppTheme.textSecondary),
+                  style: context.textTheme.bodySmall
+                      ?.copyWith(color: AppTheme.textSecondary),
                 ),
               ),
               const Divider(height: 1),
               ListTile(
-                leading: const Icon(Icons.privacy_tip_outlined, color: AppTheme.textSecondary),
-                title: Text('Privacy Policy', style: context.textTheme.bodyMedium),
-                trailing: Icon(Icons.open_in_new, size: 18, color: AppTheme.textDisabled),
-                onTap: () {
-                  // Placeholder — would launch URL in production
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Privacy Policy — coming soon')),
-                  );
-                },
+                leading: const Icon(Icons.privacy_tip_outlined,
+                    color: AppTheme.textSecondary),
+                title:
+                    Text('Privacy & Data', style: context.textTheme.bodyMedium),
+                subtitle: Text('How this build handles your information',
+                    style: context.textTheme.bodySmall),
+                trailing:
+                    Icon(Icons.chevron_right, color: AppTheme.textDisabled),
+                onTap: _showPrivacyAndData,
               ),
               const Divider(height: 1),
               ListTile(
-                leading: const Icon(Icons.description_outlined, color: AppTheme.textSecondary),
+                leading: const Icon(Icons.description_outlined,
+                    color: AppTheme.textSecondary),
                 title: Text('Licenses', style: context.textTheme.bodyMedium),
-                trailing: Icon(Icons.chevron_right, color: AppTheme.textDisabled),
+                trailing:
+                    Icon(Icons.chevron_right, color: AppTheme.textDisabled),
                 onTap: () {
                   showLicensePage(
                     context: context,
@@ -642,9 +667,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               ),
               const Divider(height: 1),
               ListTile(
-                leading: const Icon(Icons.source_outlined, color: AppTheme.textSecondary),
-                title: Text('Open Source Notices', style: context.textTheme.bodyMedium),
-                trailing: Icon(Icons.chevron_right, color: AppTheme.textDisabled),
+                leading: const Icon(Icons.source_outlined,
+                    color: AppTheme.textSecondary),
+                title: Text('Open Source Notices',
+                    style: context.textTheme.bodyMedium),
+                trailing:
+                    Icon(Icons.chevron_right, color: AppTheme.textDisabled),
                 onTap: () {
                   showLicensePage(
                     context: context,
@@ -657,6 +685,55 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ),
 
           const SizedBox(height: 48),
+        ],
+      ),
+    );
+  }
+
+  void _showPrivacyAndData() {
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Privacy & Data'),
+        content: SizedBox(
+          width: 440,
+          child: SingleChildScrollView(
+            child: const Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text('On-device data',
+                    style: TextStyle(fontWeight: FontWeight.w600)),
+                SizedBox(height: 6),
+                Text(
+                    'Project records, editing choices, and preferences are stored on this device. The app reads media from the locations you select; exports are saved to the destination you choose.'),
+                SizedBox(height: 16),
+                Text('Diagnostics and analytics',
+                    style: TextStyle(fontWeight: FontWeight.w600)),
+                SizedBox(height: 6),
+                Text(
+                    'This build keeps crash diagnostics in memory while the app is running. It does not send crash reports or usage analytics to EDITORS-PRO.'),
+                SizedBox(height: 16),
+                Text('Google Drive',
+                    style: TextStyle(fontWeight: FontWeight.w600)),
+                SizedBox(height: 6),
+                Text(
+                    'Cloud transfer is optional. If enabled and configured, signing in and syncing sends project data to Google Drive under your Google account. Signing out disconnects this app but does not remove copies already stored in Drive.'),
+                SizedBox(height: 16),
+                Text('Store-release status',
+                    style: TextStyle(fontWeight: FontWeight.w600)),
+                SizedBox(height: 6),
+                Text(
+                    'A public privacy-policy URL and support contact have not been configured for this build. This in-app notice does not replace the policy and disclosures required for store release.'),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Close'),
+          ),
         ],
       ),
     );
@@ -927,7 +1004,7 @@ class _SettingsSlider extends StatelessWidget {
         children: [
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
+            children: [
               Text(label, style: context.textTheme.bodyMedium),
               Text(
                 '${value.round()} $unit',

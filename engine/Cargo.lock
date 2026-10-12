@@ -922,6 +922,7 @@ dependencies = [
  "fontdue",
  "image",
  "jni",
+ "libc",
  "log",
  "mockall",
  "ndk-sys 0.6.0+11769913",

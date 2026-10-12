@@ -527,6 +527,7 @@ fn fs_available_space(path: &std::path::Path) -> u64 {
     {
         use std::ffi::CString;
         use std::mem::MaybeUninit;
+        use std::os::unix::ffi::OsStrExt;
 
         let c_path = match CString::new(path.as_os_str().as_bytes()) {
             Ok(p) => p,

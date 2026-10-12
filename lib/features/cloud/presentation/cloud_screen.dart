@@ -6,14 +6,15 @@
 /// - Trigger sync operations
 /// - Resolve conflicts
 ///
-/// This is a FOUNDATION implementation — actual cloud API integration
-/// comes in a future phase.
+/// Google Drive is the only implemented provider. OAuth remains unavailable
+/// until the package ID and signing certificate are registered.
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/app_theme.dart';
 import '../../../core/extensions/context_extensions.dart';
+import '../../../core/constants/cloud_config.dart';
 import '../providers/cloud_provider.dart';
 
 class CloudScreen extends ConsumerStatefulWidget {
@@ -24,8 +25,6 @@ class CloudScreen extends ConsumerStatefulWidget {
 }
 
 class _CloudScreenState extends ConsumerState<CloudScreen> {
-  String _selectedProvider = 'Google Drive';
-
   @override
   void initState() {
     super.initState();
@@ -64,11 +63,7 @@ class _CloudScreenState extends ConsumerState<CloudScreen> {
             isAuthenticated: syncState.isAuthenticated,
             accountName: syncState.accountName,
             providerName: syncState.providerName,
-            selectedProvider: _selectedProvider,
-            onProviderChanged: (provider) {
-              setState(() => _selectedProvider = provider);
-              syncNotifier.setProvider(provider);
-            },
+            isProviderConfigured: CloudConfig.isGoogleDriveConfigured,
             onSignIn: () => _handleSignIn(syncNotifier),
           ),
 
@@ -115,7 +110,7 @@ class _CloudScreenState extends ConsumerState<CloudScreen> {
   }
 
   Future<void> _handleSignIn(CloudSyncNotifier notifier) async {
-    notifier.setProvider(_selectedProvider);
+    notifier.setProvider('Google Drive');
     await notifier.authenticate();
   }
 
@@ -258,16 +253,14 @@ class _ProviderStatusCard extends StatelessWidget {
   final bool isAuthenticated;
   final String? accountName;
   final String providerName;
-  final String selectedProvider;
-  final ValueChanged<String> onProviderChanged;
+  final bool isProviderConfigured;
   final VoidCallback onSignIn;
 
   const _ProviderStatusCard({
     required this.isAuthenticated,
     this.accountName,
     required this.providerName,
-    required this.selectedProvider,
-    required this.onProviderChanged,
+    required this.isProviderConfigured,
     required this.onSignIn,
   });
 
@@ -284,7 +277,9 @@ class _ProviderStatusCard extends StatelessWidget {
               children: [
                 Icon(
                   isAuthenticated ? Icons.cloud_done : Icons.cloud_off,
-                  color: isAuthenticated ? AppTheme.success : AppTheme.textSecondary,
+                  color: isAuthenticated
+                      ? AppTheme.success
+                      : AppTheme.textSecondary,
                   size: 28,
                 ),
                 const SizedBox(width: 12),
@@ -295,7 +290,9 @@ class _ProviderStatusCard extends StatelessWidget {
                       Text(
                         isAuthenticated ? 'Connected' : 'Not Connected',
                         style: context.textTheme.titleMedium?.copyWith(
-                          color: isAuthenticated ? AppTheme.success : AppTheme.textSecondary,
+                          color: isAuthenticated
+                              ? AppTheme.success
+                              : AppTheme.textSecondary,
                         ),
                       ),
                       if (isAuthenticated && accountName != null)
@@ -310,7 +307,8 @@ class _ProviderStatusCard extends StatelessWidget {
                 ),
                 if (isAuthenticated)
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
                       color: AppTheme.success.withOpacity(0.15),
                       borderRadius: BorderRadius.circular(4),
@@ -332,100 +330,32 @@ class _ProviderStatusCard extends StatelessWidget {
             ),
             if (!isAuthenticated) ...[
               const SizedBox(height: 16),
-              Text(
-                'Cloud Provider',
-                style: context.textTheme.bodySmall?.copyWith(
-                  color: AppTheme.textSecondary,
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.cloud_outlined),
+                title: const Text('Google Drive'),
+                subtitle: Text(
+                  isProviderConfigured
+                      ? 'Selected provider'
+                      : 'Unavailable until Google OAuth is configured for this app',
                 ),
-              ),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  _ProviderChip(
-                    label: 'Google Drive',
-                    icon: Icons.cloud_outlined,
-                    selected: selectedProvider == 'Google Drive',
-                    onTap: () => onProviderChanged('Google Drive'),
-                  ),
-                  const SizedBox(width: 8),
-                  _ProviderChip(
-                    label: 'Dropbox',
-                    icon: Icons.folder_outlined,
-                    selected: selectedProvider == 'Dropbox',
-                    onTap: () => onProviderChanged('Dropbox'),
-                  ),
-                  const SizedBox(width: 8),
-                  _ProviderChip(
-                    label: 'Custom',
-                    icon: Icons.dns_outlined,
-                    selected: selectedProvider == 'Custom',
-                    onTap: () => onProviderChanged('Custom'),
-                  ),
-                ],
+                trailing:
+                    const Icon(Icons.check_circle, color: AppTheme.primary),
               ),
               const SizedBox(height: 16),
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton.icon(
-                  onPressed: onSignIn,
+                  onPressed: isProviderConfigured ? onSignIn : null,
                   icon: const Icon(Icons.login, size: 18),
-                  label: Text('Sign in with $selectedProvider'),
+                  label: Text(
+                    isProviderConfigured
+                        ? 'Sign in with Google Drive'
+                        : 'Google Drive not configured',
+                  ),
                 ),
               ),
             ],
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _ProviderChip extends StatelessWidget {
-  final String label;
-  final IconData icon;
-  final bool selected;
-  final VoidCallback onTap;
-
-  const _ProviderChip({
-    required this.label,
-    required this.icon,
-    required this.selected,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(8),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(
-          color: selected
-              ? AppTheme.primary.withOpacity(0.15)
-              : AppTheme.surfaceVariant,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(
-            color: selected ? AppTheme.primary : Colors.transparent,
-            width: 1.5,
-          ),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              icon,
-              size: 16,
-              color: selected ? AppTheme.primary : AppTheme.textSecondary,
-            ),
-            const SizedBox(width: 6),
-            Text(
-              label,
-              style: context.textTheme.bodySmall?.copyWith(
-                color: selected ? AppTheme.primary : AppTheme.textSecondary,
-                fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
-              ),
-            ),
           ],
         ),
       ),
@@ -474,7 +404,8 @@ class _SyncActionsCard extends StatelessWidget {
                 ),
                 if (pendingConflicts > 0)
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
                       color: AppTheme.warning.withOpacity(0.15),
                       borderRadius: BorderRadius.circular(4),
@@ -620,7 +551,8 @@ class _CloudProjectsList extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                   decoration: BoxDecoration(
                     color: AppTheme.info.withOpacity(0.15),
                     borderRadius: BorderRadius.circular(4),
@@ -637,7 +569,8 @@ class _CloudProjectsList extends StatelessWidget {
                 const SizedBox(width: 4),
                 IconButton(
                   icon: const Icon(Icons.sync, size: 18),
-                  onPressed: isSyncing ? null : () => onSyncProject(project.projectId),
+                  onPressed:
+                      isSyncing ? null : () => onSyncProject(project.projectId),
                   tooltip: 'Sync',
                 ),
               ],
@@ -661,7 +594,8 @@ class _InfoCard extends StatelessWidget {
           children: [
             Row(
               children: [
-                const Icon(Icons.info_outline, color: AppTheme.secondary, size: 20),
+                const Icon(Icons.info_outline,
+                    color: AppTheme.secondary, size: 20),
                 const SizedBox(width: 8),
                 Text(
                   'How Cloud Sync Works',

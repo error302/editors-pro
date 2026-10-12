@@ -767,7 +767,7 @@ impl HardwareEncoder {
             output_path: None,
             frame_count: 0,
             start_time: std::time::Instant::now(),
-            #[cfg(all(target_os = "android", feature = "ffmpeg"))]
+            #[cfg(target_os = "android")]
             media_codec: None,
             #[cfg(all(target_os = "android", feature = "ffmpeg"))]
             mux_context: None,
