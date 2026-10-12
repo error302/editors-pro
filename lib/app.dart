@@ -90,6 +90,7 @@ class EditorsProApp extends ConsumerStatefulWidget {
 }
 
 class _EditorsProAppState extends ConsumerState<EditorsProApp> {
+  final _scaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>();
   String? _lastShownError;
 
   @override
@@ -117,7 +118,9 @@ class _EditorsProAppState extends ConsumerState<EditorsProApp> {
         _lastShownError = next.lastError;
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (!mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(
+          final messenger = _scaffoldMessengerKey.currentState;
+          if (messenger == null) return;
+          messenger.showSnackBar(
             SnackBar(
               content: Text(next.lastError!),
               backgroundColor: Theme.of(context).colorScheme.error,
@@ -126,9 +129,7 @@ class _EditorsProAppState extends ConsumerState<EditorsProApp> {
               action: SnackBarAction(
                 label: 'Dismiss',
                 textColor: Colors.white,
-                onPressed: () {
-                  ScaffoldMessenger.of(context).hideCurrentSnackBar();
-                },
+                onPressed: messenger.hideCurrentSnackBar,
               ),
             ),
           );
@@ -140,6 +141,7 @@ class _EditorsProAppState extends ConsumerState<EditorsProApp> {
     });
 
     return MaterialApp.router(
+      scaffoldMessengerKey: _scaffoldMessengerKey,
       title: 'EDITORS-PRO',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,

@@ -10,13 +10,15 @@
 library;
 
 import 'dart:developer' as developer;
-import 'dart:io' show File;
+import 'dart:io' show Directory, File;
 
 import 'package:drift/drift.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
 import 'package:uuid/uuid.dart';
+import 'package:editors_pro/src/rust/api/bridge_api.dart'
+    show BridgeProjectSettings;
 
 import '../../data/database/app_database.dart';
 import '../../data/models/project_model.dart';
@@ -63,7 +65,11 @@ class ProjectRepository {
       try {
         await EngineService.instance.api.createProject(
           name: name,
-          settings: null, // Use engine defaults matching our DB values
+          settings: BridgeProjectSettings(
+            width: width,
+            height: height,
+            fps: fps,
+          ),
         );
       } catch (e) {
         developer.log('Engine createProject failed: $e',
@@ -150,6 +156,7 @@ class ProjectRepository {
     try {
       final dir = await getApplicationDocumentsDirectory();
       final projectsDir = p.join(dir.path, AppConstants.projectsDir);
+      await Directory(projectsDir).create(recursive: true);
       final eppPath = p.join(
           projectsDir, '${project.id}${AppConstants.projectFileExtension}');
 
@@ -259,6 +266,7 @@ class ProjectRepository {
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
       thumbnailPath: row.thumbnailPath,
+      eppFilePath: row.eppFilePath,
     );
   }
 
@@ -289,6 +297,51 @@ class ProjectRepository {
       default:
         return MediaType.video;
     }
+  }
+}
+
+/// Engine activation lives outside [ProjectRepository]'s interface so
+/// editor test repositories do not need to depend on native project APIs.
+extension ProjectRepositoryEngineActivation on ProjectRepository {
+  /// Make a persisted project the engine's active project before editing.
+  /// Projects that have not been saved yet start as an empty native project.
+  Future<void> activateProjectInEngine(ProjectModel project) async {
+    final service = EngineService.instance;
+    if (!service.isInitialized) {
+      throw StateError('The editing engine is not ready.');
+    }
+
+    final documentsDirectory = await getApplicationDocumentsDirectory();
+    final projectsDirectory = p.normalize(
+      p.join(documentsDirectory.path, AppConstants.projectsDir),
+    );
+    final defaultPath = p.join(
+      projectsDirectory,
+      '${project.id}${AppConstants.projectFileExtension}',
+    );
+    final eppPath = project.eppFilePath == null
+        ? defaultPath
+        : p.normalize(project.eppFilePath!);
+
+    if (!p.isWithin(projectsDirectory, eppPath)) {
+      throw StateError('The saved project file path is invalid.');
+    }
+
+    final eppFile = File(eppPath);
+    if (await eppFile.exists()) {
+      await service.api.loadProject(filePath: eppPath);
+      return;
+    }
+
+    await Directory(projectsDirectory).create(recursive: true);
+    await service.api.createProject(
+      name: project.name,
+      settings: BridgeProjectSettings(
+        width: project.width,
+        height: project.height,
+        fps: project.fps,
+      ),
+    );
   }
 }
 

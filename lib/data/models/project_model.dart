@@ -18,6 +18,7 @@ class ProjectModel {
   final List<TrackModel> tracks;
   final List<MediaAssetModel> mediaAssets;
   final String? thumbnailPath;
+  final String? eppFilePath;
 
   const ProjectModel({
     required this.id,
@@ -31,6 +32,7 @@ class ProjectModel {
     this.tracks = const [],
     this.mediaAssets = const [],
     this.thumbnailPath,
+    this.eppFilePath,
   });
 
   ProjectModel copyWith({
@@ -45,6 +47,7 @@ class ProjectModel {
     List<TrackModel>? tracks,
     List<MediaAssetModel>? mediaAssets,
     String? thumbnailPath,
+    String? eppFilePath,
   }) {
     return ProjectModel(
       id: id ?? this.id,
@@ -58,6 +61,7 @@ class ProjectModel {
       tracks: tracks ?? this.tracks,
       mediaAssets: mediaAssets ?? this.mediaAssets,
       thumbnailPath: thumbnailPath ?? this.thumbnailPath,
+      eppFilePath: eppFilePath ?? this.eppFilePath,
     );
   }
 
@@ -138,6 +142,7 @@ class ClipModel {
   final List<EffectModel> effects;
   final TransitionModel? transitionIn;
   final TransitionModel? transitionOut;
+
   /// Phase E.14: whether this clip is locked (cannot be moved, trimmed,
   /// split, or deleted). A small lock icon appears on locked clips in
   /// the timeline. Useful for protecting key clips (e.g., the opening

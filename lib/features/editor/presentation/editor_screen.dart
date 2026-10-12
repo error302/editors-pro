@@ -1810,6 +1810,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
                 assetInfo.filePath,
                 assetInfo.fileName,
                 _mediaTypeFromString(assetInfo.mediaType),
+                assetId: assetInfo.id,
                 durationMs: assetInfo.durationMs?.toInt(),
                 width: assetInfo.width?.toInt(),
                 height: assetInfo.height?.toInt(),

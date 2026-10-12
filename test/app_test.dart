@@ -7,8 +7,11 @@ import 'package:editors_pro/app.dart';
 import 'package:editors_pro/core/services/engine_service.dart';
 import 'package:editors_pro/core/services/project_repository.dart';
 import 'package:editors_pro/data/models/project_model.dart';
+import 'package:editors_pro/features/editor/providers/editor_provider.dart';
 import 'package:editors_pro/features/projects/providers/project_provider.dart';
 import 'package:editors_pro/features/onboarding/providers/onboarding_provider.dart';
+import 'package:editors_pro/features/settings/providers/settings_provider.dart';
+import 'package:go_router/go_router.dart';
 
 /// A lightweight fake that satisfies the [ProjectRepository] interface
 /// without touching the filesystem or SQLite.
@@ -238,4 +241,51 @@ void main() {
     expect(container.read(projectProvider).recentProjects, isEmpty);
     expect(container.read(projectProvider).currentProject, isNull);
   });
+
+  testWidgets('shows editor errors through the root scaffold messenger',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final preferences = await SharedPreferences.getInstance();
+    late _TestEditorNotifier editorNotifier;
+    final router = GoRouter(
+      initialLocation: '/',
+      routes: [
+        GoRoute(
+          path: '/',
+          builder: (context, state) => const Scaffold(body: Text('Editor')),
+        ),
+      ],
+    );
+    addTearDown(router.dispose);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          settingsProvider.overrideWith(
+            (ref) => SettingsNotifier(preferences),
+          ),
+          editorProvider.overrideWith(
+            (ref) => editorNotifier = _TestEditorNotifier(ref),
+          ),
+          routerProvider.overrideWithValue(router),
+        ],
+        child: const EditorsProApp(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    editorNotifier.emitError('Import failed: test failure');
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+
+    expect(find.text('Import failed: test failure'), findsOneWidget);
+  });
+}
+
+class _TestEditorNotifier extends EditorNotifier {
+  _TestEditorNotifier(super.ref);
+
+  void emitError(String message) {
+    state = state.copyWith(lastError: message);
+  }
 }

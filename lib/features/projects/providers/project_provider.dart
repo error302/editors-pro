@@ -80,6 +80,7 @@ class ProjectNotifier extends StateNotifier<ProjectState> {
         recentProjects: [project, ...state.recentProjects],
         isLoading: false,
       );
+      await syncFromEngine();
     } catch (e) {
       developer.log('createProject failed: $e', name: 'ProjectNotifier');
       state = state.copyWith(isLoading: false, error: e.toString());
@@ -87,30 +88,26 @@ class ProjectNotifier extends StateNotifier<ProjectState> {
   }
 
   /// Open an existing project — loads from DB and restores in engine.
-  Future<void> openProject(ProjectModel project) async {
+  Future<bool> openProject(ProjectModel project) async {
     state = state.copyWith(isLoading: true, error: null);
     try {
       // Load full project with assets from DB
-      final fullProject = await _repo.getProject(project.id);
-      if (fullProject != null) {
-        // Try to restore from .epp file if available
-        // (The DB row has eppFilePath if the project was previously saved)
-        state = state.copyWith(
-          currentProject: fullProject,
-          isLoading: false,
-        );
-      } else {
-        state = state.copyWith(
-          currentProject: project,
-          isLoading: false,
-        );
-      }
+      final fullProject = await _repo.getProject(project.id) ?? project;
+      await _repo.activateProjectInEngine(fullProject);
+      state = state.copyWith(
+        currentProject: fullProject,
+        isLoading: false,
+        clearError: true,
+      );
+      await syncFromEngine();
+      return true;
     } catch (e) {
       developer.log('openProject failed: $e', name: 'ProjectNotifier');
       state = state.copyWith(
-        currentProject: project,
         isLoading: false,
+        error: 'Could not open project: $e',
       );
+      return false;
     }
   }
 
@@ -217,6 +214,7 @@ class ProjectNotifier extends StateNotifier<ProjectState> {
     String filePath,
     String fileName,
     MediaType mediaType, {
+    required String assetId,
     int? durationMs,
     int? width,
     int? height,
@@ -227,7 +225,7 @@ class ProjectNotifier extends StateNotifier<ProjectState> {
     if (state.currentProject == null) return;
 
     final asset = MediaAssetModel(
-      id: _uuid.v4(),
+      id: assetId,
       filePath: filePath,
       fileName: fileName,
       mediaType: mediaType,
@@ -416,11 +414,49 @@ class ProjectNotifier extends StateNotifier<ProjectState> {
       final api = EngineService.instance.api;
       final timelineState = await api.getTimelineState();
       if (timelineState != null) {
-        // Update duration from engine
-        final duration = await api.getTimelineDuration();
+        final existingClips = {
+          for (final track in state.currentProject!.tracks)
+            for (final clip in track.clips) clip.id: clip,
+        };
+        final tracks = timelineState.tracks.map((track) {
+          final trackType = switch (track.trackType.toLowerCase()) {
+            'video' => TrackType.video,
+            'audio' => TrackType.audio,
+            'text' => TrackType.text,
+            'effect' => TrackType.effect,
+            _ => TrackType.video,
+          };
+          return TrackModel(
+            id: track.id,
+            name: track.name,
+            trackType: trackType,
+            locked: track.locked,
+            visible: track.visible,
+            volume: track.volume,
+            orderIndex: timelineState.tracks.indexOf(track),
+            clips: track.clips.map((clipInfo) {
+              final existing = existingClips[clipInfo.id];
+              return ClipModel(
+                id: clipInfo.id,
+                assetId: clipInfo.assetId,
+                startMs: clipInfo.startMs,
+                durationMs: clipInfo.durationMs,
+                trimStartMs: clipInfo.trimStartMs,
+                trimEndMs: clipInfo.trimEndMs,
+                speed: clipInfo.speed,
+                opacity: clipInfo.opacity,
+                effects: existing?.effects ?? const [],
+                transitionIn: existing?.transitionIn,
+                transitionOut: existing?.transitionOut,
+                locked: existing?.locked ?? false,
+              );
+            }).toList(),
+          );
+        }).toList();
         state = state.copyWith(
           currentProject: state.currentProject!.copyWith(
-            durationMs: duration.toInt(),
+            durationMs: timelineState.durationMs,
+            tracks: tracks,
             updatedAt: DateTime.now().millisecondsSinceEpoch,
           ),
         );

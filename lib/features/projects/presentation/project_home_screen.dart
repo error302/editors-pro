@@ -223,12 +223,7 @@ class _ProjectHomeScreenState extends ConsumerState<ProjectHomeScreen>
             final project = state.recentProjects[index];
             return _ProjectCard(
               project: project,
-              onTap: () async {
-                await ref.read(projectProvider.notifier).openProject(project);
-                if (context.mounted) {
-                  context.go('/editor/${project.id}');
-                }
-              },
+              onTap: () => _openProject(context, project),
               onMore: () => _showProjectActions(context, project),
             )
                 .animate(delay: (index * 80).ms)
@@ -237,6 +232,22 @@ class _ProjectHomeScreenState extends ConsumerState<ProjectHomeScreen>
           },
         );
       },
+    );
+  }
+
+  Future<void> _openProject(BuildContext context, ProjectModel project) async {
+    final opened =
+        await ref.read(projectProvider.notifier).openProject(project);
+    if (!mounted || !context.mounted) return;
+    if (opened) {
+      context.go('/editor/${project.id}');
+      return;
+    }
+
+    final message =
+        ref.read(projectProvider).error ?? 'Could not open project.';
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
     );
   }
 
@@ -599,13 +610,7 @@ class _ProjectHomeScreenState extends ConsumerState<ProjectHomeScreen>
               subtitle: const Text('Continue editing in the timeline'),
               onTap: () {
                 Navigator.pop(ctx);
-                unawaited(
-                  ref.read(projectProvider.notifier).openProject(project).then((_) {
-                    if (context.mounted) {
-                      context.go('/editor/${project.id}');
-                    }
-                  }),
-                );
+                unawaited(_openProject(context, project));
               },
             ),
             ListTile(
