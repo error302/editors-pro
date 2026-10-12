@@ -8,6 +8,7 @@ use crate::api::bridge_api::{
     BridgeExportProgress, BridgeExportResult, BridgeExportSettings, BridgeProjectSettings,
     EditorsProEngineApi,
 };
+use crate::api::MediaAssetInfo;
 use crate::export_engine::{ExportProgress, ExportResult, ExportStage};
 
 // ─── BridgeProjectSettings ───────────────────────────────────
@@ -213,6 +214,35 @@ fn api_import_media_nonexistent_file_errors() {
     let api = EditorsProEngineApi::new();
     let result = api.import_media("/nonexistent/file.mp4".into());
     assert!(result.is_err());
+}
+
+#[test]
+fn restoring_media_asset_preserves_its_id_without_duplicates() {
+    let api = EditorsProEngineApi::new();
+    api.initialize().unwrap();
+    api.create_project("Restore test".into(), None).unwrap();
+
+    let directory = tempfile::tempdir().unwrap();
+    let file_path = directory.path().join("still.png");
+    std::fs::write(&file_path, b"test image placeholder").unwrap();
+    let asset = MediaAssetInfo {
+        id: "stable-asset-id".into(),
+        file_path: file_path.to_string_lossy().into_owned(),
+        file_name: "still.png".into(),
+        media_type: "image".into(),
+        duration_ms: None,
+        width: None,
+        height: None,
+        file_size_bytes: 22,
+        codec: None,
+        bitrate: None,
+    };
+
+    api.restore_media_asset(asset.clone()).unwrap();
+    api.restore_media_asset(asset).unwrap();
+
+    let info = api.get_project_info().unwrap().unwrap();
+    assert_eq!(info.asset_count, 1);
 }
 
 #[test]

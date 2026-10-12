@@ -382,6 +382,11 @@ impl EditorsProEngineApi {
         self.with_engine_recovery(|engine| engine.import_media(&file_path))
     }
 
+    /// Restore a persisted media asset without changing its stable ID.
+    pub fn restore_media_asset(&self, asset: MediaAssetInfo) -> Result<(), String> {
+        self.with_engine_recovery(|engine| engine.restore_media_asset(asset))
+    }
+
     /// Add a track to the timeline.
     ///
     /// `track_type` must be one of "Video", "Audio", "Text", or "Effect".

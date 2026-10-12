@@ -17,8 +17,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
 import 'package:uuid/uuid.dart';
-import 'package:editors_pro/src/rust/api/bridge_api.dart'
-    show BridgeProjectSettings;
+import 'package:editors_pro/src/rust/api/bridge_api.dart' as bridge
+    show BridgeProjectSettings, MediaAssetInfo;
 
 import '../../data/database/app_database.dart';
 import '../../data/models/project_model.dart';
@@ -65,7 +65,7 @@ class ProjectRepository {
       try {
         await EngineService.instance.api.createProject(
           name: name,
-          settings: BridgeProjectSettings(
+          settings: bridge.BridgeProjectSettings(
             width: width,
             height: height,
             fps: fps,
@@ -152,7 +152,9 @@ class ProjectRepository {
 
   /// Save a project's full state via the Rust engine (.epp format).
   Future<void> saveProjectToEngine(ProjectModel project) async {
-    if (!EngineService.instance.isInitialized) return;
+    if (!EngineService.instance.isInitialized) {
+      throw StateError('The editing engine is not ready.');
+    }
     try {
       final dir = await getApplicationDocumentsDirectory();
       final projectsDir = p.join(dir.path, AppConstants.projectsDir);
@@ -171,6 +173,7 @@ class ProjectRepository {
     } catch (e) {
       developer.log('saveProjectToEngine failed: $e',
           name: 'ProjectRepository');
+      rethrow;
     }
   }
 
@@ -225,6 +228,25 @@ class ProjectRepository {
       thumbnailPath: Value(asset.thumbnailPath),
       importedAt: Value(DateTime.now().millisecondsSinceEpoch),
     ));
+  }
+
+  /// Register an app-owned media file in the native project using its stable
+  /// database ID, so saved clips can resolve it after reopening.
+  Future<void> restoreMediaAssetInEngine(MediaAssetModel asset) async {
+    await EngineService.instance.api.restoreMediaAsset(
+      asset: bridge.MediaAssetInfo(
+        id: asset.id,
+        filePath: asset.filePath,
+        fileName: asset.fileName,
+        mediaType: asset.mediaType.name,
+        durationMs: asset.durationMs,
+        width: asset.width,
+        height: asset.height,
+        fileSizeBytes: asset.fileSizeBytes,
+        codec: asset.codec,
+        bitrate: asset.bitrate,
+      ),
+    );
   }
 
   // ─── Delete ────────────────────────────────────────────────────
@@ -330,18 +352,30 @@ extension ProjectRepositoryEngineActivation on ProjectRepository {
     final eppFile = File(eppPath);
     if (await eppFile.exists()) {
       await service.api.loadProject(filePath: eppPath);
-      return;
+    } else {
+      await Directory(projectsDirectory).create(recursive: true);
+      await service.api.createProject(
+        name: project.name,
+        settings: bridge.BridgeProjectSettings(
+          width: project.width,
+          height: project.height,
+          fps: project.fps,
+        ),
+      );
     }
 
-    await Directory(projectsDirectory).create(recursive: true);
-    await service.api.createProject(
-      name: project.name,
-      settings: BridgeProjectSettings(
-        width: project.width,
-        height: project.height,
-        fps: project.fps,
-      ),
-    );
+    for (final asset in project.mediaAssets) {
+      try {
+        await restoreMediaAssetInEngine(asset);
+      } catch (error, stackTrace) {
+        developer.log(
+          'Could not restore media asset ${asset.id}',
+          name: 'ProjectRepository',
+          error: error,
+          stackTrace: stackTrace,
+        );
+      }
+    }
   }
 }
 

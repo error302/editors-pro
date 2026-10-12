@@ -257,6 +257,16 @@ fn dispatch_method(
             };
             to_json_string(api.import_media(path))
         }
+        "restore_media_asset" => {
+            let asset = match args.get("asset") {
+                Some(value) => match serde_json::from_value(value.clone()) {
+                    Ok(asset) => asset,
+                    Err(error) => return to_json_err(format!("invalid media asset: {}", error)),
+                },
+                None => return to_json_err("missing 'asset'"),
+            };
+            to_json_string(api.restore_media_asset(asset))
+        }
 
         // ─── Timeline ─────────────────────────────────────────────────────
         "add_track" => {

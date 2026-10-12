@@ -125,11 +125,15 @@ class _EditorToolbarState extends ConsumerState<EditorToolbar> {
             const SizedBox(width: AppTheme.spacing4),
             TextButton(
               onPressed: () async {
-                await ref.read(projectProvider.notifier).saveCurrentProject();
+                final saved = await ref
+                    .read(projectProvider.notifier)
+                    .saveCurrentProject();
                 if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Project saved'),
+                    SnackBar(
+                      content: Text(
+                        saved ? 'Project saved' : 'Could not save project',
+                      ),
                       duration: Duration(seconds: 1),
                     ),
                   );
@@ -358,11 +362,15 @@ class _EditorToolbarState extends ConsumerState<EditorToolbar> {
               icon: AppIcons.save,
               tooltip: 'Save project',
               onPressed: () async {
-                await ref.read(projectProvider.notifier).saveCurrentProject();
+                final saved = await ref
+                    .read(projectProvider.notifier)
+                    .saveCurrentProject();
                 if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Project saved'),
+                    SnackBar(
+                      content: Text(
+                        saved ? 'Project saved' : 'Could not save project',
+                      ),
                       duration: Duration(seconds: 1),
                     ),
                   );

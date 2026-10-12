@@ -273,6 +273,45 @@ impl EditorsProEngine {
         Ok(asset_info)
     }
 
+    /// Restore a persisted media asset while preserving its stable ID.
+    pub fn restore_media_asset(&mut self, info: MediaAssetInfo) -> Result<(), String> {
+        let file_path = crate::utils::validation::validate_media_path(&info.file_path)?;
+        let media_type = match info.media_type.to_lowercase().as_str() {
+            "video" => MediaType::Video,
+            "audio" => MediaType::Audio,
+            "image" => MediaType::Image,
+            other => return Err(format!("Unknown media type: {}", other)),
+        };
+
+        let restored_asset = MediaAsset {
+            id: info.id,
+            file_path,
+            file_name: info.file_name,
+            media_type,
+            duration_ms: info.duration_ms,
+            width: info.width,
+            height: info.height,
+            file_size_bytes: info.file_size_bytes,
+            codec: info.codec,
+            bitrate: info.bitrate,
+            import_date: chrono::Utc::now().timestamp_millis(),
+            thumbnail_path: None,
+        };
+        let project = self.project.as_mut().ok_or("No project open")?;
+
+        if let Some(existing) = project
+            .media_assets
+            .iter_mut()
+            .find(|asset| asset.id == restored_asset.id)
+        {
+            *existing = restored_asset;
+        } else {
+            project.add_media_asset(restored_asset);
+        }
+
+        Ok(())
+    }
+
     /// Add a track to the timeline
     pub fn add_track(
         &mut self,
@@ -2316,6 +2355,8 @@ pub struct MediaAssetInfo {
     pub width: Option<u32>,
     pub height: Option<u32>,
     pub file_size_bytes: u64,
+    pub codec: Option<String>,
+    pub bitrate: Option<u64>,
 }
 
 impl MediaAssetInfo {
@@ -2329,6 +2370,8 @@ impl MediaAssetInfo {
             width: asset.width,
             height: asset.height,
             file_size_bytes: asset.file_size_bytes,
+            codec: asset.codec.clone(),
+            bitrate: asset.bitrate,
         }
     }
 }

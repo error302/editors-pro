@@ -73,6 +73,7 @@ class EditorScreen extends ConsumerStatefulWidget {
 
 class _EditorScreenState extends ConsumerState<EditorScreen> {
   final MediaLibraryService _mediaLibrary = MediaLibraryService();
+  bool _showingMobileMediaLibrary = false;
 
   /// Phase F.2: in-memory timeline markers. In a full integration these
   /// would be persisted via the engine's `effects/markers.rs` module.
@@ -293,6 +294,8 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
   }
 
   Widget _buildMobileImportBar() {
+    final mediaCount = ref.watch(mediaAssetsProvider).length;
+
     return Container(
       height: 60,
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -331,13 +334,70 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
           ),
           const SizedBox(width: 8),
           _mobileImportAction(
-            icon: Icons.folder_open_outlined,
-            tooltip: 'Browse files',
-            onPressed: _browseMediaFiles,
+            icon: Icons.video_library_outlined,
+            tooltip: 'Media bin ($mediaCount)',
+            onPressed: _showMobileMediaLibrary,
           ),
         ],
       ),
     );
+  }
+
+  Future<void> _showMobileMediaLibrary() async {
+    if (_showingMobileMediaLibrary) return;
+    _showingMobileMediaLibrary = true;
+    try {
+      await showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        useSafeArea: true,
+        backgroundColor: AppTheme.surface,
+        builder: (sheetContext) => FractionallySizedBox(
+          heightFactor: 0.78,
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 8, 12),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Consumer(
+                        builder: (context, ref, _) {
+                          final count = ref.watch(mediaAssetsProvider).length;
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('Media bin',
+                                  style: context.textTheme.titleMedium),
+                              const SizedBox(height: 2),
+                              Text(
+                                '$count item${count == 1 ? '' : 's'}',
+                                style: context.textTheme.labelSmall?.copyWith(
+                                  color: AppTheme.textSecondary,
+                                ),
+                              ),
+                            ],
+                          );
+                        },
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: 'Close media bin',
+                      onPressed: () => Navigator.of(sheetContext).pop(),
+                      icon: const Icon(Icons.close),
+                    ),
+                  ],
+                ),
+              ),
+              const Divider(height: 1),
+              Expanded(child: _buildMediaLibrary(sheetContext)),
+            ],
+          ),
+        ),
+      );
+    } finally {
+      _showingMobileMediaLibrary = false;
+    }
   }
 
   Widget _mobileImportAction({
@@ -1630,12 +1690,25 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
             .map((c) => c.startMs + c.durationMs)
             .reduce((a, b) => a > b ? a : b);
 
+    final clipDurationMs =
+        asset.durationMs ?? (asset.mediaType == MediaType.image ? 5000 : null);
+    if (clipDurationMs == null || clipDurationMs <= 0) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Could not read the duration for ${asset.fileName}.'),
+          ),
+        );
+      }
+      return;
+    }
+
     // Call into the Rust engine to add the clip
     final clipInfo = await ref.read(editorProvider.notifier).addClipToTrack(
           trackId: targetTrack.id,
           assetId: asset.id,
           startMs: lastClipEnd,
-          durationMs: asset.durationMs ?? 0,
+          durationMs: clipDurationMs,
         );
 
     if (clipInfo != null) {
@@ -1644,7 +1717,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
         id: clipInfo.id,
         assetId: asset.id,
         startMs: lastClipEnd,
-        durationMs: asset.durationMs ?? clipInfo.durationMs.toInt(),
+        durationMs: clipDurationMs,
       );
       ref.read(projectProvider.notifier).addClipToTrack(targetTrack.id, clip);
 
@@ -1808,7 +1881,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
 
           await ref.read(projectProvider.notifier).importMedia(
                 assetInfo.filePath,
-                assetInfo.fileName,
+                pickedFile.name,
                 _mediaTypeFromString(assetInfo.mediaType),
                 assetId: assetInfo.id,
                 durationMs: assetInfo.durationMs?.toInt(),
@@ -1831,14 +1904,29 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
       }
 
       if (!mounted) return;
-      final message = importedCount == pickedFiles.length
+      final projectSaved = importedCount == 0 ||
+          await ref.read(projectProvider.notifier).saveCurrentProject();
+      final importMessage = importedCount == pickedFiles.length
           ? 'Imported $importedCount item${importedCount == 1 ? '' : 's'}.'
           : importedCount == 0
               ? 'No items were imported. Could not add: ${failedFiles.take(2).join(', ')}.'
               : 'Imported $importedCount of ${pickedFiles.length}; could not add: ${failedFiles.take(2).join(', ')}.';
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message)),
-      );
+      final message = projectSaved
+          ? importMessage
+          : '$importMessage Project save failed; save again before closing.';
+      final isMobile = MediaQuery.of(context).size.width < 600;
+      if (isMobile && importedCount > 0) {
+        await _showMobileMediaLibrary();
+        if (mounted && (!projectSaved || importedCount < pickedFiles.length)) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(message)),
+          );
+        }
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(message)),
+        );
+      }
     } catch (error, stackTrace) {
       developer.log(
         'Could not open media picker',

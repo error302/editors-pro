@@ -224,6 +224,19 @@ class MediaAssetInfo {
         codec: json['codec'] as String?,
         bitrate: json['bitrate'] as int?,
       );
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'file_path': filePath,
+        'file_name': fileName,
+        'media_type': mediaType,
+        'duration_ms': durationMs,
+        'width': width,
+        'height': height,
+        'file_size_bytes': fileSizeBytes,
+        'codec': codec,
+        'bitrate': bitrate,
+      };
 }
 
 /// Export settings for the bridge
@@ -1172,6 +1185,11 @@ class EditorsProEngineApi {
     final result =
         await _call<dynamic>('import_media', {'file_path': filePath});
     return MediaAssetInfo.fromJson(result as Map<String, dynamic>);
+  }
+
+  /// Restore persisted asset metadata while preserving its stable ID.
+  Future<void> restoreMediaAsset({required MediaAssetInfo asset}) async {
+    return await _call<void>('restore_media_asset', {'asset': asset.toJson()});
   }
 
   /// Save the current project to an .epp file.

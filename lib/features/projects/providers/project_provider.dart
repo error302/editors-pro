@@ -237,6 +237,8 @@ class ProjectNotifier extends StateNotifier<ProjectState> {
       bitrate: bitrate,
     );
 
+    await _repo.restoreMediaAssetInEngine(asset);
+
     // Persist to database
     await _repo.addMediaAsset(state.currentProject!.id, asset);
 
@@ -354,13 +356,16 @@ class ProjectNotifier extends StateNotifier<ProjectState> {
   }
 
   /// Save the current project to the engine (.epp format).
-  Future<void> saveCurrentProject() async {
-    if (state.currentProject == null) return;
+  Future<bool> saveCurrentProject() async {
+    final project = state.currentProject;
+    if (project == null) return false;
     try {
-      await _repo.updateProject(state.currentProject!);
-      await _repo.saveProjectToEngine(state.currentProject!);
+      await _repo.updateProject(project);
+      await _repo.saveProjectToEngine(project);
+      return true;
     } catch (e) {
       developer.log('saveCurrentProject failed: $e', name: 'ProjectNotifier');
+      return false;
     }
   }
 
