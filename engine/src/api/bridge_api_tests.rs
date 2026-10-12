@@ -8,8 +8,18 @@ use crate::api::bridge_api::{
     BridgeExportProgress, BridgeExportResult, BridgeExportSettings, BridgeProjectSettings,
     EditorsProEngineApi,
 };
-use crate::api::MediaAssetInfo;
+use crate::api::{ClipInfo, MediaAssetInfo};
 use crate::export_engine::{ExportProgress, ExportResult, ExportStage};
+
+#[test]
+fn clip_info_serialization_includes_track_id_for_flutter() {
+    let clip = crate::timeline::clip::Clip::new("asset-1", 250, 5_000);
+    let info = ClipInfo::from_clip(&clip, "track-1");
+    let json = serde_json::to_value(info).unwrap();
+
+    assert_eq!(json["track_id"], "track-1");
+    assert_eq!(json["asset_id"], "asset-1");
+}
 
 // ─── BridgeProjectSettings ───────────────────────────────────
 

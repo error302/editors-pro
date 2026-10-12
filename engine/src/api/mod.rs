@@ -348,7 +348,7 @@ impl EditorsProEngine {
         };
 
         let clip = Clip::new(asset_id, start_ms, clip_duration);
-        let clip_info = ClipInfo::from_clip(&clip);
+        let clip_info = ClipInfo::from_clip(&clip, track_id);
 
         let project = self.project.as_mut().ok_or("No project open")?;
         let command = AddClipCommand::new(track_id.to_string(), clip);
@@ -389,7 +389,7 @@ impl EditorsProEngine {
         let results: Vec<ClipInfo> = clips
             .iter()
             .filter(|(_, c)| c.start_ms == time_ms || c.end_ms() > time_ms)
-            .map(|(_, c)| ClipInfo::from_clip(c))
+            .map(|(track, clip)| ClipInfo::from_clip(clip, &track.id))
             .collect();
 
         if results.len() >= 2 {
@@ -1257,7 +1257,7 @@ impl EditorsProEngine {
         clip.set_property("position_x".into(), serde_json::json!(position_x));
         clip.set_property("position_y".into(), serde_json::json!(position_y));
 
-        let clip_info = ClipInfo::from_clip(&clip);
+        let clip_info = ClipInfo::from_clip(&clip, track_id);
         let command = AddClipCommand::new(track_id.to_string(), clip);
         self.command_history
             .execute(Box::new(command), project.timeline_mut())?;
@@ -2406,6 +2406,7 @@ impl TrackInfo {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ClipInfo {
     pub id: String,
+    pub track_id: String,
     pub asset_id: String,
     pub start_ms: u64,
     pub duration_ms: u64,
@@ -2419,9 +2420,10 @@ pub struct ClipInfo {
 }
 
 impl ClipInfo {
-    fn from_clip(clip: &Clip) -> Self {
+    fn from_clip(clip: &Clip, track_id: &str) -> Self {
         Self {
             id: clip.id.clone(),
+            track_id: track_id.to_string(),
             asset_id: clip.asset_id.clone(),
             start_ms: clip.start_ms,
             duration_ms: clip.duration_ms,
