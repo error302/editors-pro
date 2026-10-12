@@ -1,19 +1,16 @@
 import 'dart:async';
 import 'dart:convert' show base64Decode, base64Encode;
 import 'dart:developer' as developer;
-import 'dart:io';
 import 'dart:typed_data' show ByteData, Endian, Uint8List;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:path/path.dart' as p;
+import 'package:image_picker/image_picker.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../core/theme/app_theme.dart';
 import '../../../core/extensions/context_extensions.dart';
-import '../../../core/constants/app_constants.dart';
 import '../../../core/services/engine_service.dart';
 // Phase F.3 + F.4 + F.5: top-level FFI wrappers
 import 'package:editors_pro/src/rust/api/bridge_api.dart'
@@ -38,6 +35,7 @@ import '../../../data/models/project_model.dart';
 import '../../projects/providers/project_provider.dart';
 import '../providers/editor_provider.dart';
 import '../providers/engine_bridge_provider.dart';
+import '../services/media_library_service.dart';
 import '../widgets/preview_viewport.dart';
 import '../widgets/timeline_panel.dart';
 import '../widgets/editor_toolbar.dart';
@@ -74,6 +72,8 @@ class EditorScreen extends ConsumerStatefulWidget {
 }
 
 class _EditorScreenState extends ConsumerState<EditorScreen> {
+  final MediaLibraryService _mediaLibrary = MediaLibraryService();
+
   /// Phase F.2: in-memory timeline markers. In a full integration these
   /// would be persisted via the engine's `effects/markers.rs` module.
   /// For now, scoped to the screen lifetime.
@@ -143,7 +143,8 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
                           editorState.safeZoneMode != SafeZoneMode.off)
                         Positioned.fill(
                           child: SafeZonesOverlay(
-                            config: _safeZoneConfigFor(editorState.safeZoneMode),
+                            config:
+                                _safeZoneConfigFor(editorState.safeZoneMode),
                             previewAspectRatio: 16 / 9,
                           ),
                         ),
@@ -172,15 +173,17 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
                         left: 8,
                         child: FloatingActionButton.small(
                           heroTag: 'safezones_fab',
-                          tooltip: 'Safe zones: ${editorState.safeZoneMode.name}',
+                          tooltip:
+                              'Safe zones: ${editorState.safeZoneMode.name}',
                           backgroundColor: editorState.showSafeZones
                               ? AppTheme.primary
                               : AppTheme.surface,
                           foregroundColor: editorState.showSafeZones
                               ? Colors.white
                               : AppTheme.textSecondary,
-                          onPressed: () =>
-                              ref.read(editorProvider.notifier).cycleSafeZoneMode(),
+                          onPressed: () => ref
+                              .read(editorProvider.notifier)
+                              .cycleSafeZoneMode(),
                           child: const Icon(Icons.crop_free, size: 18),
                         ),
                       ),
@@ -197,8 +200,9 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
                           foregroundColor: editorState.showAudioMeterBridge
                               ? Colors.white
                               : AppTheme.textSecondary,
-                          onPressed: () =>
-                              ref.read(editorProvider.notifier).toggleAudioMeterBridge(),
+                          onPressed: () => ref
+                              .read(editorProvider.notifier)
+                              .toggleAudioMeterBridge(),
                           child: const Icon(Icons.graphic_eq, size: 18),
                         ),
                       ),
@@ -231,14 +235,16 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
                               child: Card(
                                 color: AppTheme.surface,
                                 child: Padding(
-                                  padding: const EdgeInsets.all(AppTheme.spacing24),
+                                  padding:
+                                      const EdgeInsets.all(AppTheme.spacing24),
                                   child: Column(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
                                       const CircularProgressIndicator(
                                         color: AppTheme.primary,
                                       ),
-                                      const SizedBox(height: AppTheme.spacing16),
+                                      const SizedBox(
+                                          height: AppTheme.spacing16),
                                       Text(
                                         'Importing media…',
                                         style: TextStyle(
@@ -277,9 +283,82 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
           if (editorState.showAudioMeterBridge)
             _buildAudioMeterBridge(context, editorState),
 
+          if (isNarrowScreen) _buildMobileImportBar(),
+
           // Bottom: Timeline
           const TimelinePanel(),
         ],
+      ),
+    );
+  }
+
+  Widget _buildMobileImportBar() {
+    return Container(
+      height: 60,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: const BoxDecoration(
+        color: AppTheme.surface,
+        border: Border(
+          top: BorderSide(color: AppTheme.border, width: 1),
+        ),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: SizedBox(
+              height: 48,
+              child: FilledButton.icon(
+                onPressed: () => _importMedia(),
+                icon: const Icon(Icons.add_photo_alternate_outlined, size: 20),
+                label: const Text('Add media'),
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppTheme.primary,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  textStyle: const TextStyle(fontWeight: FontWeight.w600),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          _mobileImportAction(
+            icon: Icons.audio_file_outlined,
+            tooltip: 'Add audio',
+            onPressed: _importAudio,
+          ),
+          const SizedBox(width: 8),
+          _mobileImportAction(
+            icon: Icons.folder_open_outlined,
+            tooltip: 'Browse files',
+            onPressed: _browseMediaFiles,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _mobileImportAction({
+    required IconData icon,
+    required String tooltip,
+    required VoidCallback onPressed,
+  }) {
+    return SizedBox(
+      width: 48,
+      height: 48,
+      child: IconButton.filledTonal(
+        onPressed: onPressed,
+        tooltip: tooltip,
+        icon: Icon(icon, size: 20),
+        style: IconButton.styleFrom(
+          foregroundColor: AppTheme.textPrimary,
+          backgroundColor: AppTheme.surfaceVariant,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
+          ),
+        ),
       ),
     );
   }
@@ -450,67 +529,89 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
                     label: 'Media',
                     icon: Icons.video_library,
                     selected: state.leftPanelTab == LeftPanelTab.media,
-                    onTap: () => ref.read(editorProvider.notifier).setLeftPanelTab(LeftPanelTab.media),
+                    onTap: () => ref
+                        .read(editorProvider.notifier)
+                        .setLeftPanelTab(LeftPanelTab.media),
                   ),
                   _TabButton(
                     label: 'Audio',
                     icon: Icons.audiotrack,
                     selected: state.leftPanelTab == LeftPanelTab.audio,
-                    onTap: () => ref.read(editorProvider.notifier).setLeftPanelTab(LeftPanelTab.audio),
+                    onTap: () => ref
+                        .read(editorProvider.notifier)
+                        .setLeftPanelTab(LeftPanelTab.audio),
                   ),
                   _TabButton(
                     label: 'Effects',
                     icon: Icons.auto_fix_high,
                     selected: state.leftPanelTab == LeftPanelTab.effects,
-                    onTap: () => ref.read(editorProvider.notifier).setLeftPanelTab(LeftPanelTab.effects),
+                    onTap: () => ref
+                        .read(editorProvider.notifier)
+                        .setLeftPanelTab(LeftPanelTab.effects),
                   ),
                   _TabButton(
                     label: 'Text',
                     icon: Icons.text_fields,
                     selected: state.leftPanelTab == LeftPanelTab.text,
-                    onTap: () => ref.read(editorProvider.notifier).setLeftPanelTab(LeftPanelTab.text),
+                    onTap: () => ref
+                        .read(editorProvider.notifier)
+                        .setLeftPanelTab(LeftPanelTab.text),
                   ),
                   _TabButton(
                     label: 'Speed',
                     icon: Icons.speed,
                     selected: state.leftPanelTab == LeftPanelTab.speed,
-                    onTap: () => ref.read(editorProvider.notifier).setLeftPanelTab(LeftPanelTab.speed),
+                    onTap: () => ref
+                        .read(editorProvider.notifier)
+                        .setLeftPanelTab(LeftPanelTab.speed),
                   ),
                   _TabButton(
                     label: 'Keys',
                     icon: Icons.timeline,
                     selected: state.leftPanelTab == LeftPanelTab.keyframes,
-                    onTap: () => ref.read(editorProvider.notifier).setLeftPanelTab(LeftPanelTab.keyframes),
+                    onTap: () => ref
+                        .read(editorProvider.notifier)
+                        .setLeftPanelTab(LeftPanelTab.keyframes),
                   ),
                   _TabButton(
                     label: 'Mixer',
                     icon: Icons.graphic_eq,
                     selected: state.leftPanelTab == LeftPanelTab.mixer,
-                    onTap: () => ref.read(editorProvider.notifier).setLeftPanelTab(LeftPanelTab.mixer),
+                    onTap: () => ref
+                        .read(editorProvider.notifier)
+                        .setLeftPanelTab(LeftPanelTab.mixer),
                   ),
                   _TabButton(
                     label: 'Scopes',
                     icon: Icons.analytics_outlined,
                     selected: state.leftPanelTab == LeftPanelTab.scopes,
-                    onTap: () => ref.read(editorProvider.notifier).setLeftPanelTab(LeftPanelTab.scopes),
+                    onTap: () => ref
+                        .read(editorProvider.notifier)
+                        .setLeftPanelTab(LeftPanelTab.scopes),
                   ),
                   _TabButton(
                     label: 'Markers',
                     icon: Icons.bookmark_border,
                     selected: state.leftPanelTab == LeftPanelTab.markers,
-                    onTap: () => ref.read(editorProvider.notifier).setLeftPanelTab(LeftPanelTab.markers),
+                    onTap: () => ref
+                        .read(editorProvider.notifier)
+                        .setLeftPanelTab(LeftPanelTab.markers),
                   ),
                   _TabButton(
                     label: 'LUTs',
                     icon: Icons.palette_outlined,
                     selected: state.leftPanelTab == LeftPanelTab.luts,
-                    onTap: () => ref.read(editorProvider.notifier).setLeftPanelTab(LeftPanelTab.luts),
+                    onTap: () => ref
+                        .read(editorProvider.notifier)
+                        .setLeftPanelTab(LeftPanelTab.luts),
                   ),
                   _TabButton(
                     label: 'EQ',
                     icon: Icons.equalizer,
                     selected: state.leftPanelTab == LeftPanelTab.eq,
-                    onTap: () => ref.read(editorProvider.notifier).setLeftPanelTab(LeftPanelTab.eq),
+                    onTap: () => ref
+                        .read(editorProvider.notifier)
+                        .setLeftPanelTab(LeftPanelTab.eq),
                   ),
                 ],
               ),
@@ -580,10 +681,12 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
           onVolumeChanged: (trackId, volume) {
             if (!EngineService.instance.isInitialized) return;
             unawaited(
-              EngineService.instance.api.setTrackVolume(
+              EngineService.instance.api
+                  .setTrackVolume(
                 trackId: trackId,
                 volume: volume,
-              ).catchError((e) {
+              )
+                  .catchError((e) {
                 developer.log('setTrackVolume failed: $e', name: 'MixerPanel');
               }),
             );
@@ -599,10 +702,13 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
           onMuteToggled: (trackId, muted) {
             if (!EngineService.instance.isInitialized) return;
             unawaited(
-              EngineService.instance.api.toggleTrackVisibility(
+              EngineService.instance.api
+                  .toggleTrackVisibility(
                 trackId: trackId,
-              ).catchError((e) {
-                developer.log('toggleTrackVisibility failed: $e', name: 'MixerPanel');
+              )
+                  .catchError((e) {
+                developer.log('toggleTrackVisibility failed: $e',
+                    name: 'MixerPanel');
               }),
             );
           },
@@ -631,7 +737,8 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
     try {
       final timeline = await EngineService.instance.api.getTimelineState();
       if (timeline == null) return const [];
-      final audioTracks = timeline.tracks.where((t) => t.trackType == 'audio').toList();
+      final audioTracks =
+          timeline.tracks.where((t) => t.trackType == 'audio').toList();
       // Fetch pan + solo for each track in parallel.
       final futures = audioTracks.map((t) async {
         double pan = 0.0;
@@ -757,7 +864,8 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
           .toList();
     }
 
-    final histBins = (hg['bins'] as List).map((v) => (v as num).toInt()).toList();
+    final histBins =
+        (hg['bins'] as List).map((v) => (v as num).toInt()).toList();
 
     return ScopesData(
       waveform: WaveformData(width: wfWidth, columns: wfColumns),
@@ -785,7 +893,8 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
             padding: const EdgeInsets.all(AppTheme.spacing16),
             child: ColorScopesPanel(
               scopes: scopes,
-              onRequestRefresh: () => _refreshScopes(context, ref.read(editorProvider)),
+              onRequestRefresh: () =>
+                  _refreshScopes(context, ref.read(editorProvider)),
             ),
           ),
         ),
@@ -887,26 +996,41 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
 
   String _markerColorToString(MarkerColor c) {
     switch (c) {
-      case MarkerColor.red: return 'red';
-      case MarkerColor.orange: return 'orange';
-      case MarkerColor.yellow: return 'yellow';
-      case MarkerColor.green: return 'green';
-      case MarkerColor.blue: return 'blue';
-      case MarkerColor.purple: return 'purple';
-      case MarkerColor.pink: return 'pink';
-      case MarkerColor.white: return 'gray'; // engine has no 'white'
+      case MarkerColor.red:
+        return 'red';
+      case MarkerColor.orange:
+        return 'orange';
+      case MarkerColor.yellow:
+        return 'yellow';
+      case MarkerColor.green:
+        return 'green';
+      case MarkerColor.blue:
+        return 'blue';
+      case MarkerColor.purple:
+        return 'purple';
+      case MarkerColor.pink:
+        return 'pink';
+      case MarkerColor.white:
+        return 'gray'; // engine has no 'white'
     }
   }
 
   MarkerColor _stringToMarkerColor(String s) {
     switch (s.toLowerCase()) {
-      case 'red': return MarkerColor.red;
-      case 'orange': return MarkerColor.orange;
-      case 'yellow': return MarkerColor.yellow;
-      case 'green': return MarkerColor.green;
-      case 'blue': return MarkerColor.blue;
-      case 'purple': return MarkerColor.purple;
-      case 'pink': return MarkerColor.pink;
+      case 'red':
+        return MarkerColor.red;
+      case 'orange':
+        return MarkerColor.orange;
+      case 'yellow':
+        return MarkerColor.yellow;
+      case 'green':
+        return MarkerColor.green;
+      case 'blue':
+        return MarkerColor.blue;
+      case 'purple':
+        return MarkerColor.purple;
+      case 'pink':
+        return MarkerColor.pink;
       case 'gray':
       case 'grey':
       default:
@@ -916,26 +1040,39 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
 
   String _markerTypeToString(MarkerType t) {
     switch (t) {
-      case MarkerType.chapter: return 'chapter';
-      case MarkerType.note: return 'comment';
-      case MarkerType.sync: return 'standard';
-      case MarkerType.qc: return 'error';
-      case MarkerType.edit: return 'standard';
-      case MarkerType.audio: return 'standard';
-      case MarkerType.vfx: return 'custom';
+      case MarkerType.chapter:
+        return 'chapter';
+      case MarkerType.note:
+        return 'comment';
+      case MarkerType.sync:
+        return 'standard';
+      case MarkerType.qc:
+        return 'error';
+      case MarkerType.edit:
+        return 'standard';
+      case MarkerType.audio:
+        return 'standard';
+      case MarkerType.vfx:
+        return 'custom';
     }
   }
 
   MarkerType _stringToMarkerType(String s) {
     switch (s.toLowerCase()) {
-      case 'chapter': return MarkerType.chapter;
-      case 'comment': return MarkerType.note;
-      case 'todo': return MarkerType.qc;
-      case 'error': return MarkerType.qc;
+      case 'chapter':
+        return MarkerType.chapter;
+      case 'comment':
+        return MarkerType.note;
+      case 'todo':
+        return MarkerType.qc;
+      case 'error':
+        return MarkerType.qc;
       case 'musicbeat':
       case 'music_beat':
-      case 'beat': return MarkerType.audio;
-      case 'custom': return MarkerType.vfx;
+      case 'beat':
+        return MarkerType.audio;
+      case 'custom':
+        return MarkerType.vfx;
       case 'standard':
       default:
         return MarkerType.note;
@@ -1062,7 +1199,8 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
         try {
           await _applyEqToSelectedClip(settings, state);
         } catch (e) {
-          developer.log('Immediate EQ apply failed (per-track settings still persisted): $e',
+          developer.log(
+              'Immediate EQ apply failed (per-track settings still persisted): $e',
               name: 'EqPanel');
         }
       }
@@ -1077,7 +1215,8 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
   /// Phase F.5: immediate EQ application to the selected clip's audio.
   /// Uses TrackInfo.clips (now parsed) to find the asset_id, fetches
   /// samples, applies EQ, writes back via setAudioSamples.
-  Future<void> _applyEqToSelectedClip(EqSettings settings, EditorState state) async {
+  Future<void> _applyEqToSelectedClip(
+      EqSettings settings, EditorState state) async {
     final timeline = await EngineService.instance.api.getTimelineState();
     if (timeline == null || state.selectedClipId == null) return;
 
@@ -1096,7 +1235,8 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
       }
       if (assetId != null) break;
     }
-    if (assetId == null || clipStartMs == null || clipDurationMs == null) return;
+    if (assetId == null || clipStartMs == null || clipDurationMs == null)
+      return;
 
     try {
       final samples = await EngineService.instance.api.getAudioSamples(
@@ -1164,11 +1304,13 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.add_circle_outline, size: 48, color: AppTheme.textDisabled),
+              Icon(Icons.add_circle_outline,
+                  size: 48, color: AppTheme.textDisabled),
               const SizedBox(height: 16),
               Text(
                 'Import Media',
-                style: context.textTheme.titleSmall?.copyWith(color: AppTheme.textSecondary),
+                style: context.textTheme.titleSmall
+                    ?.copyWith(color: AppTheme.textSecondary),
               ),
               const SizedBox(height: 8),
               Text(
@@ -1179,8 +1321,13 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
               const SizedBox(height: 16),
               ElevatedButton.icon(
                 onPressed: () => _importMedia(),
-                icon: const Icon(Icons.add, size: 18),
-                label: const Text('Import'),
+                icon: const Icon(Icons.photo_library_outlined, size: 18),
+                label: const Text('Choose from Gallery'),
+              ),
+              TextButton.icon(
+                onPressed: () => _browseMediaFiles(),
+                icon: const Icon(Icons.folder_open, size: 18),
+                label: const Text('Browse files'),
               ),
             ],
           ),
@@ -1190,16 +1337,31 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
 
     return ListView.builder(
       padding: const EdgeInsets.all(8),
-      itemCount: assets.length + 1, // +1 for import button
+      itemCount: assets.length + 1, // +1 for import actions
       itemBuilder: (context, index) {
         if (index == 0) {
           return Padding(
             padding: const EdgeInsets.all(8),
-            child: OutlinedButton.icon(
-              onPressed: () => _importMedia(),
-              icon: const Icon(Icons.add, size: 16),
-              label: const Text('Import Media'),
-              style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(36)),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                OutlinedButton.icon(
+                  onPressed: () => _importMedia(),
+                  icon: const Icon(Icons.photo_library_outlined, size: 18),
+                  label: const Text('Choose from Gallery'),
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size.fromHeight(44),
+                  ),
+                ),
+                Align(
+                  alignment: Alignment.center,
+                  child: TextButton.icon(
+                    onPressed: () => _browseMediaFiles(),
+                    icon: const Icon(Icons.folder_open, size: 18),
+                    label: const Text('Browse files'),
+                  ),
+                ),
+              ],
             ),
           );
         }
@@ -1215,7 +1377,8 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
 
   Widget _buildAudioPanel(BuildContext context) {
     final assets = ref.watch(mediaAssetsProvider);
-    final audioAssets = assets.where((a) => a.mediaType == MediaType.audio).toList();
+    final audioAssets =
+        assets.where((a) => a.mediaType == MediaType.audio).toList();
 
     return Column(
       children: [
@@ -1223,10 +1386,11 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
         Padding(
           padding: const EdgeInsets.all(8),
           child: OutlinedButton.icon(
-            onPressed: () => _importMedia(),
+            onPressed: () => _importAudio(),
             icon: const Icon(Icons.add, size: 16),
             label: const Text('Import Audio'),
-            style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(36)),
+            style: OutlinedButton.styleFrom(
+                minimumSize: const Size.fromHeight(36)),
           ),
         ),
 
@@ -1239,7 +1403,8 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.music_note, size: 48, color: AppTheme.textDisabled),
+                    Icon(Icons.music_note,
+                        size: 48, color: AppTheme.textDisabled),
                     const SizedBox(height: 16),
                     Text(
                       'No Audio Files',
@@ -1395,7 +1560,8 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.timeline, size: 48, color: AppTheme.textDisabled),
+              const Icon(Icons.timeline,
+                  size: 48, color: AppTheme.textDisabled),
               const SizedBox(height: 16),
               Text(
                 'Select a Clip',
@@ -1445,9 +1611,8 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
     }
 
     // Find the first track of the matching type
-    final targetTrack = project.tracks
-        .where((t) => t.trackType == targetTrackType)
-        .firstOrNull;
+    final targetTrack =
+        project.tracks.where((t) => t.trackType == targetTrackType).firstOrNull;
 
     if (targetTrack == null) {
       if (mounted) {
@@ -1506,9 +1671,8 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
     if (project == null) return;
 
     // Find the text track
-    final textTrack = project.tracks
-        .where((t) => t.trackType == TrackType.text)
-        .firstOrNull;
+    final textTrack =
+        project.tracks.where((t) => t.trackType == TrackType.text).firstOrNull;
 
     if (textTrack == null) {
       if (mounted) {
@@ -1549,59 +1713,103 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
     }
   }
 
-  /// Import media using the file picker, copy to cache, and register
-  /// with the Rust engine.
+  /// Open Android's gallery-style picker for photos and videos.
   Future<void> _importMedia() async {
-    try {
-      ref.read(editorProvider.notifier).setImporting(true);
+    await _runMediaImport(() async {
+      final files = await ImagePicker().pickMultipleMedia(limit: 20);
+      return files
+          .map((file) => _PickedMedia(path: file.path, name: file.name))
+          .toList();
+    });
+  }
 
+  Future<void> _importAudio() async {
+    await _runMediaImport(() async {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.audio,
+        allowMultiple: true,
+      );
+      return result?.files
+              .map((file) => _PickedMedia(path: file.path, name: file.name))
+              .toList() ??
+          const [];
+    });
+  }
+
+  Future<void> _browseMediaFiles() async {
+    await _runMediaImport(() async {
       final result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
         allowedExtensions: [
-          'mp4', 'avi', 'mov', 'mkv', 'webm', 'flv', 'wmv', '3gp',
-          'mp3', 'wav', 'aac', 'flac', 'ogg', 'm4a', 'wma',
-          'jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp',
+          'mp4',
+          'avi',
+          'mov',
+          'mkv',
+          'webm',
+          'flv',
+          'wmv',
+          '3gp',
+          'mp3',
+          'wav',
+          'aac',
+          'flac',
+          'ogg',
+          'm4a',
+          'wma',
+          'jpg',
+          'jpeg',
+          'png',
+          'gif',
+          'bmp',
+          'webp',
         ],
         allowMultiple: true,
       );
+      return result?.files
+              .map((file) => _PickedMedia(path: file.path, name: file.name))
+              .toList() ??
+          const [];
+    });
+  }
 
-      if (result == null || result.files.isEmpty) {
-        ref.read(editorProvider.notifier).setImporting(false);
-        return;
+  Future<void> _runMediaImport(
+    Future<List<_PickedMedia>> Function() pickFiles,
+  ) async {
+    final editorNotifier = ref.read(editorProvider.notifier);
+    editorNotifier.setImporting(true);
+    try {
+      if (!EngineService.instance.isInitialized) {
+        throw StateError(
+            'The editing engine is not ready. Reopen the project and try again.');
       }
 
-      final cacheDir = await getTemporaryDirectory();
-      final mediaDir = Directory(p.join(cacheDir.path, AppConstants.mediaDir));
-      if (!mediaDir.existsSync()) {
-        mediaDir.createSync(recursive: true);
-      }
+      final pickedFiles = await pickFiles();
+      if (pickedFiles.isEmpty) return;
 
-      for (final pickedFile in result.files) {
-        final sourcePath = pickedFile.path;
-        if (sourcePath == null) continue;
-
-        final destPath = p.join(mediaDir.path, p.basename(sourcePath));
-        await File(sourcePath).copy(destPath);
-
-        if (!EngineService.instance.isInitialized) {
-          ref.read(editorProvider.notifier).setImporting(false);
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Engine not initialized')),
-            );
+      var importedCount = 0;
+      final failedFiles = <String>[];
+      for (final pickedFile in pickedFiles) {
+        try {
+          final sourcePath = pickedFile.path;
+          if (sourcePath == null || sourcePath.isEmpty) {
+            throw StateError('The selected file could not be opened.');
           }
-          return;
-        }
 
-        final notifier = ref.read(editorProvider.notifier);
-        final assetInfo = await notifier.importMedia(destPath);
+          final copy = await _mediaLibrary.copyIntoLibrary(
+            sourcePath: sourcePath,
+            fileName: pickedFile.name,
+          );
 
-        if (assetInfo != null) {
-          final mediaType = _mediaTypeFromString(assetInfo.mediaType);
+          final assetInfo = await editorNotifier.importMedia(copy.path);
+          if (assetInfo == null) {
+            await copy.delete();
+            throw StateError('The editing engine could not read this format.');
+          }
+
           await ref.read(projectProvider.notifier).importMedia(
                 assetInfo.filePath,
                 assetInfo.fileName,
-                mediaType,
+                _mediaTypeFromString(assetInfo.mediaType),
                 durationMs: assetInfo.durationMs?.toInt(),
                 width: assetInfo.width?.toInt(),
                 height: assetInfo.height?.toInt(),
@@ -1609,25 +1817,42 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
                 codec: assetInfo.codec,
                 bitrate: assetInfo.bitrate?.toInt(),
               );
+          importedCount++;
+        } catch (error, stackTrace) {
+          failedFiles.add(pickedFile.name);
+          developer.log(
+            'Media import failed for ${pickedFile.name}',
+            name: 'EditorScreen',
+            error: error,
+            stackTrace: stackTrace,
+          );
         }
       }
 
-      ref.read(editorProvider.notifier).setImporting(false);
-
+      if (!mounted) return;
+      final message = importedCount == pickedFiles.length
+          ? 'Imported $importedCount item${importedCount == 1 ? '' : 's'}.'
+          : importedCount == 0
+              ? 'No items were imported. Could not add: ${failedFiles.take(2).join(', ')}.'
+              : 'Imported $importedCount of ${pickedFiles.length}; could not add: ${failedFiles.take(2).join(', ')}.';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message)),
+      );
+    } catch (error, stackTrace) {
+      developer.log(
+        'Could not open media picker',
+        name: 'EditorScreen',
+        error: error,
+        stackTrace: stackTrace,
+      );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Imported ${result.files.length} file(s)'),
-            duration: const Duration(seconds: 1),
-          ),
+          SnackBar(content: Text('Could not open the media picker: $error')),
         );
       }
-    } catch (e) {
-      ref.read(editorProvider.notifier).setImporting(false);
+    } finally {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Import failed: $e')),
-        );
+        editorNotifier.setImporting(false);
       }
     }
   }
@@ -1646,6 +1871,13 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
         return MediaType.video;
     }
   }
+}
+
+class _PickedMedia {
+  const _PickedMedia({required this.path, required this.name});
+
+  final String? path;
+  final String name;
 }
 
 class _TabButton extends StatelessWidget {
@@ -1699,7 +1931,6 @@ class _TabButton extends StatelessWidget {
       ),
     );
   }
-
 }
 
 class _MediaAssetItem extends StatelessWidget {
@@ -1826,7 +2057,8 @@ class _MediaAssetItem extends StatelessWidget {
   }
 
   String _formatBytes(int bytes) {
-    if (bytes >= 1073741824) return '${(bytes / 1073741824).toStringAsFixed(1)} GB';
+    if (bytes >= 1073741824)
+      return '${(bytes / 1073741824).toStringAsFixed(1)} GB';
     if (bytes >= 1048576) return '${(bytes / 1048576).toStringAsFixed(1)} MB';
     if (bytes >= 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
     return '$bytes B';
@@ -1848,8 +2080,9 @@ class _CompactLoudnessBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final loudnessOk = (reading.integratedLufs - target.integratedTarget).abs() <=
-        target.integratedTolerance + 0.5;
+    final loudnessOk =
+        (reading.integratedLufs - target.integratedTarget).abs() <=
+            target.integratedTolerance + 0.5;
     final truePeakOk = reading.truePeakDbtp <= target.truePeakCeiling;
     final allOk = loudnessOk && truePeakOk;
 
@@ -2083,7 +2316,8 @@ class _LiveLoudnessBuilderState extends State<_LiveLoudnessBuilder> {
         return;
       }
       final reading = LoudnessReading(
-        integratedLufs: (result['integrated_lufs'] as num?)?.toDouble() ?? -70.0,
+        integratedLufs:
+            (result['integrated_lufs'] as num?)?.toDouble() ?? -70.0,
         shortTermLufs: (result['short_term_lufs'] as num?)?.toDouble() ?? -70.0,
         momentaryLufs: (result['momentary_lufs'] as num?)?.toDouble() ?? -70.0,
         truePeakDbtp: (result['true_peak_dbtp'] as num?)?.toDouble() ?? -70.0,
@@ -2121,7 +2355,8 @@ class _LoudnessMeterDialogState extends State<_LoudnessMeterDialog> {
   void initState() {
     super.initState();
     _refresh();
-    _timer = Timer.periodic(const Duration(milliseconds: 500), (_) => _refresh());
+    _timer =
+        Timer.periodic(const Duration(milliseconds: 500), (_) => _refresh());
   }
 
   @override
@@ -2143,7 +2378,8 @@ class _LoudnessMeterDialogState extends State<_LoudnessMeterDialog> {
         return;
       }
       final reading = LoudnessReading(
-        integratedLufs: (result['integrated_lufs'] as num?)?.toDouble() ?? -70.0,
+        integratedLufs:
+            (result['integrated_lufs'] as num?)?.toDouble() ?? -70.0,
         shortTermLufs: (result['short_term_lufs'] as num?)?.toDouble() ?? -70.0,
         momentaryLufs: (result['momentary_lufs'] as num?)?.toDouble() ?? -70.0,
         truePeakDbtp: (result['true_peak_dbtp'] as num?)?.toDouble() ?? -70.0,
@@ -2171,14 +2407,16 @@ class _LoudnessMeterDialogState extends State<_LoudnessMeterDialog> {
               Row(
                 children: [
                   const Text('Loudness Meter',
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                      style:
+                          TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                   const Spacer(),
                   IconButton(
                     icon: const Icon(Icons.close, size: 18),
                     onPressed: () => Navigator.pop(context),
                     iconSize: 18,
                     padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                    constraints:
+                        const BoxConstraints(minWidth: 32, minHeight: 32),
                   ),
                 ],
               ),
@@ -2223,8 +2461,7 @@ class _LoudnessMeterDialogState extends State<_LoudnessMeterDialog> {
               // doesn't have continuous audio playback running)
               Row(
                 children: [
-                  const Icon(Icons.info_outline, size: 14,
-                      color: Colors.grey),
+                  const Icon(Icons.info_outline, size: 14, color: Colors.grey),
                   const SizedBox(width: 4),
                   Expanded(
                     child: Text(

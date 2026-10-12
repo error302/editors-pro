@@ -31,6 +31,7 @@ dependencies:
 
   # File picking
   file_picker: ^9.2.1
+  image_picker: ^1.2.4
 
   # Path utilities
   path_provider: ^2.1.5

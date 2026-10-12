@@ -48,6 +48,10 @@ class _EditorToolbarState extends ConsumerState<EditorToolbar> {
     final editorState = ref.watch(editorProvider);
     final project = ref.watch(currentProjectProvider);
     final hasSelection = editorState.selectedClipId != null;
+    if (MediaQuery.sizeOf(context).width < 600) {
+      return _buildCompactToolbar(
+          context, project?.name ?? 'Untitled', project?.id);
+    }
 
     return Container(
       height: 56,
@@ -58,8 +62,7 @@ class _EditorToolbarState extends ConsumerState<EditorToolbar> {
         ),
       ),
       child: Padding(
-        padding:
-            const EdgeInsets.symmetric(horizontal: AppTheme.spacing12),
+        padding: const EdgeInsets.symmetric(horizontal: AppTheme.spacing12),
         child: Row(
           children: [
             // ── 1. Back ─────────────────────────────────────────────
@@ -122,9 +125,7 @@ class _EditorToolbarState extends ConsumerState<EditorToolbar> {
             const SizedBox(width: AppTheme.spacing4),
             TextButton(
               onPressed: () async {
-                await ref
-                    .read(projectProvider.notifier)
-                    .saveCurrentProject();
+                await ref.read(projectProvider.notifier).saveCurrentProject();
                 if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
@@ -231,8 +232,7 @@ class _EditorToolbarState extends ConsumerState<EditorToolbar> {
             _EditModeToggleButton(
               icon: Icons.grid_on,
               label: 'Snap',
-              tooltip:
-                  'Snap to grid — align clips to markers and boundaries',
+              tooltip: 'Snap to grid — align clips to markers and boundaries',
               isActive: _snapToGrid,
               onPressed: () {
                 setState(() => _snapToGrid = !_snapToGrid);
@@ -299,6 +299,111 @@ class _EditorToolbarState extends ConsumerState<EditorToolbar> {
                   : null,
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCompactToolbar(
+    BuildContext context,
+    String projectName,
+    String? projectId,
+  ) {
+    return SafeArea(
+      bottom: false,
+      child: Container(
+        height: 56,
+        decoration: const BoxDecoration(
+          color: AppTheme.surface,
+          border: Border(
+            bottom: BorderSide(color: AppTheme.border, width: 1),
+          ),
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 4),
+        child: Row(
+          children: [
+            _mobileIconButton(
+              icon: AppIcons.back,
+              tooltip: 'Back to projects',
+              onPressed: () => context.go('/'),
+            ),
+            Expanded(
+              child: Text(
+                projectName,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: context.textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w600,
+                  color: AppTheme.textPrimary,
+                ),
+              ),
+            ),
+            _mobileIconButton(
+              icon: AppIcons.undo,
+              tooltip: 'Undo',
+              onPressed: () {
+                HapticFeedback.selectionClick();
+                ref.read(editorProvider.notifier).undo();
+              },
+            ),
+            _mobileIconButton(
+              icon: AppIcons.redo,
+              tooltip: 'Redo',
+              onPressed: () {
+                HapticFeedback.selectionClick();
+                ref.read(editorProvider.notifier).redo();
+              },
+            ),
+            _mobileIconButton(
+              icon: AppIcons.save,
+              tooltip: 'Save project',
+              onPressed: () async {
+                await ref.read(projectProvider.notifier).saveCurrentProject();
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Project saved'),
+                      duration: Duration(seconds: 1),
+                    ),
+                  );
+                }
+              },
+            ),
+            _mobileIconButton(
+              icon: AppIcons.exportIcon,
+              tooltip: 'Export project',
+              onPressed: projectId == null
+                  ? null
+                  : () => context.go('/export/$projectId'),
+              color: AppTheme.primary,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _mobileIconButton({
+    required String icon,
+    required String tooltip,
+    required VoidCallback? onPressed,
+    Color color = AppTheme.textSecondary,
+  }) {
+    return SizedBox(
+      width: 48,
+      height: 48,
+      child: IconButton(
+        onPressed: onPressed,
+        tooltip: tooltip,
+        padding: EdgeInsets.zero,
+        icon: SvgPicture.asset(
+          icon,
+          width: 20,
+          height: 20,
+          colorFilter: ColorFilter.mode(
+            onPressed == null ? AppTheme.textDisabled : color,
+            BlendMode.srcIn,
+          ),
         ),
       ),
     );
