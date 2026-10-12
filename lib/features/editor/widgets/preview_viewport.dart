@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:collection';
+import 'dart:math' as math;
 import 'dart:typed_data';
 import 'dart:developer' as developer;
 
@@ -15,6 +16,8 @@ import '../providers/editor_provider.dart';
 import 'text_overlay_handle.dart';
 import 'transform_handles.dart';
 import 'safe_zones_overlay.dart';
+
+enum SafeZoneType { actionSafe, titleSafe, centerCross, thirds, centerMarker }
 
 /// Video preview viewport — displays the current frame rendered by the
 /// Rust engine and provides playback controls.
@@ -46,6 +49,14 @@ class _PreviewViewportState extends ConsumerState<PreviewViewport> {
 
   /// Whether the zebra (overexposure) overlay is visible.
   bool _showZebra = false;
+
+  SafeZoneConfig get _safeZoneConfig => SafeZoneConfig(
+        showActionSafe: _enabledSafeZones.contains(SafeZoneType.actionSafe),
+        showTitleSafe: _enabledSafeZones.contains(SafeZoneType.titleSafe),
+        showCenter: _enabledSafeZones.contains(SafeZoneType.centerCross) ||
+            _enabledSafeZones.contains(SafeZoneType.centerMarker),
+        showRuleOfThirds: _enabledSafeZones.contains(SafeZoneType.thirds),
+      );
 
   /// Frame duration in milliseconds at 30fps (≈33.33ms).
   static const int _frameDurationMs = 33;
@@ -195,7 +206,7 @@ class _PreviewViewportState extends ConsumerState<PreviewViewport> {
 
                       // Safe zones overlay
                       if (_showSafeZones)
-                        SafeZonesOverlay(enabledZones: _enabledSafeZones),
+                        SafeZonesOverlay(config: _safeZoneConfig),
 
                       // Zebra (overexposure) overlay
                       if (_showZebra)

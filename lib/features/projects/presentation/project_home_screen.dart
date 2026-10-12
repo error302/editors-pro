@@ -62,7 +62,7 @@ class _ProjectHomeScreenState extends ConsumerState<ProjectHomeScreen>
           ],
         ),
       ),
-      floatingActionButton: projectState.projects.isEmpty ? null : _buildCreateButton(context),
+      floatingActionButton: projectState.recentProjects.isEmpty ? null : _buildCreateButton(context),
     );
   }
 
@@ -449,7 +449,7 @@ class _ProjectHomeScreenState extends ConsumerState<ProjectHomeScreen>
     }
   }
 
-  void _showProjectActions(BuildContext context, ProjectModel project) {
+  void _showProjectActionsLegacy(BuildContext context, ProjectModel project) {
     showModalBottomSheet(
       context: context,
       backgroundColor: AppTheme.surface,

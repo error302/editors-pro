@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 /// Phase F.2: Safe Zones overlay.
@@ -183,7 +185,7 @@ class _SafeZonesPainter extends CustomPainter {
   void _drawDashedLine(Canvas canvas, Offset start, Offset end, Paint paint, double dashLen, double gapLen) {
     final dx = end.dx - start.dx;
     final dy = end.dy - start.dy;
-    final totalLen = (dx * dx + dy * dy).sqrt();
+    final totalLen = math.sqrt(dx * dx + dy * dy);
     if (totalLen == 0) return;
     final ux = dx / totalLen;
     final uy = dy / totalLen;

@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_theme.dart';
@@ -73,7 +75,7 @@ class _AudioMixerPanelState extends State<AudioMixerPanel> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.mixer_outlined,
+                      Icon(Icons.equalizer,
                           size: 48, color: AppTheme.textSecondary),
                       const SizedBox(height: AppTheme.spacing8),
                       Text('No audio tracks yet.',
@@ -218,7 +220,7 @@ class _MixerChannel extends StatelessWidget {
 
   String _volumeToDb(double v) {
     if (v <= 0.001) return '−∞';
-    final db = 20 * (v.log10());
+    final db = 20 * math.log(v) / math.ln10;
     return '${db.toStringAsFixed(1)} dB';
   }
 }
@@ -277,7 +279,7 @@ class _MasterChannel extends StatelessWidget {
 
   String _volumeToDb(double v) {
     if (v <= 0.001) return '−∞';
-    final db = 20 * (v.log10());
+    final db = 20 * math.log(v) / math.ln10;
     return '${db.toStringAsFixed(1)} dB';
   }
 }

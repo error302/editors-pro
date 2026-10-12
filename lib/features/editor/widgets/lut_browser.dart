@@ -20,8 +20,8 @@ import '../../../src/rust/api/bridge_api.dart';
 /// The pro move is: technical LUT first (Log→Rec.709), then grade, then
 /// creative LUT last. See persona/skills/lut-management/SKILL.md.
 class LutBrowser extends StatefulWidget {
-  /// Called with the loaded LUT's serialized form when the user picks one.
-  final void Function(String lutJson) onLutSelected;
+  /// Called with the parsed LUT data when the user picks one.
+  final void Function(Map<String, dynamic> lutData) onLutSelected;
 
   /// Called when the user adjusts the LUT intensity (0.0–1.0).
   final void Function(double intensity) onIntensityChanged;
@@ -64,9 +64,9 @@ class _LutBrowserState extends State<LutBrowser> {
       if (filePath == null) return;
 
       final content = await File(filePath).readAsString();
-      final lutJson = await lutLoadCubeContent(content: content);
+      final lutData = await lutLoadCubeContent(content: content);
 
-      widget.onLutSelected(lutJson);
+      widget.onLutSelected(lutData);
       setState(() => _loadedLutName = result.files.single.name);
     } catch (e) {
       if (mounted) {

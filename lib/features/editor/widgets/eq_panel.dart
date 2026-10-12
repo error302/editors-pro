@@ -17,11 +17,11 @@ class EqPanel extends StatefulWidget {
   final void Function(EqSettings settings) onChanged;
   final EqSettings initialSettings;
 
-  const EqPanel({
+  EqPanel({
     super.key,
     required this.onChanged,
-    this.initialSettings = EqSettings.flat,
-  });
+    EqSettings? initialSettings,
+  }) : initialSettings = initialSettings ?? EqSettings.flat;
 
   @override
   State<EqPanel> createState() => _EqPanelState();

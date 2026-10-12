@@ -212,7 +212,7 @@ class _VideoScopesPanelState extends ConsumerState<VideoScopesPanel>
                 inactiveTrackColor: AppTheme.border,
                 trackHeight: 2,
                 thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
-                overlayRadius: 10,
+                overlayShape: const RoundSliderOverlayShape(overlayRadius: 10),
               ),
               child: Slider(
                 value: _gain,
@@ -820,7 +820,8 @@ class VectorscopePainter extends CustomPainter {
 
     final cx = size.width / 2;
     final cy = size.height / 2;
-    final radius = (min(size.width, size.height) / 2 - 16).clamp(0, double.infinity);
+    final radius =
+        (min(size.width, size.height) / 2 - 16).clamp(0.0, double.infinity).toDouble();
 
     // ── Color wheel (reference ring) ────────────────────────────────
     _drawColorWheel(canvas, cx, cy, radius);

@@ -13,7 +13,19 @@ import 'engine_bridge_provider.dart';
 // Re-export the bridge-generated DTOs so the rest of the app can
 // reference them without knowing the bridge internals.
 import 'package:editors_pro/src/rust/api/bridge_api.dart'
-    show BridgeExportSettings, BridgeExportResult, BridgeProjectSettings, ClipInfo, EffectInfo, FontInfo, GpuInfo, MediaAssetInfo, ProjectInfo, TranscriptionSegmentInfo;
+    show
+        BridgeExportSettings,
+        BridgeExportResult,
+        BridgeProjectSettings,
+        BridgeSpeedCurve,
+        BridgeSpeedSegment,
+        ClipInfo,
+        EffectInfo,
+        FontInfo,
+        GpuInfo,
+        MediaAssetInfo,
+        ProjectInfo,
+        TranscriptionSegmentInfo;
 
 /// Editor state
 class EditorState {
@@ -1021,7 +1033,7 @@ class EditorNotifier extends StateNotifier<EditorState> {
       await api.addKeyframe(
         clipId: clipId,
         property: property,
-        timeMs: BigInt.from(timeMs),
+        timeMs: timeMs,
         value: value,
         easingName: easingName,
       );
@@ -1103,7 +1115,7 @@ class EditorNotifier extends StateNotifier<EditorState> {
     if (!_engineReady) return;
     try {
       final api = EngineService.instance.api;
-      final timeMs = BigInt.from(state.currentTimeMs);
+      final timeMs = state.currentTimeMs;
       // Get existing keyframes at this time, or add a new one
       await api.addKeyframe(
         clipId: clipId,
