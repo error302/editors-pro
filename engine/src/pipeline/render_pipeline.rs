@@ -209,7 +209,7 @@ impl RenderPipeline {
                 }
 
                 let clip_volume = clip.volume as f32 * track_volume;
-                let clip_duration_samples = (clip.get_duration() * sample_rate as f64) as usize;
+                let clip_duration_samples = (clip.effective_duration() as f64 / 1000.0 * sample_rate as f64) as usize;
 
                 // Generate silence for now (real implementation would decode audio)
                 for i in 0..clip_duration_samples.min(total_samples) {

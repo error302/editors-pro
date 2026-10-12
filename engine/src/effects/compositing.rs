@@ -3,7 +3,7 @@
 //! Implements all standard Photoshop-style blend modes for professional compositing.
 //! Supports GPU acceleration via WGSL compute shaders.
 
-use serde::{Deserialize, Serialize)];
+use serde::{Deserialize, Serialize};
 
 /// All 22 blend modes for layer compositing.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

@@ -17,7 +17,7 @@ pub struct CommandResult {
 }
 
 /// A trait for commands that can be executed and undone on a timeline
-pub trait Command: std::fmt::Debug {
+pub trait Command: std::fmt::Debug + Send {
     fn execute(&mut self, timeline: &mut Timeline) -> Result<CommandResult, String>;
     fn undo(&mut self, timeline: &mut Timeline) -> Result<CommandResult, String>;
     fn description(&self) -> String;
@@ -999,6 +999,7 @@ impl Command for UpdateKeyframeCommand {
 
 /// Command history manager for undo/redo
 #[derive(Debug)]
+#[derive(Default)]
 pub struct CommandHistory {
     undo_stack: Vec<Box<dyn Command>>,
     redo_stack: Vec<Box<dyn Command>>,
@@ -1076,7 +1077,7 @@ impl Clone for CommandHistory {
 // Implement Serialize/Deserialize for CommandHistory (skip the stacks)
 impl Serialize for CommandHistory {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        serializer.serialize_nothing()
+        serializer.serialize_none()
     }
 }
 

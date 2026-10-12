@@ -235,10 +235,28 @@ impl Timeline {
             .filter(|t| t.visible)
             .flat_map(|track| {
                 track.clips.iter()
-                    .filter(|clip| time_ms >= clip.start_ms && time_ms < clip.start_ms + clip.effective_duration())
-                    .map(|clip| (track, clip))
+                    .filter(move |clip| time_ms >= clip.start_ms && time_ms < clip.start_ms + clip.effective_duration())
+                    .map(move |clip| (track, clip))
             })
             .collect()
+    }
+
+    /// Phase B.12: get the total duration in seconds.
+    pub fn get_duration(&self) -> f64 {
+        self.duration_ms as f64 / 1000.0
+    }
+
+    /// Phase B.12: find a clip at a given time (seconds).
+    pub fn find_clip_at(&self, time_s: f64) -> Option<&Clip> {
+        let time_ms = (time_s * 1000.0) as u64;
+        self.tracks.iter()
+            .flat_map(|t| t.clips.iter())
+            .find(|c| time_ms >= c.start_ms && time_ms < c.start_ms + c.effective_duration())
+    }
+
+    /// Compatibility alias for find_clip_at
+    pub fn find_clip_at_time(&self, time_s: f64) -> Option<&Clip> {
+        self.find_clip_at(time_s)
     }
 
     /// Get tracks filtered by type

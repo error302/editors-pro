@@ -232,6 +232,9 @@ impl EffectsPipeline {
                     let config = chroma_key::ChromaKeyConfig::from_parameters(&effect.parameters);
                     chroma_key::apply_chroma_key(frame_data, width, height, &config);
                 }
+                _ => {
+                    log::debug!("Effect type {:?} not handled in CPU apply loop", effect.effect_type);
+                }
             }
         }
     }

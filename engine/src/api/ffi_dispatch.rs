@@ -915,7 +915,7 @@ fn dispatch_method(
                         }
                     }
                 }
-                None => to_json_err("invalid base64 frame".into()),
+                None => to_json_err(String::from("invalid base64 frame")),
             }
         }
         "count_out_of_range_pixels" => {
@@ -924,7 +924,7 @@ fn dispatch_method(
                 Some(pixels) => {
                     to_json_ok(&crate::analysis::scopes::count_out_of_range_pixels(&pixels))
                 }
-                None => to_json_err("invalid base64 frame".into()),
+                None => to_json_err(String::from("invalid base64 frame")),
             }
         }
 
@@ -939,7 +939,7 @@ fn dispatch_method(
                     crate::effects::legalizer::legalize_rgba8(&mut pixels, &params);
                     to_json_ok(&base64_encode_bytes(&pixels))
                 }
-                None => to_json_err("invalid base64 frame".into()),
+                None => to_json_err(String::from("invalid base64 frame")),
             }
         }
 
@@ -959,7 +959,7 @@ fn dispatch_method(
                         &prev, &curr, width, height, block_size, search_range,
                     ))
                 }
-                _ => to_json_err("invalid frames".into()),
+                _ => to_json_err(String::from("invalid frames")),
             }
         }
 
@@ -967,7 +967,7 @@ fn dispatch_method(
         "track_point" => {
             // Stub: returns the start point as a single-point track.
             // Full implementation requires multi-frame input via stream.
-            to_json_err("track_point requires stream input — use track_point_single instead".into())
+            to_json_err(String::from("track_point requires stream input — use track_point_single instead"))
         }
 
         // Color match (engine/src/effects/color_match.rs)
@@ -984,7 +984,7 @@ fn dispatch_method(
                         &source, &reference, width, height,
                     ))
                 }
-                _ => to_json_err("invalid frames".into()),
+                _ => to_json_err(String::from("invalid frames")),
             }
         }
 
@@ -1008,7 +1008,7 @@ fn dispatch_method(
                     crate::effects::sky_replace::replace_sky(&mut frame, &new_sky, width, height, &params);
                     to_json_ok(&base64_encode_bytes(&frame))
                 }
-                _ => to_json_err("invalid frames".into()),
+                _ => to_json_err(String::from("invalid frames")),
             }
         }
 
@@ -1027,7 +1027,7 @@ fn dispatch_method(
                     };
                     to_json_ok(&crate::analysis::beat_detect::detect_beats(&samples, &params))
                 }
-                None => to_json_err("invalid base64 samples".into()),
+                None => to_json_err(String::from("invalid base64 samples")),
             }
         }
 
@@ -1075,7 +1075,7 @@ fn dispatch_method(
             // Args: { "timeline": <InteropTimeline JSON>, "format": "edl"|"fcpxml"|"otio" }
             let timeline_json = match args.get("timeline") {
                 Some(t) => t,
-                None => return to_json_err("missing 'timeline' arg".into()),
+                None => return to_json_err(String::from("missing 'timeline' arg")),
             };
             let timeline: crate::project::interop::InteropTimeline =
                 match serde_json::from_value(timeline_json.clone()) {
@@ -1098,7 +1098,7 @@ fn dispatch_method(
         "validate_advanced_trim" => {
             let params_json = match args.get("params") {
                 Some(p) => p,
-                None => return to_json_err("missing 'params' arg".into()),
+                None => return to_json_err(String::from("missing 'params' arg")),
             };
             let params: crate::timeline::advanced_trim::AdvancedTrimParams =
                 match serde_json::from_value(params_json.clone()) {
@@ -1133,7 +1133,7 @@ fn dispatch_method(
         "apply_lut_to_frame" => {
             let lut_json = match args.get("lut_json") {
                 Some(v) => v,
-                None => return to_json_err("missing 'lut_json' arg".into()),
+                None => return to_json_err(String::from("missing 'lut_json' arg")),
             };
             let lut: crate::effects::lut::Lut = match serde_json::from_value(lut_json.clone()) {
                 Ok(l) => l,
@@ -1148,8 +1148,8 @@ fn dispatch_method(
                     lut.apply_rgba8(&mut pixels, width, height, intensity);
                     to_json_ok(&base64_encode_bytes(&pixels))
                 }
-                Some(_) => to_json_err("frame size mismatch".into()),
-                None => to_json_err("invalid base64 frame".into()),
+                Some(_) => to_json_err(String::from("frame size mismatch")),
+                None => to_json_err(String::from("invalid base64 frame")),
             }
         }
 
@@ -1159,7 +1159,7 @@ fn dispatch_method(
         "apply_eq_to_samples" => {
             let settings_json = match args.get("settings") {
                 Some(v) => v,
-                None => return to_json_err("missing 'settings' arg".into()),
+                None => return to_json_err(String::from("missing 'settings' arg")),
             };
             let settings: crate::audio::effects::EqSettings = match serde_json::from_value(settings_json.clone()) {
                 Ok(s) => s,
@@ -1172,7 +1172,7 @@ fn dispatch_method(
                     let result = crate::audio::effects::apply_eq_chain(&samples, sample_rate, &settings);
                     to_json_ok(&base64_encode_f32_samples(&result))
                 }
-                None => to_json_err("invalid base64 samples".into()),
+                None => to_json_err(String::from("invalid base64 samples")),
             }
         }
 
@@ -1201,7 +1201,7 @@ fn dispatch_method(
             let id = args.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string();
             match api.remove_marker(id) {
                 Ok(Some(m)) => to_json_ok(&serde_json::to_value(&m).unwrap_or_default()),
-                Ok(None) => to_json_err("marker not found".into()),
+                Ok(None) => to_json_err(String::from("marker not found")),
                 Err(e) => to_json_err(e),
             }
         }
@@ -1222,7 +1222,7 @@ fn dispatch_method(
                         Err(e) => to_json_err(e),
                     }
                 }
-                None => to_json_err("invalid base64 samples".into()),
+                None => to_json_err(String::from("invalid base64 samples")),
             }
         }
 
@@ -1263,7 +1263,7 @@ fn dispatch_method(
             let track_id = args.get("track_id").and_then(|v| v.as_str()).unwrap_or("").to_string();
             let settings_json = match args.get("settings") {
                 Some(v) => v,
-                None => return to_json_err("missing 'settings' arg".into()),
+                None => return to_json_err(String::from("missing 'settings' arg")),
             };
             let settings: crate::audio::effects::EqSettings = match serde_json::from_value(settings_json.clone()) {
                 Ok(s) => s,
@@ -1291,7 +1291,7 @@ fn dispatch_method(
                 Some(samples) => {
                     to_json_string::<()>(api.set_audio_samples(asset_id, samples, sample_rate, channels))
                 }
-                None => to_json_err("invalid base64 samples".into()),
+                None => to_json_err(String::from("invalid base64 samples")),
             }
         }
 
@@ -1300,7 +1300,7 @@ fn dispatch_method(
         "set_active_lut" => {
             let lut_json = match args.get("lut_json") {
                 Some(v) => v,
-                None => return to_json_err("missing 'lut_json' arg".into()),
+                None => return to_json_err(String::from("missing 'lut_json' arg")),
             };
             let lut: crate::effects::lut::Lut = match serde_json::from_value(lut_json.clone()) {
                 Ok(l) => l,

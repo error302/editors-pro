@@ -1036,7 +1036,7 @@ impl EditorsProEngine {
         let project = self.project.as_mut().ok_or("No project open")?;
 
         let preset = crate::effects::filters::FilterPreset::built_in_presets()
-            .iter()
+            .into_iter()
             .find(|p| p.id == preset_id)
             .ok_or_else(|| format!("Preset {} not found", preset_id))?;
 
@@ -1347,7 +1347,13 @@ impl EditorsProEngine {
 
     /// Import subtitles from an SRT file
     pub fn import_subtitles(&self, file_path: &str) -> Result<Vec<SubtitleEntry>, String> {
-        crate::subtitle::parser::parse_srt_file(file_path)
+        let entries = crate::subtitle::parser::parse_srt_file(file_path)?;
+        Ok(entries.into_iter().map(|e| SubtitleEntry {
+            index: e.index,
+            start_ms: e.start_ms,
+            end_ms: e.end_ms,
+            text: e.text,
+        }).collect())
     }
 
     // ─── Audio Operations ─────────────────────────────────────────────
@@ -1436,51 +1442,103 @@ impl EditorsProEngine {
         start_ms: u64,
         duration_ms: u64,
     ) -> Result<AudioBuffer, String> {
-        let project = self.project.as_ref().ok_or("No project open")?;
+        let (audio_clips_data, video_clips_data, ducking_configs, _project_sample_rate) = {
+            let project = self.project.as_ref().ok_or("No project open")?;
 
-        // Collect audio tracks and their clips
-        let audio_tracks: Vec<_> = project
-            .timeline()
-            .tracks_of_type(TrackType::Audio)
-            .into_iter()
-            .filter(|t| t.visible)
-            .collect();
+            let mut a_clips = Vec::new();
+            for track in project.timeline().tracks_of_type(TrackType::Audio) {
+                if !track.visible {
+                    continue;
+                }
+                for clip in &track.clips {
+                    if clip.start_ms >= start_ms + duration_ms || clip.end_ms() <= start_ms {
+                        continue;
+                    }
+                    a_clips.push((track.id.clone(), track.volume, track.visible, clip.clone()));
+                }
+            }
+
+            let mut v_clips = Vec::new();
+            for track in project.timeline().tracks_of_type(TrackType::Video) {
+                for clip in &track.clips {
+                    if clip.start_ms >= start_ms + duration_ms || clip.end_ms() <= start_ms {
+                        continue;
+                    }
+                    v_clips.push((track.id.clone(), track.volume, track.visible, clip.clone()));
+                }
+            }
+
+            (
+                a_clips,
+                v_clips,
+                self.ducking_configs.clone(),
+                project.settings.sample_rate,
+            )
+        };
 
         let mut sources: Vec<TrackAudioSource> = Vec::new();
 
-        for track in audio_tracks {
-            for clip in &track.clips {
-                // Check if this clip overlaps with our requested range
-                let clip_start = clip.start_ms;
-                let clip_end = clip.end_ms();
-                if clip_start >= start_ms + duration_ms || clip_end <= start_ms {
-                    continue;
-                }
+        for (track_id, track_volume, track_visible, clip) in audio_clips_data {
+            let clip_start = clip.start_ms;
+            let clip_end = clip.end_ms();
 
-                // Calculate the actual time range we need from this clip
-                let overlap_start = clip_start.max(start_ms);
-                let overlap_end = clip_end.min(start_ms + duration_ms);
-                let overlap_duration = overlap_end - overlap_start;
+            // Calculate the actual time range we need from this clip
+            let overlap_start = clip_start.max(start_ms);
+            let overlap_end = clip_end.min(start_ms + duration_ms);
+            let overlap_duration = overlap_end - overlap_start;
 
-                // Get the source audio
-                let audio = self.get_audio_samples(&clip.asset_id)?;
+            // Get the source audio. Note: get_audio_samples borrows self mutably,
+            // which is why we cloned audio_clips_data earlier and finished the
+            // immutable borrow of self.project.
+            let audio = self.get_audio_samples(&clip.asset_id)?;
 
-                // Calculate the offset within the source
+            // Calculate the offset within the source
+            let source_start = clip.trim_start_ms + (overlap_start - clip_start);
+            let segment = audio.segment(source_start, source_start + overlap_duration);
+
+            // Phase F.4: pull per-track mixer state (pan, solo, EQ)
+            let track_state = self.track_mixer_state.get(&track_id);
+            let pan = track_state.map(|s| s.pan).unwrap_or(0.0);
+            let solo = track_state.map(|s| s.solo).unwrap_or(false);
+            let eq_settings = self.track_eq_settings.get(&track_id).cloned();
+
+            sources.push(TrackAudioSource {
+                buffer: segment,
+                volume: track_volume,
+                offset_ms: overlap_start - start_ms,
+                envelope: VolumeEnvelope::default(),
+                muted: !track_visible,
+                pan,
+                solo,
+                eq_settings,
+            });
+        }
+
+        for (track_id, track_volume, track_visible, clip) in video_clips_data {
+            let clip_start = clip.start_ms;
+            let clip_end = clip.end_ms();
+
+            let overlap_start = clip_start.max(start_ms);
+            let overlap_end = clip_end.min(start_ms + duration_ms);
+            let overlap_duration = overlap_end - overlap_start;
+
+            // Video clips may have embedded audio
+            if let Ok(audio) = self.get_audio_samples(&clip.asset_id) {
                 let source_start = clip.trim_start_ms + (overlap_start - clip_start);
                 let segment = audio.segment(source_start, source_start + overlap_duration);
 
-                // Phase F.4: pull per-track mixer state (pan, solo, EQ)
-                let track_state = self.track_mixer_state.get(&track.id);
+                // Phase F.4: pull per-track mixer state for video tracks too
+                let track_state = self.track_mixer_state.get(&track_id);
                 let pan = track_state.map(|s| s.pan).unwrap_or(0.0);
                 let solo = track_state.map(|s| s.solo).unwrap_or(false);
-                let eq_settings = self.track_eq_settings.get(&track.id).cloned();
+                let eq_settings = self.track_eq_settings.get(&track_id).cloned();
 
                 sources.push(TrackAudioSource {
                     buffer: segment,
-                    volume: track.volume,
+                    volume: track_volume,
                     offset_ms: overlap_start - start_ms,
                     envelope: VolumeEnvelope::default(),
-                    muted: !track.visible,
+                    muted: !track_visible,
                     pan,
                     solo,
                     eq_settings,
@@ -1488,65 +1546,20 @@ impl EditorsProEngine {
             }
         }
 
-        // Also include audio from video tracks
-        let video_tracks: Vec<_> = project
-            .timeline()
-            .tracks_of_type(TrackType::Video)
-            .into_iter()
-            .filter(|t| t.visible)
-            .collect();
-
-        for track in video_tracks {
-            for clip in &track.clips {
-                let clip_start = clip.start_ms;
-                let clip_end = clip.end_ms();
-                if clip_start >= start_ms + duration_ms || clip_end <= start_ms {
-                    continue;
-                }
-
-                let overlap_start = clip_start.max(start_ms);
-                let overlap_end = clip_end.min(start_ms + duration_ms);
-                let overlap_duration = overlap_end - overlap_start;
-
-                // Video clips may have embedded audio
-                if let Ok(audio) = self.get_audio_samples(&clip.asset_id) {
-                    let source_start = clip.trim_start_ms + (overlap_start - clip_start);
-                    let segment = audio.segment(source_start, source_start + overlap_duration);
-
-                    // Phase F.4: pull per-track mixer state for video tracks too
-                    let track_state = self.track_mixer_state.get(&track.id);
-                    let pan = track_state.map(|s| s.pan).unwrap_or(0.0);
-                    let solo = track_state.map(|s| s.solo).unwrap_or(false);
-                    let eq_settings = self.track_eq_settings.get(&track.id).cloned();
-
-                    sources.push(TrackAudioSource {
-                        buffer: segment,
-                        volume: track.volume,
-                        offset_ms: overlap_start - start_ms,
-                        envelope: VolumeEnvelope::default(),
-                        muted: !track.visible,
-                        pan,
-                        solo,
-                        eq_settings,
-                    });
-                }
-            }
-        }
-
         // Mix all sources
         let mixed = self.audio_mixer.mix_sources(&sources, duration_ms);
 
-        // Phase F.5: update the cached loudness reading, but throttle to
-        // once per 500ms to avoid CPU overhead during real-time playback.
-        // The Flutter Audio Meter Bridge polls at 500ms–1s intervals, so
-        // computing loudness more frequently is wasted work.
+        // Phase F.5: update the cached loudness reading
         let now_ms = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap_or_default()
             .as_millis() as u64;
-        let last_ms = self.last_loudness_analysis_ms.load(std::sync::atomic::Ordering::Relaxed);
+        let last_ms = self
+            .last_loudness_analysis_ms
+            .load(std::sync::atomic::Ordering::Relaxed);
         if now_ms.saturating_sub(last_ms) >= 500 {
-            self.last_loudness_analysis_ms.store(now_ms, std::sync::atomic::Ordering::Relaxed);
+            self.last_loudness_analysis_ms
+                .store(now_ms, std::sync::atomic::Ordering::Relaxed);
             let _ = self.analyze_samples_loudness(
                 &mixed.samples,
                 mixed.sample_rate,
@@ -1555,13 +1568,20 @@ impl EditorsProEngine {
         }
 
         // Apply ducking if configured
-        for (track_id, config) in &self.ducking_configs {
+        for (track_id, config) in &ducking_configs {
             if config.enabled {
-                // Find the trigger track (voiceover)
-                let trigger_track = project.timeline().tracks.iter().find(|t| &t.id == track_id);
-                if let Some(trigger) = trigger_track {
-                    // Collect trigger audio
-                    for clip in &trigger.clips {
+                // Find the trigger track and its clips while project is borrowed.
+                // We clone the clips info so we can drop the project borrow before
+                // calling get_audio_samples.
+                let trigger_clips = {
+                    let project = self.project.as_ref().ok_or("No project open")?;
+                    project.timeline().tracks.iter()
+                        .find(|t| &t.id == track_id)
+                        .map(|t| t.clips.clone())
+                };
+
+                if let Some(trigger_clips) = trigger_clips {
+                    for clip in trigger_clips {
                         let clip_start = clip.start_ms;
                         let clip_end = clip.end_ms();
                         if clip_start >= start_ms + duration_ms || clip_end <= start_ms {
@@ -2092,7 +2112,7 @@ impl EditorsProEngine {
         let mono: Vec<f32> = if buffer.channels == 1 {
             buffer.samples.clone()
         } else {
-            buffer.samples.chunks(buffer.channels)
+            buffer.samples.chunks(buffer.channels.try_into().unwrap())
                 .map(|frame| frame.iter().sum::<f32>() / buffer.channels as f32)
                 .collect()
         };

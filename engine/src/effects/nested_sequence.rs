@@ -3,7 +3,7 @@
 //! Supports grouping clips into compound/nested sequences that can be edited
 //! as a single clip on the parent timeline, with recursive nesting support.
 
-use serde::{Deserialize, Serialize}];
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 /// A nested sequence (compound clip) that contains its own sub-timeline.

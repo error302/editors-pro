@@ -18,7 +18,7 @@ use std::fmt;
 use std::sync::Arc;
 
 /// Error severity level for categorization and reporting
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum ErrorSeverity {
     /// Informational — not really an error, just a note
     Info,
@@ -42,7 +42,7 @@ impl fmt::Display for ErrorSeverity {
 }
 
 /// Error category for grouping related errors
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum ErrorCategory {
     /// Decoding errors (FFmpeg, video/audio parsing)
     Decode,
@@ -271,7 +271,7 @@ impl ErrorReporter {
         report.push_str("=== EDITORS-PRO Error Report ===\n");
         report.push_str(&format!("Total errors: {}\n", self.total_errors()));
         report.push_str("Errors by category:\n");
-        for (cat, count) in self.error_counts {
+        for (cat, count) in &self.error_counts {
             report.push_str(&format!("  {}: {}\n", cat, count));
         }
         report.push_str("\nRecent errors:\n");

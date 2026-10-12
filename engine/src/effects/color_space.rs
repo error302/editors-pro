@@ -90,11 +90,11 @@ impl TransferFunction {
             }
             Self::HLG => {
                 // HLG OETF (scene-referred)
-                let a = 0.17883277;
-                let b = 1.0 - 4.0 * a;
-                let c = 0.5 - a * (4.0 * a).ln();
+                let a = 0.17883277f64;
+                let b = 1.0f64 - 4.0f64 * a;
+                let c = 0.5f64 - a * (4.0f64 * a).ln();
                 if linear <= 1.0 / 12.0 { (3.0 * linear).sqrt() }
-                else { a * (12.0 * linear - b).ln() + c }
+                else { (a * (12.0f64 * linear as f64 - b).ln() + c) as f32 }
             }
             Self::LogC => {
                 // ARRI LogC EI 800
@@ -157,9 +157,9 @@ impl TransferFunction {
             Self::HLG => {
                 let a = 0.17883277;
                 let b = 1.0 - 4.0 * a;
-                let c = 0.5 - a * (4.0 * a).ln();
+                let c = 0.5 - a * (4.0f64 * a).ln();
                 if encoded <= 0.5 { (encoded * encoded) / 3.0 }
-                else { ((encoded - c) / a).exp() / 12.0 + b / 12.0 }
+                else { (((encoded as f64 - c) / a).exp() / 12.0 + b / 12.0) as f32 }
             }
             Self::LogC => {
                 let cut = 0.092514 * 0.010591 + 0.000684;

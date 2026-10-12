@@ -182,13 +182,16 @@ impl MacroPlayer {
     pub fn start(&mut self) { self.is_playing = true; self.current_time_ms = 0.0; self.next_action_idx = 0; self.completed_loops = 0; }
     pub fn stop(&mut self) { self.is_playing = false; }
 
-    /// Advance time and return actions that should fire.
-    pub fn tick(&mut self, delta_ms: f64, macro_def: &Macro) -> Vec<&MacroAction> {
-        if !self.is_playing { return Vec::new(); }
-        self.current_time_ms += delta_ms * macro_def.playback_speed;
+    pub fn tick<'a>(&mut self, delta_ms: f64, macro_def: &'a Macro) -> Vec<&'a MacroAction> {
+        if !self.is_playing {
+            return Vec::new();
+        }
+        let speed = macro_def.playback_speed;
+        self.current_time_ms += delta_ms * speed;
         let mut fired = Vec::new();
-        while self.next_action_idx < macro_def.actions.len() {
-            let action = &macro_def.actions[self.next_action_idx];
+        let actions = &macro_def.actions;
+        while self.next_action_idx < actions.len() {
+            let action = &actions[self.next_action_idx];
             if action.timestamp_ms <= self.current_time_ms {
                 fired.push(action);
                 self.next_action_idx += 1;
@@ -197,7 +200,7 @@ impl MacroPlayer {
             }
         }
         // Check if macro completed
-        if self.next_action_idx >= macro_def.actions.len() {
+        if self.next_action_idx >= actions.len() {
             self.completed_loops += 1;
             if macro_def.is_looping || self.completed_loops < macro_def.loop_count {
                 self.next_action_idx = 0;

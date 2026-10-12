@@ -69,8 +69,8 @@ pub fn convert_rgba_to_yuv420p(
     }
 
     // Chroma planes (Cb, Cr) — 2×2 subsampled
-    let cb_plane = &mut yuv[y_size..y_size + uv_size];
-    let cr_plane = &mut yuv[y_size + uv_size..];
+    let (_, chroma_data) = yuv.split_at_mut(y_size);
+    let (cb_plane, cr_plane) = chroma_data.split_at_mut(uv_size);
 
     for row in (0..h).step_by(2) {
         for col in (0..w).step_by(2) {

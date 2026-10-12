@@ -260,9 +260,12 @@ fn apply_halation(frame: &mut [u8], width: u32, height: u32, params: &HalationPa
             for x in radius..width as usize - radius {
                 let mut sum = 0.0;
                 let mut count = 0;
-                for dy in -radius..=radius {
-                    for dx in -radius..=radius {
-                        sum += bloom[(y + dy) * width as usize + (x + dx)];
+                let r = radius as i32;
+                for dy in -r..=r {
+                    for dx in -r..=r {
+                        let y_idx = (y as i32 + dy) as usize;
+                        let x_idx = (x as i32 + dx) as usize;
+                        sum += bloom[y_idx * width as usize + x_idx];
                         count += 1;
                     }
                 }

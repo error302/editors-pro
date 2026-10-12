@@ -20,15 +20,27 @@ use serde::{Deserialize, Serialize};
 /// that maps the source frame's pixels to match the reference frame.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ColorMatchLut {
-    /// 256-entry per-channel mapping. `lut[channel][input_value] → output_value`.
-    pub lut: [[u8; 256]; 3],
+    /// 768 bytes: 3 channels * 256 entries. `lut[ch * 256 + input_val] → output_val`.
+    pub lut: Vec<u8>,
+}
+
+impl ColorMatchLut {
+    pub fn new() -> Self {
+        Self { lut: vec![0u8; 768] }
+    }
+
+    pub fn get(&self, ch: usize, val: u8) -> u8 {
+        self.lut[ch * 256 + val as usize]
+    }
+
+    pub fn set(&mut self, ch: usize, val: u8, new_val: u8) {
+        self.lut[ch * 256 + val as usize] = new_val;
+    }
 }
 
 /// Compute a color-match LUT from a source frame and a reference frame.
 ///
 /// Both frames must have the same dimensions.
-///
-/// video: histogram-based match only, upgrade to per-channel with masking if selective match is needed
 pub fn compute_match_lut(
     source: &[u8],
     reference: &[u8],
@@ -38,7 +50,7 @@ pub fn compute_match_lut(
     debug_assert_eq!(source.len(), width * height * 4);
     debug_assert_eq!(reference.len(), width * height * 4);
 
-    let mut lut = [[0u8; 256]; 3];
+    let mut lut_obj = ColorMatchLut::new();
 
     for ch in 0..3 {
         // Compute source histogram and CDF
@@ -80,19 +92,19 @@ pub fn compute_match_lut(
                     hi = mid;
                 }
             }
-            lut[ch][i] = lo as u8;
+            lut_obj.set(ch, i as u8, lo as u8);
         }
     }
 
-    ColorMatchLut { lut }
+    lut_obj
 }
 
 /// Apply a color-match LUT to a frame (in-place).
 pub fn apply_match_lut(pixels: &mut [u8], lut: &ColorMatchLut) {
     for px in pixels.chunks_exact_mut(4) {
-        px[0] = lut.lut[0][px[0] as usize];
-        px[1] = lut.lut[1][px[1] as usize];
-        px[2] = lut.lut[2][px[2] as usize];
+        px[0] = lut.get(0, px[0]);
+        px[1] = lut.get(1, px[1]);
+        px[2] = lut.get(2, px[2]);
         // alpha unchanged
     }
 }
@@ -128,7 +140,7 @@ mod tests {
         for ch in 0..3 {
             for i in 0..256 {
                 // The LUT maps i to itself (or very close)
-                let mapped = lut.lut[ch][i];
+                let mapped = lut.get(ch, i as u8);
                 assert!((mapped as i32 - i as i32).abs() <= 1,
                     "channel {} index {} mapped to {}, expected ~{}", ch, i, mapped, i);
             }

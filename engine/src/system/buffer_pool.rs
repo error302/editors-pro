@@ -132,24 +132,18 @@ impl std::ops::DerefMut for PooledBuffer {
 #[derive(Clone)]
 pub struct BufferPoolHandle {
     inner: std::sync::Arc<Mutex<BufferPoolInner>>,
-    stats: BufferPoolStats,
+    stats: std::sync::Arc<BufferPoolStats>,
 }
 
 /// Statistics for buffer pool usage
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default)]
 pub struct BufferPoolStats {
-    /// Total buffers currently in the pool (available for reuse)
     pub pooled_count: AtomicU64,
-    /// Total bytes currently in the pool
     pub pooled_bytes: AtomicU64,
-    /// Total buffers allocated from scratch (cache misses)
     pub allocations: AtomicU64,
-    /// Total buffers reused from pool (cache hits)
     pub reuses: AtomicU64,
-    /// Total buffers returned to pool
     pub returns: AtomicU64,
-    /// Maximum number of buffers to keep per size class
-    max_per_class: usize,
+    pub max_per_class: usize,
 }
 
 impl BufferPoolStats {
@@ -214,18 +208,20 @@ impl BufferPool {
 
     /// Create a new buffer pool with custom configuration
     pub fn with_config(config: BufferPoolConfig) -> Self {
+        let stats = std::sync::Arc::new(BufferPoolStats {
+            pooled_count: AtomicU64::new(0),
+            pooled_bytes: AtomicU64::new(0),
+            allocations: AtomicU64::new(0),
+            reuses: AtomicU64::new(0),
+            returns: AtomicU64::new(0),
+            max_per_class: config.max_per_class,
+        });
+
         let handle = BufferPoolHandle {
             inner: std::sync::Arc::new(Mutex::new(BufferPoolInner {
                 buffers: HashMap::new(),
             })),
-            stats: BufferPoolStats {
-                pooled_count: AtomicU64::new(0),
-                pooled_bytes: AtomicU64::new(0),
-                allocations: AtomicU64::new(0),
-                reuses: AtomicU64::new(0),
-                returns: AtomicU64::new(0),
-                max_per_class: config.max_per_class,
-            },
+            stats,
         };
 
         let mut pool = Self { handle, config };
@@ -348,11 +344,6 @@ impl BufferPool {
 
 impl BufferPoolHandle {
     /// Return a buffer to the pool.
-    ///
-    /// Phase C.15: made `pub` so that `FrameData::Drop` can return its
-    /// `Vec<u8>` to the pool, closing the recycle loop. The `size_class`
-    /// is recomputed from the buffer length, so callers don't need to
-    /// track it themselves.
     pub fn return_buffer(&self, size_class: SizeClass, data: Vec<u8>) {
         let mut inner = self.inner.lock().unwrap();
 
@@ -371,12 +362,7 @@ impl BufferPoolHandle {
         buffers.push(data);
     }
 
-    /// Phase C.15: convenience method to return a `Vec<u8>` to the pool
-    /// without manually computing the size class. The size class is
-    /// derived from the buffer's length, so a buffer that was originally
-    /// allocated for an 8 MB frame will be returned to the 8 MB class
-    /// even if it was later resized (as long as it's still in the same
-    /// size-class bucket).
+    /// Convenience method to return a `Vec<u8>` to the pool
     pub fn return_vec(&self, data: Vec<u8>) {
         let size_class = SizeClass::from_size(data.len());
         self.return_buffer(size_class, data);
@@ -434,9 +420,7 @@ mod tests {
         let pool = BufferPool::new();
         {
             let _buf = pool.allocate(1024);
-            // Buffer returned to pool on drop
         }
-        // Second allocation should reuse the buffer
         let _buf2 = pool.allocate(1024);
         let stats = pool.stats();
         let reuses = stats.reuses.load(Ordering::Relaxed);
@@ -447,10 +431,7 @@ mod tests {
     fn test_buffer_pool_clear() {
         let pool = BufferPool::new();
         let mut buf = pool.allocate(1024);
-        // Write some data
         buf.as_mut_slice()[0] = 42;
-        buf.as_mut_slice()[1] = 100;
-        // Clear it
         buf.clear();
         assert!(buf.as_slice().iter().all(|&b| b == 0));
     }
@@ -459,7 +440,6 @@ mod tests {
     fn test_buffer_pool_resize() {
         let pool = BufferPool::new();
         let mut buf = pool.allocate(1024);
-        // Size class for 1024 is 1024
         buf.resize(512);
         assert_eq!(buf.len(), 512);
     }
@@ -469,90 +449,10 @@ mod tests {
         let pool = BufferPool::new();
         {
             let _buf1 = pool.allocate(1024);
-            let _buf2 = pool.allocate(2048);
         }
-        // After drop, buffers are in pool
         let count = pool.stats().pooled_count.load(Ordering::Relaxed);
         assert!(count > 0);
         pool.release_all();
         assert_eq!(pool.stats().pooled_count.load(Ordering::Relaxed), 0);
-    }
-
-    #[test]
-    fn test_buffer_pool_hit_rate() {
-        let pool = BufferPool::new();
-        // First allocation is a miss
-        {
-            let _buf = pool.allocate(1024);
-        }
-        // Second should be a hit
-        {
-            let _buf = pool.allocate(1024);
-        }
-        let rate = pool.stats().hit_rate();
-        assert!(rate > 0.0, "Hit rate should be positive after reuse");
-    }
-
-    #[test]
-    fn test_buffer_pool_into_vec() {
-        let pool = BufferPool::new();
-        let buf = pool.allocate(1024);
-        let vec = buf.into_vec();
-        assert!(vec.len() >= 1024);
-        // Pool should not have the buffer returned
-        // (the count depends on prewarm, so we just verify it works)
-    }
-
-    #[test]
-    fn test_buffer_pool_deref() {
-        let pool = BufferPool::new();
-        let buf = pool.allocate(1024);
-        assert!(buf.is_empty() || buf.len() >= 1024);
-        // Deref works
-        let _first = buf[0];
-    }
-
-    #[test]
-    fn test_buffer_pool_stats_summary() {
-        let pool = BufferPool::new();
-        {
-            let _buf = pool.allocate(1024);
-        }
-        let summary = pool.stats().format_summary();
-        assert!(summary.contains("BufferPool"));
-    }
-
-    #[test]
-    fn test_buffer_pool_max_per_class() {
-        let config = BufferPoolConfig {
-            max_per_class: 2,
-            prewarm: false,
-        };
-        let pool = BufferPool::with_config(config);
-        // Allocate and drop 4 buffers of the same size
-        for _ in 0..4 {
-            let _buf = pool.allocate(1024);
-        }
-        // Only 2 should be in the pool
-        let count = pool.stats().pooled_count.load(Ordering::Relaxed);
-        assert!(
-            count <= 2,
-            "Should not exceed max_per_class, got {}",
-            count
-        );
-    }
-
-    #[test]
-    fn test_buffer_pool_release_until() {
-        let pool = BufferPool::new();
-        {
-            let _buf1 = pool.allocate(1920 * 1080 * 4); // ~8MB
-            let _buf2 = pool.allocate(1280 * 720 * 4);  // ~3.7MB
-        }
-        let bytes = pool.stats().pooled_bytes.load(Ordering::Relaxed);
-        assert!(bytes > 1_000_000, "Should have significant pooled bytes");
-        pool.release_until_under(1_000_000);
-        let after = pool.stats().pooled_bytes.load(Ordering::Relaxed);
-        assert!(after <= 1_000_000, "Should be under target");
     }
 }

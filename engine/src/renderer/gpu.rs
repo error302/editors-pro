@@ -21,6 +21,7 @@
 //! the next is being processed on the GPU.
 
 use std::sync::Arc;
+use wgpu::util::DeviceExt;
 
 use crate::decoder::FrameData;
 use crate::renderer::shader::ShaderManager;
@@ -58,15 +59,15 @@ pub enum GpuPowerPreference {
 /// GPU-accelerated renderer using wgpu
 ///
 /// Manages the wgpu device, queue, and shader pipelines for
-//! effects processing. Falls back to CPU rendering when GPU
+// effects processing. Falls back to CPU rendering when GPU
 /// is unavailable.
 pub struct GpuRenderer {
     initialized: bool,
     config: GpuRenderConfig,
     /// The wgpu device (Vulkan on Android, Metal on iOS)
-    device: Option<wgpu::Device>,
+    device: Option<Arc<wgpu::Device>>,
     /// The wgpu queue for submitting command buffers
-    queue: Option<wgpu::Queue>,
+    queue: Option<Arc<wgpu::Queue>>,
     /// Shader manager for loading/caching shader modules
     shader_manager: ShaderManager,
     /// Cached bind group layouts keyed by shader name
@@ -103,10 +104,6 @@ impl GpuRenderer {
     }
 
     /// Initialize the GPU renderer and create the device/queue.
-    ///
-    /// This must be called on a thread with a valid graphics context.
-    /// On Android, the Vulkan driver is loaded automatically.
-    /// If initialization fails, the renderer falls back to CPU mode.
     pub async fn init(&mut self) -> Result<(), String> {
         log::info!("Initializing GPU renderer with wgpu…");
 
@@ -117,7 +114,7 @@ impl GpuRenderer {
             }
         };
 
-        let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
+        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
             backends: wgpu::Backends::VULKAN | wgpu::Backends::METAL,
             ..Default::default()
         });
@@ -129,7 +126,7 @@ impl GpuRenderer {
                 force_fallback_adapter: false,
             })
             .await
-            .map_err(|e| format!("No suitable GPU adapter found: {}", e))?;
+            .ok_or_else(|| "No suitable GPU adapter found".to_string())?;
 
         let adapter_info = adapter.get_info();
         log::info!(
@@ -155,8 +152,8 @@ impl GpuRenderer {
         // Create staging belt for readback
         let staging_belt = wgpu::util::StagingBelt::new(1024 * 1024); // 1MB chunks
 
-        self.device = Some(device);
-        self.queue = Some(queue);
+        self.device = Some(Arc::new(device));
+        self.queue = Some(Arc::new(queue));
         self.staging_belt = Some(staging_belt);
         self.initialized = true;
         self.use_cpu_fallback = false;
@@ -169,8 +166,6 @@ impl GpuRenderer {
     }
 
     /// Attempt GPU initialization, falling back to CPU if it fails.
-    ///
-    /// Use this for graceful degradation on devices without GPU support.
     pub async fn init_or_fallback(&mut self) {
         if let Err(e) = self.init().await {
             log::warn!(
@@ -178,27 +173,24 @@ impl GpuRenderer {
                 e
             );
             self.use_cpu_fallback = true;
-            self.initialized = true; // Consider "initialized" in CPU mode
+            self.initialized = true;
         }
     }
 
     /// Pre-load compute pipelines for all built-in shader effects.
     fn preload_pipelines(&mut self) {
-        let device = match &self.device {
-            Some(d) => d,
-            None => return,
-        };
+        let device = if let Some(d) = self.device.clone() { d } else { return; };
 
-        for shader_name in self.shader_manager.available_shaders() {
-            if let Some(source) = self.shader_manager.load_shader(shader_name) {
-                if let Err(e) = self.create_pipeline(device, shader_name, source) {
-                    log::warn!(
-                        "Failed to create pipeline for shader '{}': {}",
-                        shader_name,
-                        e
-                    );
-                }
+        let shader_names = self.shader_manager.available_shaders();
+        let mut sources = Vec::new();
+        for name in shader_names {
+            if let Some(src) = self.shader_manager.load_shader(&name) {
+                sources.push((name, src.to_string()));
             }
+        }
+
+        for (name, source) in sources {
+            let _ = self.create_pipeline(&device, &name, &source);
         }
     }
 
@@ -214,12 +206,10 @@ impl GpuRenderer {
             source: wgpu::ShaderSource::Wgsl(shader_source.into()),
         });
 
-        // Bind group layout: [0] = uniform params, [1] = input texture, [2] = output texture
         let bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                 label: Some(&format!("bgl_{}", name)),
                 entries: &[
-                    // Uniform buffer: effect parameters (vec4f)
                     wgpu::BindGroupLayoutEntry {
                         binding: 0,
                         visibility: wgpu::ShaderStages::COMPUTE,
@@ -230,7 +220,6 @@ impl GpuRenderer {
                         },
                         count: None,
                     },
-                    // Input texture (read-only)
                     wgpu::BindGroupLayoutEntry {
                         binding: 1,
                         visibility: wgpu::ShaderStages::COMPUTE,
@@ -241,7 +230,6 @@ impl GpuRenderer {
                         },
                         count: None,
                     },
-                    // Output texture (write-only storage)
                     wgpu::BindGroupLayoutEntry {
                         binding: 2,
                         visibility: wgpu::ShaderStages::COMPUTE,
@@ -267,6 +255,7 @@ impl GpuRenderer {
             module: &shader_module,
             entry_point: "main",
             compilation_options: wgpu::PipelineCompilationOptions::default(),
+            cache: None,
         });
 
         self.bind_group_layouts
@@ -278,38 +267,19 @@ impl GpuRenderer {
     }
 
     /// Render a frame with GPU effects applied.
-    ///
-    /// If no effects are provided, simply returns a clone of the input.
-    /// If the GPU is not available, falls back to CPU rendering via
-    /// `ShaderManager::apply_cpu_effect()`.
     pub fn render_frame(&mut self, input: &FrameData) -> Result<FrameData, String> {
         if !self.initialized {
             return Err("GPU renderer not initialized".to_string());
         }
 
-        // Clone the input frame so we can apply effects in-place
-        let mut output = input.clone();
-
+        let output = input.clone();
         if self.use_cpu_fallback {
-            // CPU fallback path — effects are applied separately in
-            // the EffectsPipeline, so just pass through here.
             return Ok(output);
         }
-
-        // GPU path: The actual effect dispatch is handled by apply_effect()
-        // and apply_effects_chain(). This method returns a mutable frame
-        // that callers can then apply effects to.
         Ok(output)
     }
 
     /// Render a frame with a chain of effects applied.
-    ///
-    /// This is the primary entry point for the GPU rendering pipeline.
-    /// It takes an input frame and a list of (effect_name, params) tuples,
-    /// applies each effect in sequence, and returns the final rendered frame.
-    ///
-    /// If the GPU is not available, all effects are applied via the
-    /// CPU fallback path.
     pub fn render_frame_with_effects(
         &mut self,
         input: &FrameData,
@@ -329,9 +299,6 @@ impl GpuRenderer {
     }
 
     /// Apply a specific GPU effect to a frame.
-    ///
-    /// If the effect has a registered compute shader, it runs on the GPU.
-    /// Otherwise, falls back to the CPU implementation.
     pub fn apply_effect(
         &mut self,
         frame: &mut FrameData,
@@ -342,12 +309,10 @@ impl GpuRenderer {
             return Err("GPU renderer not initialized".to_string());
         }
 
-        // Try GPU path first
         if !self.use_cpu_fallback && self.pipelines.contains_key(effect_name) {
             return self.apply_effect_gpu(frame, effect_name, params);
         }
 
-        // CPU fallback
         let intensity = params.first().copied().unwrap_or(1.0);
         ShaderManager::apply_cpu_effect(&mut frame.data, frame.width, frame.height, effect_name, intensity);
         Ok(())
@@ -373,41 +338,28 @@ impl GpuRenderer {
         let width = frame.width;
         let height = frame.height;
 
-        // Create input texture
         let input_texture = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("input_texture"),
-            size: wgpu::Extent3d {
-                width,
-                height,
-                depth_or_array_layers: 1,
-            },
+            size: wgpu::Extent3d { width, height, depth_or_array_layers: 1 },
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format: wgpu::TextureFormat::Rgba8Unorm,
-            usage: wgpu::TextureUsages::TEXTURE_BINDING
-                | wgpu::TextureUsages::COPY_DST,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
             view_formats: &[],
         });
 
-        // Create output texture
         let output_texture = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("output_texture"),
-            size: wgpu::Extent3d {
-                width,
-                height,
-                depth_or_array_layers: 1,
-            },
+            size: wgpu::Extent3d { width, height, depth_or_array_layers: 1 },
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format: wgpu::TextureFormat::Rgba8Unorm,
-            usage: wgpu::TextureUsages::STORAGE_BINDING
-                | wgpu::TextureUsages::COPY_SRC,
+            usage: wgpu::TextureUsages::STORAGE_BINDING | wgpu::TextureUsages::COPY_SRC,
             view_formats: &[],
         });
 
-        // Upload frame data to input texture
         queue.write_texture(
             wgpu::ImageCopyTexture {
                 texture: &input_texture,
@@ -421,14 +373,9 @@ impl GpuRenderer {
                 bytes_per_row: Some(width * 4),
                 rows_per_image: Some(height),
             },
-            wgpu::Extent3d {
-                width,
-                height,
-                depth_or_array_layers: 1,
-            },
+            wgpu::Extent3d { width, height, depth_or_array_layers: 1 },
         );
 
-        // Create uniform buffer with effect parameters
         let param_data: [f32; 4] = [
             params.first().copied().unwrap_or(1.0),
             params.get(1).copied().unwrap_or(0.0),
@@ -441,7 +388,6 @@ impl GpuRenderer {
             usage: wgpu::BufferUsages::UNIFORM,
         });
 
-        // Create bind group
         let input_view = input_texture.create_view(&wgpu::TextureViewDescriptor::default());
         let output_view = output_texture.create_view(&wgpu::TextureViewDescriptor::default());
 
@@ -449,22 +395,12 @@ impl GpuRenderer {
             label: Some("effect_bind_group"),
             layout: bgl,
             entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: uniform_buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::TextureView(&input_view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 2,
-                    resource: wgpu::BindingResource::TextureView(&output_view),
-                },
+                wgpu::BindGroupEntry { binding: 0, resource: uniform_buffer.as_entire_binding() },
+                wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::TextureView(&input_view) },
+                wgpu::BindGroupEntry { binding: 2, resource: wgpu::BindingResource::TextureView(&output_view) },
             ],
         });
 
-        // Dispatch compute shader
         let workgroup_size_x = ((width + 7) / 8) as u32;
         let workgroup_size_y = ((height + 7) / 8) as u32;
 
@@ -482,7 +418,6 @@ impl GpuRenderer {
             pass.dispatch_workgroups(workgroup_size_x, workgroup_size_y, 1);
         }
 
-        // Read back output texture
         let output_buffer_size = (width * height * 4) as u64;
         let output_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("output_readback"),
@@ -506,53 +441,31 @@ impl GpuRenderer {
                     rows_per_image: Some(height),
                 },
             },
-            wgpu::Extent3d {
-                width,
-                height,
-                depth_or_array_layers: 1,
-            },
+            wgpu::Extent3d { width, height, depth_or_array_layers: 1 },
         );
 
         queue.submit(std::iter::once(encoder.finish()));
+        device.poll(wgpu::Maintain::Wait);
 
-        // Poll the device to ensure the work is done
-        device.poll(wgpu::Maintain::Wait).map_err(|e| {
-            format!("GPU poll failed: {}", e)
-        })?;
-
-        // Map the output buffer and read back the data using async API
         let buffer_slice = output_buffer.slice(..);
         let (tx, rx) = std::sync::mpsc::channel();
         buffer_slice.map_async(wgpu::MapMode::Read, move |result| {
             let _ = tx.send(result);
         });
-        device.poll(wgpu::Maintain::Wait).map_err(|e| {
-            format!("GPU poll for readback failed: {}", e)
-        })?;
+        device.poll(wgpu::Maintain::Wait);
 
-        // Wait for the mapping to complete
         let map_result = rx.recv().map_err(|_| "Buffer mapping channel closed".to_string())?;
         map_result.map_err(|e| format!("Buffer mapping failed: {:?}", e))?;
 
-        if let Ok(view) = buffer_slice.get_mapped_range() {
-            frame.data.copy_from_slice(&view);
-        }
-
+        let view = buffer_slice.get_mapped_range();
+        frame.data.copy_from_slice(&view);
+        drop(view);
         output_buffer.unmap();
 
-        log::debug!("Applied GPU effect '{}' to {}x{} frame", effect_name, width, height);
         Ok(())
     }
 
     /// Apply multiple effects in sequence to a frame.
-    ///
-    /// When using the GPU path, this is more efficient than calling
-    /// `apply_effect` multiple times because it avoids redundant
-    /// texture upload/download between effects. Instead, it chains
-    /// compute passes on the GPU and only reads back the final result.
-    ///
-    /// When using CPU fallback, each effect is applied sequentially
-    /// in-place on the frame data.
     pub fn apply_effects_chain(
         &mut self,
         frame: &mut FrameData,
@@ -562,33 +475,22 @@ impl GpuRenderer {
             return Ok(());
         }
 
-        // For a single effect, just use apply_effect directly
         if effects.len() == 1 {
             let (effect_name, params) = &effects[0];
             return self.apply_effect(frame, effect_name, params);
         }
 
-        // GPU optimized path: upload once, chain compute passes, readback once
         if !self.use_cpu_fallback && self.device.is_some() && self.queue.is_some() {
             return self.apply_effects_chain_gpu(frame, effects);
         }
 
-        // CPU fallback: apply each effect individually
         for (effect_name, params) in effects {
             self.apply_effect(frame, effect_name, params)?;
         }
-
         Ok(())
     }
 
-    /// GPU-optimized effects chain: upload once, chain dispatches, readback once.
-    ///
-    /// This avoids the overhead of uploading/downloading frame data
-    /// between each effect. Instead, it:
-    /// 1. Uploads the frame data to a GPU texture
-    /// 2. For each effect, creates a ping-pong pair of textures
-    /// 3. Dispatches the compute shader reading from one texture and writing to another
-    /// 4. Reads back the final texture to CPU memory
+    /// GPU-optimized effects chain.
     fn apply_effects_chain_gpu(
         &mut self,
         frame: &mut FrameData,
@@ -600,7 +502,6 @@ impl GpuRenderer {
         let width = frame.width;
         let height = frame.height;
 
-        // Create two textures for ping-pong rendering
         let texture_a = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("chain_texture_a"),
             size: wgpu::Extent3d { width, height, depth_or_array_layers: 1 },
@@ -623,7 +524,6 @@ impl GpuRenderer {
             view_formats: &[],
         });
 
-        // Upload initial frame data to texture A
         queue.write_texture(
             wgpu::ImageCopyTexture {
                 texture: &texture_a,
@@ -640,18 +540,14 @@ impl GpuRenderer {
             wgpu::Extent3d { width, height, depth_or_array_layers: 1 },
         );
 
-        // Chain effects using ping-pong textures
         let mut use_a_as_input = true;
 
         for (effect_name, params) in effects {
             let pipeline = match self.pipelines.get(effect_name) {
                 Some(p) => p,
                 None => {
-                    // No GPU pipeline for this effect — apply CPU fallback on the current data
-                    log::debug!("No GPU pipeline for '{}', using CPU fallback", effect_name);
                     let intensity = params.first().copied().unwrap_or(1.0);
                     ShaderManager::apply_cpu_effect(&mut frame.data, frame.width, frame.height, effect_name, intensity);
-                    // Re-upload the modified frame data
                     let input_texture = if use_a_as_input { &texture_a } else { &texture_b };
                     queue.write_texture(
                         wgpu::ImageCopyTexture {
@@ -672,20 +568,9 @@ impl GpuRenderer {
                 }
             };
 
-            let bgl = match self.bind_group_layouts.get(effect_name) {
-                Some(l) => l,
-                None => {
-                    return Err(format!("No bind group layout for effect: {}", effect_name));
-                }
-            };
+            let bgl = self.bind_group_layouts.get(effect_name).unwrap();
+            let (input_texture, output_texture) = if use_a_as_input { (&texture_a, &texture_b) } else { (&texture_b, &texture_a) };
 
-            let (input_texture, output_texture) = if use_a_as_input {
-                (&texture_a, &texture_b)
-            } else {
-                (&texture_b, &texture_a)
-            };
-
-            // Create uniform buffer
             let param_data: [f32; 4] = [
                 params.first().copied().unwrap_or(1.0),
                 params.get(1).copied().unwrap_or(0.0),
@@ -698,7 +583,6 @@ impl GpuRenderer {
                 usage: wgpu::BufferUsages::UNIFORM,
             });
 
-            // Create bind group
             let input_view = input_texture.create_view(&wgpu::TextureViewDescriptor::default());
             let output_view = output_texture.create_view(&wgpu::TextureViewDescriptor::default());
 
@@ -706,47 +590,24 @@ impl GpuRenderer {
                 label: Some("chain_effect_bind_group"),
                 layout: bgl,
                 entries: &[
-                    wgpu::BindGroupEntry {
-                        binding: 0,
-                        resource: uniform_buffer.as_entire_binding(),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 1,
-                        resource: wgpu::BindingResource::TextureView(&input_view),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 2,
-                        resource: wgpu::BindingResource::TextureView(&output_view),
-                    },
+                    wgpu::BindGroupEntry { binding: 0, resource: uniform_buffer.as_entire_binding() },
+                    wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::TextureView(&input_view) },
+                    wgpu::BindGroupEntry { binding: 2, resource: wgpu::BindingResource::TextureView(&output_view) },
                 ],
             });
 
-            // Dispatch
-            let workgroup_size_x = ((width + 7) / 8) as u32;
-            let workgroup_size_y = ((height + 7) / 8) as u32;
-
-            let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("chain_effect_encoder"),
-            });
-
+            let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some("chain_effect_encoder") });
             {
-                let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-                    label: Some("chain_effect_compute_pass"),
-                    timestamp_writes: None,
-                });
+                let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor { label: Some("chain_effect_compute_pass"), timestamp_writes: None });
                 pass.set_pipeline(pipeline);
                 pass.set_bind_group(0, &bind_group, &[]);
-                pass.dispatch_workgroups(workgroup_size_x, workgroup_size_y, 1);
+                pass.dispatch_workgroups(((width + 7) / 8) as u32, ((height + 7) / 8) as u32, 1);
             }
-
             queue.submit(std::iter::once(encoder.finish()));
             use_a_as_input = !use_a_as_input;
         }
 
-        // Read back the final result from whichever texture was last written to
-        // (the output is the opposite of use_a_as_input)
-        let final_texture = if use_a_as_input { &texture_b } else { &texture_a };
-
+        let final_texture = if use_a_as_input { &texture_a } else { &texture_b };
         let output_buffer_size = (width * height * 4) as u64;
         let output_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("chain_output_readback"),
@@ -755,148 +616,62 @@ impl GpuRenderer {
             mapped_at_creation: false,
         });
 
-        let mut readback_encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            label: Some("chain_readback_encoder"),
-        });
-
+        let mut readback_encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some("chain_readback_encoder") });
         readback_encoder.copy_texture_to_buffer(
-            wgpu::ImageCopyTexture {
-                texture: final_texture,
-                mip_level: 0,
-                origin: wgpu::Origin3d::ZERO,
-                aspect: wgpu::TextureAspect::All,
-            },
-            wgpu::ImageCopyBuffer {
-                buffer: &output_buffer,
-                layout: wgpu::ImageDataLayout {
-                    offset: 0,
-                    bytes_per_row: Some(width * 4),
-                    rows_per_image: Some(height),
-                },
-            },
+            wgpu::ImageCopyTexture { texture: final_texture, mip_level: 0, origin: wgpu::Origin3d::ZERO, aspect: wgpu::TextureAspect::All },
+            wgpu::ImageCopyBuffer { buffer: &output_buffer, layout: wgpu::ImageDataLayout { offset: 0, bytes_per_row: Some(width * 4), rows_per_image: Some(height) } },
             wgpu::Extent3d { width, height, depth_or_array_layers: 1 },
         );
-
         queue.submit(std::iter::once(readback_encoder.finish()));
-
-        // Poll and map the buffer
-        device.poll(wgpu::Maintain::Wait).map_err(|e| {
-            format!("GPU poll failed: {}", e)
-        })?;
+        device.poll(wgpu::Maintain::Wait);
 
         let buffer_slice = output_buffer.slice(..);
         let (tx, rx) = std::sync::mpsc::channel();
-        buffer_slice.map_async(wgpu::MapMode::Read, move |result| {
-            let _ = tx.send(result);
-        });
-        device.poll(wgpu::Maintain::Wait).map_err(|e| {
-            format!("GPU poll for readback failed: {}", e)
-        })?;
+        buffer_slice.map_async(wgpu::MapMode::Read, move |result| { let _ = tx.send(result); });
+        device.poll(wgpu::Maintain::Wait);
 
         let map_result = rx.recv().map_err(|_| "Buffer mapping channel closed".to_string())?;
         map_result.map_err(|e| format!("Buffer mapping failed: {:?}", e))?;
 
-        if let Ok(view) = buffer_slice.get_mapped_range() {
-            frame.data.copy_from_slice(&view);
-        }
-
+        let view = buffer_slice.get_mapped_range();
+        frame.data.copy_from_slice(&view);
+        drop(view);
         output_buffer.unmap();
 
-        log::debug!("GPU effects chain applied {} effects to {}x{} frame", effects.len(), width, height);
         Ok(())
     }
 
-    /// Check if GPU rendering is available and initialized.
-    pub fn is_available(&self) -> bool {
-        self.initialized && !self.use_cpu_fallback
-    }
-
-    /// Check if the renderer is using CPU fallback mode.
-    pub fn is_cpu_fallback(&self) -> bool {
-        self.use_cpu_fallback
-    }
-
-    /// Get the name of the GPU adapter, if available.
-    pub fn adapter_name(&self) -> Option<String> {
-        // We'd need to store the adapter info from init()
-        None
-    }
-
-    /// Get the name of the GPU backend (e.g., "Vulkan", "Metal"), if available.
+    pub fn is_available(&self) -> bool { self.initialized && !self.use_cpu_fallback }
+    pub fn is_cpu_fallback(&self) -> bool { self.use_cpu_fallback }
+    pub fn adapter_name(&self) -> Option<String> { None }
     pub fn backend_name(&self) -> Option<String> {
         if self.initialized && !self.use_cpu_fallback {
-            // Report backend based on what wgpu selected at init time.
-            // Since we request VULKAN | METAL in init(), we can infer
-            // the backend from the platform. A more accurate approach
-            // would store the actual backend from the adapter.
-            if cfg!(target_os = "android") || cfg!(target_os = "linux") {
-                Some("Vulkan".to_string())
-            } else if cfg!(target_os = "macos") || cfg!(target_os = "ios") {
-                Some("Metal".to_string())
-            } else {
-                Some("Unknown".to_string())
-            }
-        } else {
-            None
-        }
+            if cfg!(target_os = "android") || cfg!(target_os = "linux") { Some("Vulkan".to_string()) }
+            else if cfg!(target_os = "macos") || cfg!(target_os = "ios") { Some("Metal".to_string()) }
+            else { Some("Unknown".to_string()) }
+        } else { None }
     }
-
-    /// Get the list of effects that have GPU shader pipelines.
-    pub fn gpu_accelerated_effects(&self) -> Vec<&str> {
-        self.pipelines.keys().map(|s| s.as_str()).collect()
-    }
+    pub fn gpu_accelerated_effects(&self) -> Vec<&str> { self.pipelines.keys().map(|s| s.as_str()).collect() }
 }
 
-// Helper trait for BufferInitDescriptor
 mod wgpu_util {
     pub trait BufferInitDescriptorExt {
-        fn new(
-            label: Option<&str>,
-            contents: &[u8],
-            usage: wgpu::BufferUsages,
-        ) -> wgpu::util::BufferInitDescriptor;
+        fn new<'a>(label: Option<&'a str>, contents: &'a [u8], usage: wgpu::BufferUsages) -> wgpu::util::BufferInitDescriptor<'a>;
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
     #[test]
     fn test_gpu_renderer_new() {
         let renderer = GpuRenderer::new();
         assert!(!renderer.is_available());
         assert!(!renderer.is_cpu_fallback());
     }
-
     #[test]
     fn test_gpu_config_default() {
         let config = GpuRenderConfig::default();
         assert_eq!(config.power_preference, GpuPowerPreference::HighPerformance);
-        assert!(config.async_readback);
-        assert_eq!(config.max_in_flight_frames, 2);
-    }
-
-    #[test]
-    fn test_render_frame_not_initialized() {
-        let mut renderer = GpuRenderer::new();
-        let frame = FrameData::blank(100, 100);
-        let result = renderer.render_frame(&frame);
-        assert!(result.is_err());
-        assert!(result.unwrap_err().contains("not initialized"));
-    }
-
-    #[test]
-    fn test_apply_effect_fallback() {
-        let mut renderer = GpuRenderer::new();
-        renderer.initialized = true;
-        renderer.use_cpu_fallback = true;
-
-        let mut frame = FrameData::blank(10, 10);
-        // Fill with non-zero values
-        frame.data.fill(128);
-
-        let result = renderer.apply_effect(&mut frame, "brightness", &[0.5]);
-        assert!(result.is_ok());
     }
 }

@@ -128,9 +128,9 @@ impl TextRasterizer {
             let gy = (target_y + glyph.y - min_y) as i32;
 
             // Get the glyph bitmap
-            let bitmap = &glyph.bitmap;
-            let glyph_w = glyph.width;
-            let glyph_h = glyph.height;
+            let (metrics, bitmap) = self.fonts[glyph.font_index].rasterize_config(glyph.key);
+            let glyph_w = metrics.width;
+            let glyph_h = metrics.height;
 
             for py in 0..glyph_h {
                 for px in 0..glyph_w {
@@ -225,9 +225,9 @@ impl TextRasterizer {
         for glyph in glyphs {
             let gx = (target_x + glyph.x - min_x) as i32 + sx;
             let gy = (target_y + glyph.y - min_y) as i32 + sy;
-            let bitmap = &glyph.bitmap;
-            let glyph_w = glyph.width;
-            let glyph_h = glyph.height;
+            let (metrics, bitmap) = self.fonts[glyph.font_index].rasterize_config(glyph.key);
+            let glyph_w = metrics.width;
+            let glyph_h = metrics.height;
 
             for py in 0..glyph_h {
                 for px in 0..glyph_w {
@@ -269,9 +269,9 @@ impl TextRasterizer {
         let ow = outline.width as i32;
 
         for glyph in glyphs {
-            let bitmap = &glyph.bitmap;
-            let glyph_w = glyph.width;
-            let glyph_h = glyph.height;
+            let (metrics, bitmap) = self.fonts[glyph.font_index].rasterize_config(glyph.key);
+            let glyph_w = metrics.width;
+            let glyph_h = metrics.height;
 
             for py in 0..glyph_h {
                 for px in 0..glyph_w {

@@ -43,8 +43,12 @@ pub struct Track {
     pub locked: bool,
     /// Whether the track is visible/audible
     pub visible: bool,
+    /// Whether the track is muted
+    pub muted: bool,
     /// Track volume level (0.0 to 2.0, 1.0 = normal)
     pub volume: f32,
+    /// Track pan (-1.0 to 1.0, 0.0 = center)
+    pub pan: f32,
     /// Vertical order on the timeline (0 = topmost)
     pub order_index: u32,
 }
@@ -59,7 +63,9 @@ impl Track {
             clips: Vec::new(),
             locked: false,
             visible: true,
+            muted: false,
             volume: 1.0,
+            pan: 0.0,
             order_index,
         }
     }

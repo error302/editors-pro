@@ -44,7 +44,8 @@ use std::thread;
 use crossbeam_channel::{bounded, Receiver, Sender};
 use once_cell::sync::Lazy;
 
-use crate::decoder::{FrameData, HardwareDecoder, VideoInfo};
+use crate::decoder::{FrameData, VideoInfo};
+use crate::decoder::hardware::HardwareDecoder;
 
 /// A request from the Flutter side to the decode worker.
 pub enum DecodeRequest {

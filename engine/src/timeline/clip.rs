@@ -26,6 +26,10 @@ pub struct Clip {
     pub trim_start_ms: u64,
     /// Trim from the end of the source media in milliseconds
     pub trim_end_ms: u64,
+    /// Whether the clip is muted
+    pub muted: bool,
+    /// Clip volume level (0.0 to 2.0, 1.0 = normal)
+    pub volume: f32,
     /// Speed curve for variable playback speed (replaces flat speed: f32)
     pub speed_curve: SpeedCurve,
     /// Opacity level (0.0 = transparent, 1.0 = fully opaque)
@@ -52,6 +56,8 @@ impl Clip {
             duration_ms,
             trim_start_ms: 0,
             trim_end_ms: 0,
+            muted: false,
+            volume: 1.0,
             speed_curve: SpeedCurve::constant(1.0),
             opacity: 1.0,
             effects: Vec::new(),
@@ -72,6 +78,8 @@ impl Clip {
             duration_ms: duration,
             trim_start_ms: source_start_ms,
             trim_end_ms: 0,
+            muted: false,
+            volume: 1.0,
             speed_curve: SpeedCurve::constant(1.0),
             opacity: 1.0,
             effects: Vec::new(),

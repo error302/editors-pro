@@ -54,17 +54,17 @@ pub trait ProgressReporter: Send + Sync {
 }
 
 /// A simple progress reporter that sends progress via a flume sender.
-pub struct ChannelProgressReporter {
-    sender: flume::Sender<TaskResult<()>>,
+pub struct ChannelProgressReporter<T: Clone + Send + 'static> {
+    sender: flume::Sender<TaskResult<T>>,
 }
 
-impl ChannelProgressReporter {
-    pub fn new(sender: flume::Sender<TaskResult<()>>) -> Self {
+impl<T: Clone + Send + 'static> ChannelProgressReporter<T> {
+    pub fn new(sender: flume::Sender<TaskResult<T>>) -> Self {
         Self { sender }
     }
 }
 
-impl ProgressReporter for ChannelProgressReporter {
+impl<T: Clone + Send + 'static> ProgressReporter for ChannelProgressReporter<T> {
     fn report(&self, progress: f32, message: String) {
         let _ = self.sender.send(TaskResult::Progress {
             percent: progress,

@@ -41,6 +41,7 @@ pub fn init_engine() -> Result<(), EngineError> {
     );
 
     // Initialize FFmpeg libraries
+    #[cfg(feature = "ffmpeg")]
     ffmpeg_next::init().map_err(|e| {
         log::error!("Failed to initialize FFmpeg: {}", e);
         EngineError::InitializationFailed(format!("FFmpeg init error: {}", e))

@@ -95,7 +95,7 @@ impl SpeedRamp {
                         let p1y = p1.speed;
                         let cp0y = p0.speed + p0.bezier_handle_out.1;
                         let cp1y = p1.speed + p1.bezier_handle_in.1;
-                        cubic_bezier_1d(p0y, cp0y, cp1y, p1y, t as f32) as f64
+                        cubic_bezier_1d(p0y as f32, cp0y as f32, cp1y as f32, p1y as f32, t as f32) as f64
                     }
                     RampInterpolation::SmoothStep => {
                         let t = t * t * (3.0 - 2.0 * t);
@@ -116,7 +116,7 @@ impl SpeedRamp {
                     RampInterpolation::CatmullRom => {
                         let p_prev = if i > 0 { self.points[i-1].speed } else { p0.speed };
                         let p_next = if i + 2 < self.points.len() { self.points[i+2].speed } else { p1.speed };
-                        catmull_rom_1d(p_prev, p0.speed, p1.speed, p_next, t as f32) as f64
+                        catmull_rom_1d(p_prev as f32, p0.speed as f32, p1.speed as f32, p_next as f32, t as f32) as f64
                     }
                 };
             }

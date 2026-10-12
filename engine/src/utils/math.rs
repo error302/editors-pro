@@ -894,10 +894,10 @@ pub fn xyz_to_lab(x: f64, y: f64, z: f64) -> (f64, f64, f64) {
     let zn = 1.08883;
 
     let f = |t: f64| -> f64 {
-        if t > (6.0 / 29.0).powi(3) {
+        if t > (6.0f64 / 29.0f64).powi(3) {
             t.cbrt()
         } else {
-            t / (3.0 * (6.0 / 29.0).powi(2)) + 4.0 / 29.0
+            t / (3.0 * (6.0f64 / 29.0f64).powi(2)) + 4.0 / 29.0
         }
     };
 
@@ -927,8 +927,8 @@ pub fn lab_to_xyz(l: f64, a: f64, b: f64) -> (f64, f64, f64) {
     let fx = a / 500.0 + fy;
     let fz = fy - b / 200.0;
 
-    let epsilon = (6.0 / 29.0).powi(3);
-    let kappa = (29.0 / 6.0).powi(2) * 3.0;
+    let epsilon = (6.0f64 / 29.0f64).powi(3);
+    let kappa = (29.0f64 / 6.0f64).powi(2) * 3.0;
 
     let xr = if fx.powi(3) > epsilon { fx.powi(3) } else { (116.0 * fx - 16.0) / kappa };
     let yr = if l > kappa * epsilon { ((l + 16.0) / 116.0).powi(3) } else { l / kappa };

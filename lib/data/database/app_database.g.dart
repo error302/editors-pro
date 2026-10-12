@@ -1407,9 +1407,9 @@ final class $$ProjectEntriesTableReferences
                   db.projectEntries.id, db.mediaAssetEntries.projectId));
 
   $$MediaAssetEntriesTableProcessedTableManager get mediaAssetEntriesRefs {
-    final manager =
-        $$MediaAssetEntriesTableTableManager($_db, $_db.mediaAssetEntries)
-            .filter((f) => f.projectId.id($_item.id));
+    final manager = $$MediaAssetEntriesTableTableManager(
+            $_db, $_db.mediaAssetEntries)
+        .filter((f) => f.projectId.id.sqlEquals($_itemColumn<String>('id')!));
 
     final cache =
         $_typedResult.readTableOrNull(_mediaAssetEntriesRefsTable($_db));
@@ -1673,7 +1673,8 @@ class $$ProjectEntriesTableTableManager extends RootTableManager<
               getPrefetchedDataCallback: (items) async {
                 return [
                   if (mediaAssetEntriesRefs)
-                    await $_getPrefetchedData(
+                    await $_getPrefetchedData<ProjectEntry,
+                            $ProjectEntriesTable, MediaAssetEntry>(
                         currentTable: table,
                         referencedTable: $$ProjectEntriesTableReferences
                             ._mediaAssetEntriesRefsTable(db),
@@ -1748,8 +1749,10 @@ final class $$MediaAssetEntriesTableReferences extends BaseReferences<
           db.mediaAssetEntries.projectId, db.projectEntries.id));
 
   $$ProjectEntriesTableProcessedTableManager get projectId {
+    final $_column = $_itemColumn<String>('project_id')!;
+
     final manager = $$ProjectEntriesTableTableManager($_db, $_db.projectEntries)
-        .filter((f) => f.id($_item.projectId));
+        .filter((f) => f.id.sqlEquals($_column));
     final item = $_typedResult.readTableOrNull(_projectIdTable($_db));
     if (item == null) return manager;
     return ProcessedTableManager(

@@ -6,6 +6,7 @@
 
 pub mod decoder;
 pub mod ducking;
+pub mod effects;
 pub mod mixer;
 pub mod transcription;
 pub mod waveform;

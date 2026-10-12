@@ -85,7 +85,7 @@ pub fn export_edl(timeline: &InteropTimeline) -> String {
         let rec_out = format_timecode(clip.timeline_end_ms, timeline.frame_rate_num, timeline.frame_rate_den);
 
         out.push_str(&format!(
-            "{:03d}  AX       V     C        {} {} {} {}\n",
+            "{:03}  AX       V     C        {} {} {} {}\n",
             event_num, src_in, src_out, rec_in, rec_out
         ));
         out.push_str(&format!("FROM CLIP NAME: {}\n", clip.name));

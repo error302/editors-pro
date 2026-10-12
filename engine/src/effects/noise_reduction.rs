@@ -145,7 +145,7 @@ fn bilateral_filter(data: &mut [f32], width: u32, height: u32, spatial_sigma: f3
 fn wiener_filter(data: &mut [f32], width: u32, height: u32, noise_variance: f32) {
     // Simplified: local mean subtraction + soft thresholding
     let block_size = 8;
-    let mut output = data.clone();
+    let mut output = data.to_vec();
 
     for by in (0..height).step_by(block_size) {
         for bx in (0..width).step_by(block_size) {

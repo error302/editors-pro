@@ -47,8 +47,8 @@ impl ShaderManager {
     }
 
     /// List all available shader names
-    pub fn available_shaders(&self) -> Vec<&str> {
-        self.shaders.keys().map(|s| s.as_str()).collect()
+    pub fn available_shaders(&self) -> Vec<String> {
+        self.shaders.keys().cloned().collect()
     }
 
     /// Apply a CPU-based effect to frame data (fallback when GPU is not available)
@@ -79,7 +79,7 @@ impl ShaderManager {
     /// times because it avoids redundant pattern matching.
     pub fn apply_cpu_effects(data: &mut [u8], width: u32, height: u32, effects: &[(&str, f32)]) {
         for &(effect, intensity) in effects {
-            apply_cpu_effect(data, width, height, effect, intensity);
+            Self::apply_cpu_effect(data, width, height, effect, intensity);
         }
     }
 }

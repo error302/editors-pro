@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use log::debug;
 use serde::{Deserialize, Serialize};
-use std::sync::atomic::{AtomicF64, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 
 use crate::project::Project;
@@ -43,9 +43,9 @@ impl Default for PreviewConfig {
 pub struct PreviewPipeline {
     project: Project,
     config: PreviewConfig,
-    current_time: Arc<AtomicF64>,
+    current_time: Arc<AtomicU64>,
     current_frame: Arc<AtomicU64>,
-    playback_speed: Arc<AtomicF64>,
+    playback_speed: Arc<AtomicU64>,
     adaptive_quality_enabled: bool,
     current_quality: PreviewQuality,
 }
@@ -55,10 +55,10 @@ impl PreviewPipeline {
     pub fn new(project: Project, config: PreviewConfig) -> Result<Self> {
         Ok(Self {
             project,
-            config,
-            current_time: Arc::new(AtomicF64::new(0.0)),
+            config: config.clone(),
+            current_time: Arc::new(AtomicU64::new(0.0f64.to_bits())),
             current_frame: Arc::new(AtomicU64::new(0)),
-            playback_speed: Arc::new(AtomicF64::new(1.0)),
+            playback_speed: Arc::new(AtomicU64::new(1.0f64.to_bits())),
             adaptive_quality_enabled: true,
             current_quality: config.quality,
         })
@@ -81,7 +81,7 @@ impl PreviewPipeline {
         // Return a blank frame
         let frame_data = vec![0u8; frame_size];
 
-        self.current_time.store(time, Ordering::SeqCst);
+        self.current_time.store(time.to_bits(), Ordering::SeqCst);
         if self.config.target_fps > 0.0 {
             self.current_frame
                 .store((time * self.config.target_fps) as u64, Ordering::SeqCst);
@@ -98,7 +98,7 @@ impl PreviewPipeline {
     pub fn seek(&self, time: f64) -> Result<()> {
         let duration = self.project.timeline.get_duration();
         let clamped_time = time.clamp(0.0, duration);
-        self.current_time.store(clamped_time, Ordering::SeqCst);
+        self.current_time.store(clamped_time.to_bits(), Ordering::SeqCst);
         if self.config.target_fps > 0.0 {
             self.current_frame
                 .store((clamped_time * self.config.target_fps) as u64, Ordering::SeqCst);
@@ -109,7 +109,7 @@ impl PreviewPipeline {
 
     /// Set the playback speed (1.0 = normal, 2.0 = double speed, etc.).
     pub fn set_playback_speed(&self, speed: f32) {
-        self.playback_speed.store(speed as f64, Ordering::SeqCst);
+        self.playback_speed.store((speed as f64).to_bits(), Ordering::SeqCst);
         debug!("Playback speed set to {:.2}x", speed);
     }
 
@@ -129,12 +129,12 @@ impl PreviewPipeline {
 
     /// Get the current playback time.
     pub fn get_current_time(&self) -> f64 {
-        self.current_time.load(Ordering::SeqCst)
+        f64::from_bits(self.current_time.load(Ordering::SeqCst))
     }
 
     /// Get the playback speed.
     pub fn get_playback_speed(&self) -> f64 {
-        self.playback_speed.load(Ordering::SeqCst)
+        f64::from_bits(self.playback_speed.load(Ordering::SeqCst))
     }
 
     /// Calculate the effective resolution based on quality setting.
