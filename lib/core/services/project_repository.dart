@@ -23,6 +23,7 @@ import '../../data/models/project_model.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/services/engine_service.dart';
 import '../../core/services/database_provider.dart';
+import '../../core/services/project_snapshots.dart';
 
 class ProjectRepository {
   final AppDatabase _db;
@@ -65,7 +66,8 @@ class ProjectRepository {
           settings: null, // Use engine defaults matching our DB values
         );
       } catch (e) {
-        developer.log('Engine createProject failed: $e', name: 'ProjectRepository');
+        developer.log('Engine createProject failed: $e',
+            name: 'ProjectRepository');
       }
     }
 
@@ -83,9 +85,21 @@ class ProjectRepository {
       height: height,
       fps: fps,
       tracks: [
-        TrackModel(id: videoTrackId, name: 'Video 1', trackType: TrackType.video, orderIndex: 0),
-        TrackModel(id: audioTrackId, name: 'Audio 1', trackType: TrackType.audio, orderIndex: 1),
-        TrackModel(id: textTrackId, name: 'Text', trackType: TrackType.text, orderIndex: 2),
+        TrackModel(
+            id: videoTrackId,
+            name: 'Video 1',
+            trackType: TrackType.video,
+            orderIndex: 0),
+        TrackModel(
+            id: audioTrackId,
+            name: 'Audio 1',
+            trackType: TrackType.audio,
+            orderIndex: 1),
+        TrackModel(
+            id: textTrackId,
+            name: 'Text',
+            trackType: TrackType.text,
+            orderIndex: 2),
       ],
     );
   }
@@ -136,7 +150,8 @@ class ProjectRepository {
     try {
       final dir = await getApplicationDocumentsDirectory();
       final projectsDir = p.join(dir.path, AppConstants.projectsDir);
-      final eppPath = p.join(projectsDir, '${project.id}${AppConstants.projectFileExtension}');
+      final eppPath = p.join(
+          projectsDir, '${project.id}${AppConstants.projectFileExtension}');
 
       await EngineService.instance.api.saveProject(filePath: eppPath);
 
@@ -147,7 +162,8 @@ class ProjectRepository {
         updatedAt: Value(DateTime.now().millisecondsSinceEpoch),
       ));
     } catch (e) {
-      developer.log('saveProjectToEngine failed: $e', name: 'ProjectRepository');
+      developer.log('saveProjectToEngine failed: $e',
+          name: 'ProjectRepository');
     }
   }
 
@@ -160,12 +176,14 @@ class ProjectRepository {
     try {
       final dir = await getApplicationDocumentsDirectory();
       final projectsDir = p.join(dir.path, AppConstants.projectsDir);
-      final eppPath = p.join(projectsDir, '$projectId${AppConstants.projectFileExtension}');
+      final eppPath =
+          p.join(projectsDir, '$projectId${AppConstants.projectFileExtension}');
       final file = File(eppPath);
       if (!file.existsSync()) return null;
       return await file.readAsBytes();
     } catch (e) {
-      developer.log('readProjectEppBytes failed: $e', name: 'ProjectRepository');
+      developer.log('readProjectEppBytes failed: $e',
+          name: 'ProjectRepository');
       return null;
     }
   }
@@ -176,7 +194,8 @@ class ProjectRepository {
     try {
       await EngineService.instance.api.loadProject(filePath: eppFilePath);
     } catch (e) {
-      developer.log('loadProjectFromEngine failed: $e', name: 'ProjectRepository');
+      developer.log('loadProjectFromEngine failed: $e',
+          name: 'ProjectRepository');
     }
   }
 
@@ -205,8 +224,26 @@ class ProjectRepository {
 
   /// Delete a project and all its associated data.
   Future<void> deleteProject(String projectId) async {
-    await _db.deleteAssetsForProject(projectId);
-    await _db.deleteProject(projectId);
+    final docs = await getApplicationDocumentsDirectory();
+    final projectsDir =
+        p.normalize(p.join(docs.path, AppConstants.projectsDir));
+    final eppPath = p.normalize(
+      p.join(projectsDir, '$projectId${AppConstants.projectFileExtension}'),
+    );
+    if (!p.isWithin(projectsDir, eppPath)) {
+      throw ArgumentError.value(projectId, 'projectId', 'Invalid project ID');
+    }
+
+    final eppFile = File(eppPath);
+    if (await eppFile.exists()) {
+      await eppFile.delete();
+    }
+    await ProjectSnapshots.deleteAllForProject(projectId);
+
+    await _db.transaction(() async {
+      await _db.deleteAssetsForProject(projectId);
+      await _db.deleteProject(projectId);
+    });
   }
 
   // ─── Conversion helpers ────────────────────────────────────────
@@ -243,10 +280,14 @@ class ProjectRepository {
 
   MediaType _mediaTypeFromString(String type) {
     switch (type.toLowerCase()) {
-      case 'video': return MediaType.video;
-      case 'audio': return MediaType.audio;
-      case 'image': return MediaType.image;
-      default: return MediaType.video;
+      case 'video':
+        return MediaType.video;
+      case 'audio':
+        return MediaType.audio;
+      case 'image':
+        return MediaType.image;
+      default:
+        return MediaType.video;
     }
   }
 }

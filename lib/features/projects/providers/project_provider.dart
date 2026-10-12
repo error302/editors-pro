@@ -28,9 +28,11 @@ class ProjectState {
     bool? isLoading,
     String? error,
     bool clearError = false,
+    bool clearCurrentProject = false,
   }) {
     return ProjectState(
-      currentProject: currentProject ?? this.currentProject,
+      currentProject:
+          clearCurrentProject ? null : (currentProject ?? this.currentProject),
       recentProjects: recentProjects ?? this.recentProjects,
       isLoading: isLoading ?? this.isLoading,
       error: clearError ? null : (error ?? this.error),
@@ -65,11 +67,13 @@ class ProjectNotifier extends StateNotifier<ProjectState> {
 
   /// Create a new project — persists to database and initializes in the
   /// Rust engine.
-  Future<void> createProject(String name, {int width = 1920, int height = 1080, double fps = 30.0}) async {
+  Future<void> createProject(String name,
+      {int width = 1920, int height = 1080, double fps = 30.0}) async {
     state = state.copyWith(isLoading: true, error: null);
 
     try {
-      final project = await _repo.createProject(name, width: width, height: height, fps: fps);
+      final project = await _repo.createProject(name,
+          width: width, height: height, fps: fps);
 
       state = state.copyWith(
         currentProject: project,
@@ -119,14 +123,52 @@ class ProjectNotifier extends StateNotifier<ProjectState> {
   Future<void> deleteProject(String projectId) async {
     try {
       await _repo.deleteProject(projectId);
-      final updatedRecent = state.recentProjects.where((p) => p.id != projectId).toList();
+      final updatedRecent =
+          state.recentProjects.where((p) => p.id != projectId).toList();
       state = state.copyWith(
         recentProjects: updatedRecent,
-        currentProject: state.currentProject?.id == projectId ? null : state.currentProject,
+        clearCurrentProject: state.currentProject?.id == projectId,
       );
     } catch (e) {
       developer.log('deleteProject failed: $e', name: 'ProjectNotifier');
       state = state.copyWith(error: 'Delete failed: $e');
+    }
+  }
+
+  /// Delete every saved project while keeping source media files untouched.
+  Future<int> deleteAllProjects() async {
+    state = state.copyWith(isLoading: true, clearError: true);
+    try {
+      final projects = await _repo.getAllProjects();
+      for (final project in projects) {
+        await _repo.deleteProject(project.id);
+      }
+
+      state = state.copyWith(
+        recentProjects: const [],
+        clearCurrentProject: true,
+        isLoading: false,
+        clearError: true,
+      );
+      return projects.length;
+    } catch (e) {
+      List<ProjectModel>? remainingProjects;
+      try {
+        remainingProjects = await _repo.getAllProjects();
+      } catch (_) {
+        // Preserve the last known list if the database cannot be re-read.
+      }
+      final currentProjectRemains = remainingProjects?.any(
+            (project) => project.id == state.currentProject?.id,
+          ) ??
+          true;
+      state = state.copyWith(
+        recentProjects: remainingProjects,
+        clearCurrentProject: !currentProjectRemains,
+        isLoading: false,
+        error: 'Delete failed: $e',
+      );
+      rethrow;
     }
   }
 
@@ -171,9 +213,16 @@ class ProjectNotifier extends StateNotifier<ProjectState> {
   }
 
   /// Import media into the current project — persists to DB + engine.
-  Future<void> importMedia(String filePath, String fileName, MediaType mediaType, {
-    int? durationMs, int? width, int? height, int fileSizeBytes = 0,
-    String? codec, int? bitrate,
+  Future<void> importMedia(
+    String filePath,
+    String fileName,
+    MediaType mediaType, {
+    int? durationMs,
+    int? width,
+    int? height,
+    int fileSizeBytes = 0,
+    String? codec,
+    int? bitrate,
   }) async {
     if (state.currentProject == null) return;
 
@@ -328,7 +377,8 @@ class ProjectNotifier extends StateNotifier<ProjectState> {
     if (state.currentProject == null) return null;
     try {
       // Read the current .epp bytes from the engine's save location.
-      final eppBytes = await _repo.readProjectEppBytes(state.currentProject!.id);
+      final eppBytes =
+          await _repo.readProjectEppBytes(state.currentProject!.id);
       if (eppBytes == null) {
         developer.log(
           'createSnapshot: no .epp file found for project ${state.currentProject!.id}',
@@ -360,7 +410,8 @@ class ProjectNotifier extends StateNotifier<ProjectState> {
   /// Sync the project model with the latest engine state (after
   /// engine mutations like addClip, split, etc.).
   Future<void> syncFromEngine() async {
-    if (!EngineService.instance.isInitialized || state.currentProject == null) return;
+    if (!EngineService.instance.isInitialized || state.currentProject == null)
+      return;
     try {
       final api = EngineService.instance.api;
       final timelineState = await api.getTimelineState();
@@ -381,7 +432,8 @@ class ProjectNotifier extends StateNotifier<ProjectState> {
 }
 
 /// Provider for project state
-final projectProvider = StateNotifierProvider<ProjectNotifier, ProjectState>((ref) {
+final projectProvider =
+    StateNotifierProvider<ProjectNotifier, ProjectState>((ref) {
   return ProjectNotifier(ref);
 });
 

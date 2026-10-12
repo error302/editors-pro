@@ -1,15 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:editors_pro/app.dart';
 import 'package:editors_pro/core/services/engine_service.dart';
 import 'package:editors_pro/core/services/project_repository.dart';
 import 'package:editors_pro/data/models/project_model.dart';
+import 'package:editors_pro/features/projects/providers/project_provider.dart';
+import 'package:editors_pro/features/onboarding/providers/onboarding_provider.dart';
 
 /// A lightweight fake that satisfies the [ProjectRepository] interface
 /// without touching the filesystem or SQLite.
 class _FakeProjectRepository implements ProjectRepository {
+  _FakeProjectRepository({List<ProjectModel> projects = const []})
+      : projects = List.of(projects);
+
+  final List<ProjectModel> projects;
+  final List<String> deletedProjectIds = [];
+
   @override
   Future<ProjectModel> createProject(
     String name, {
@@ -27,15 +36,24 @@ class _FakeProjectRepository implements ProjectRepository {
       height: height,
       fps: fps,
       tracks: [
-        TrackModel(id: 'v1', name: 'Video 1', trackType: TrackType.video, orderIndex: 0),
-        TrackModel(id: 'a1', name: 'Audio 1', trackType: TrackType.audio, orderIndex: 1),
-        TrackModel(id: 't1', name: 'Text', trackType: TrackType.text, orderIndex: 2),
+        TrackModel(
+            id: 'v1',
+            name: 'Video 1',
+            trackType: TrackType.video,
+            orderIndex: 0),
+        TrackModel(
+            id: 'a1',
+            name: 'Audio 1',
+            trackType: TrackType.audio,
+            orderIndex: 1),
+        TrackModel(
+            id: 't1', name: 'Text', trackType: TrackType.text, orderIndex: 2),
       ],
     );
   }
 
   @override
-  Future<List<ProjectModel>> getAllProjects() async => [];
+  Future<List<ProjectModel>> getAllProjects() async => List.of(projects);
 
   @override
   Future<ProjectModel?> getProject(String id) async => null;
@@ -50,10 +68,16 @@ class _FakeProjectRepository implements ProjectRepository {
   Future<void> loadProjectFromEngine(String eppFilePath) async {}
 
   @override
+  Future<List<int>?> readProjectEppBytes(String projectId) async => null;
+
+  @override
   Future<void> addMediaAsset(String projectId, MediaAssetModel asset) async {}
 
   @override
-  Future<void> deleteProject(String projectId) async {}
+  Future<void> deleteProject(String projectId) async {
+    deletedProjectIds.add(projectId);
+    projects.removeWhere((project) => project.id == projectId);
+  }
 }
 
 void main() {
@@ -70,11 +94,14 @@ void main() {
 
     /// Pump the app with a fake repository so database calls don't crash.
     Future<void> pumpApp(WidgetTester tester) async {
+      SharedPreferences.setMockInitialValues({});
+      final preferences = await SharedPreferences.getInstance();
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
             projectRepositoryProvider
                 .overrideWith((ref) => _FakeProjectRepository()),
+            sharedPreferencesProvider.overrideWithValue(preferences),
           ],
           child: const EditorsProApp(),
         ),
@@ -159,7 +186,8 @@ void main() {
       expect(find.text('TEMPLATES'), findsOneWidget);
     });
 
-    testWidgets('home screen shows empty state when no projects', (tester) async {
+    testWidgets('home screen shows empty state when no projects',
+        (tester) async {
       await pumpApp(tester);
 
       expect(find.text('No Projects Yet'), findsOneWidget);
@@ -170,5 +198,44 @@ void main() {
 
       expect(find.text('New Project'), findsOneWidget);
     });
+  });
+
+  test('delete all projects clears saved projects and the open project',
+      () async {
+    final projects = [
+      ProjectModel(
+        id: 'project-1',
+        name: 'First',
+        createdAt: 1,
+        updatedAt: 1,
+        width: 1920,
+        height: 1080,
+        fps: 30,
+      ),
+      ProjectModel(
+        id: 'project-2',
+        name: 'Second',
+        createdAt: 2,
+        updatedAt: 2,
+        width: 1920,
+        height: 1080,
+        fps: 30,
+      ),
+    ];
+    final repository = _FakeProjectRepository(projects: projects);
+    final container = ProviderContainer(overrides: [
+      projectRepositoryProvider.overrideWith((ref) => repository),
+    ]);
+    addTearDown(container.dispose);
+
+    final notifier = container.read(projectProvider.notifier);
+    await notifier.loadProjects();
+    await notifier.openProject(projects.first);
+    final deletedCount = await notifier.deleteAllProjects();
+
+    expect(deletedCount, 2);
+    expect(repository.deletedProjectIds, ['project-1', 'project-2']);
+    expect(container.read(projectProvider).recentProjects, isEmpty);
+    expect(container.read(projectProvider).currentProject, isNull);
   });
 }

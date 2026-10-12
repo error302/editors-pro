@@ -4,6 +4,8 @@
 /// default project settings, storage management, performance tuning,
 /// export defaults, and privacy options.
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -13,9 +15,8 @@ import '../../core/extensions/context_extensions.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/constants/cloud_config.dart';
 import '../../core/services/database_provider.dart';
-import '../../core/services/engine_service.dart';
 import '../cloud/providers/cloud_provider.dart';
-import '../editor/providers/proxy_provider.dart';
+import '../projects/providers/project_provider.dart';
 import 'providers/settings_provider.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
@@ -30,12 +31,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   int _autoSaveIntervalMinutes = 2;
   String _defaultResolution = '1080p';
   double _defaultFps = 30.0;
-  bool _proxyEnabled = false;
-  String _proxyQuality = '480p';
-  bool _hardwareDecoding = true;
-  int _cacheSizeMb = 500;
-  bool _isClearingProxyCache = false;
-  String? _proxyCacheSizeDisplay;
+  bool _isDeletingAllProjects = false;
   String _cloudProvider = 'None';
 
   @override
@@ -50,24 +46,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final autoSaveInterval = await db.getPreference('auto_save_interval');
     final defaultRes = await db.getPreference('default_resolution');
     final defaultFps = await db.getPreference('default_fps');
-    final proxyEnabled = await db.getPreference('proxy_enabled');
-    final proxyQuality = await db.getPreference('proxy_quality');
-    final hwDecode = await db.getPreference('hardware_decoding');
-    final cacheSize = await db.getPreference('cache_size_mb');
-
-    // Also try to get proxy quality from the engine bridge
-    String effectiveProxyQuality = proxyQuality ?? '480p';
-    try {
-      final engine = EngineService.instance;
-      if (engine.isInitialized) {
-        final engineQuality = await engine.api.getProxyQuality();
-        if (engineQuality.isNotEmpty) {
-          effectiveProxyQuality = engineQuality;
-        }
-      }
-    } catch (_) {
-      // Engine not available, use local preference
-    }
 
     if (mounted) {
       setState(() {
@@ -75,12 +53,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         _autoSaveIntervalMinutes = int.tryParse(autoSaveInterval ?? '') ?? 2;
         _defaultResolution = defaultRes ?? '1080p';
         _defaultFps = double.tryParse(defaultFps ?? '') ?? 30.0;
-        _proxyEnabled = proxyEnabled == 'true';
-        _proxyQuality = effectiveProxyQuality;
-        _hardwareDecoding = hwDecode != 'false';
-        _cacheSizeMb = int.tryParse(cacheSize ?? '') ?? 500;
       });
-      _loadProxyCacheSize();
     }
   }
 
@@ -89,80 +62,30 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     await db.setPreference(key, value);
   }
 
-  Future<void> _setProxyQuality(String quality) async {
-    setState(() => _proxyQuality = quality);
-    await _setPreference('proxy_quality', quality);
-    final notifier = ref.read(settingsProvider.notifier);
-    notifier.setProxyQuality(quality);
-
-    // Update engine proxy quality via bridge API
+  Future<void> _deleteAllProjects() async {
+    if (_isDeletingAllProjects) return;
+    setState(() => _isDeletingAllProjects = true);
     try {
-      final engine = EngineService.instance;
-      if (engine.isInitialized) {
-        await engine.api.setProxyQuality(quality: quality);
-      }
-    } catch (e) {
-      debugPrint('Failed to set proxy quality on engine: $e');
-    }
-  }
-
-  Future<void> _loadProxyCacheSize() async {
-    try {
-      final engine = EngineService.instance;
-      if (engine.isInitialized) {
-        final size = await engine.api.getProxyCacheSize();
-        if (mounted && size > 0) {
-          setState(() {
-            _proxyCacheSizeDisplay = _formatBytes(size);
-          });
-        }
-      }
-    } catch (_) {
-      // Engine not available
-    }
-  }
-
-  Future<void> _clearProxyCache() async {
-    setState(() => _isClearingProxyCache = true);
-    try {
-      final engine = EngineService.instance;
-      if (engine.isInitialized) {
-        final bytesFreed = await engine.api.clearProxyCache();
-        if (mounted) {
-          setState(() {
-            _proxyCacheSizeDisplay = null;
-            _isClearingProxyCache = false;
-          });
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                bytesFreed > 0
-                    ? 'Proxy cache cleared (${_formatBytes(bytesFreed)} freed)'
-                    : 'Proxy cache is already empty',
-              ),
-            ),
-          );
-        }
+      final count =
+          await ref.read(projectProvider.notifier).deleteAllProjects();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(count == 0
+                ? 'There are no projects to delete'
+                : '$count projects deleted; original media files were left untouched'),
+          ),
+        );
       }
     } catch (e) {
       if (mounted) {
-        setState(() => _isClearingProxyCache = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to clear proxy cache: $e')),
+          SnackBar(content: Text('Could not delete all projects: $e')),
         );
       }
+    } finally {
+      if (mounted) setState(() => _isDeletingAllProjects = false);
     }
-  }
-
-  String _formatBytes(int bytes) {
-    if (bytes >= 1024 * 1024 * 1024) {
-      return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(1)} GB';
-    } else if (bytes >= 1024 * 1024) {
-      return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
-    } else if (bytes >= 1024) {
-      return '${(bytes / 1024).toStringAsFixed(1)} KB';
-    }
-    return '$bytes B';
   }
 
   @override
@@ -282,36 +205,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           _SectionHeader(title: 'Performance'),
           _SettingsCard(
             children: [
-              _SettingsSwitch(
-                label: 'Hardware-Accelerated Decoding',
-                subtitle: 'Use MediaCodec for faster video decode',
-                value: _hardwareDecoding,
-                onChanged: (v) {
-                  setState(() => _hardwareDecoding = v);
-                  _setPreference('hardware_decoding', v.toString());
-                  settingsNotifier.setHardwareDecoding(v);
-                },
-              ),
-              const Divider(height: 1),
-              _SettingsSwitch(
-                label: 'GPU Acceleration',
-                subtitle: 'Use GPU for rendering when available',
-                value: settings.gpuAccelerationEnabled,
-                onChanged: (v) => settingsNotifier.setGpuAcceleration(v),
-              ),
-              const Divider(height: 1),
-              _SettingsSlider(
-                label: 'Preview Cache Size',
-                value: _cacheSizeMb.toDouble(),
-                min: 100,
-                max: 2000,
-                divisions: 19,
-                unit: 'MB',
-                onChanged: (v) {
-                  setState(() => _cacheSizeMb = v.round());
-                  _setPreference('cache_size_mb', v.round().toString());
-                  settingsNotifier.setCacheSizeMb(v.round());
-                },
+              const ListTile(
+                leading: Icon(Icons.info_outline),
+                title: Text('Performance controls unavailable'),
+                subtitle:
+                    Text('This engine build does not expose these controls.'),
+                enabled: false,
               ),
             ],
           ),
@@ -320,69 +219,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
           // ─── Proxy & Performance ───────────────────────────
           _SectionHeader(title: 'Proxy & Performance'),
-          Consumer(builder: (context, ref, _) {
-            final proxyState = ref.watch(proxyProvider);
-            final proxyNotifier = ref.read(proxyProvider.notifier);
-            return _SettingsCard(
-              children: [
-                _SettingsDropdown(
-                  label: 'Proxy Quality',
-                  value: proxyState.quality,
-                  options: const ['Off', '360p', '480p', '720p'],
-                  onChanged: (v) {
-                    proxyNotifier.setQuality(v);
-                    _setProxyQuality(v);
-                  },
-                ),
-                const Divider(height: 1),
-                _SettingsSwitch(
-                  label: 'Auto-Generate Proxies',
-                  subtitle:
-                      'Automatically create proxies when importing high-res media',
-                  value: proxyState.autoProxyEnabled,
-                  onChanged: (v) => proxyNotifier.setAutoProxy(v),
-                ),
-                const Divider(height: 1),
-                ListTile(
-                  leading: const Icon(Icons.video_settings_outlined,
-                      color: AppTheme.primary),
-                  title:
-                      Text('Proxy Cache', style: context.textTheme.bodyMedium),
-                  subtitle: Text(
-                    proxyState.cacheSizeBytes > 0
-                        ? '${_formatBytes(proxyState.cacheSizeBytes)} · ${proxyState.activeProxyCount} active prox${proxyState.activeProxyCount == 1 ? 'y' : 'ies'}'
-                        : '${proxyState.activeProxyCount} active prox${proxyState.activeProxyCount == 1 ? 'y' : 'ies'}',
-                    style: context.textTheme.bodySmall,
-                  ),
-                  trailing: _isClearingProxyCache
-                      ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : TextButton(
-                          onPressed: proxyState.cacheSizeBytes > 0
-                              ? () => _showClearProxyCacheDialog(context)
-                              : null,
-                          child: const Text('Clear'),
-                        ),
-                ),
-                const Divider(height: 1),
-                Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  child: Text(
-                    'Proxies are lower-resolution copies used for smooth editing. '
-                    'The original full-resolution media is always used for export.',
-                    style: context.textTheme.bodySmall?.copyWith(
-                      color: AppTheme.textDisabled,
-                      height: 1.4,
-                    ),
-                  ),
-                ),
-              ],
-            );
-          }),
+          _SettingsCard(
+            children: const [
+              ListTile(
+                leading: Icon(Icons.info_outline),
+                title: Text('Proxy tools unavailable'),
+                subtitle:
+                    Text('This engine build does not include proxy support.'),
+                enabled: false,
+              ),
+            ],
+          ),
 
           const SizedBox(height: 24),
 
@@ -415,39 +262,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           _SectionHeader(title: 'Storage'),
           _SettingsCard(
             children: [
-              ListTile(
-                leading:
-                    const Icon(Icons.folder_outlined, color: AppTheme.primary),
-                title: Text('Clear Preview Cache',
-                    style: context.textTheme.bodyMedium),
-                subtitle: Text('Free up disk space used by cached frames',
-                    style: context.textTheme.bodySmall),
-                trailing:
-                    Icon(Icons.chevron_right, color: AppTheme.textDisabled),
-                onTap: () => _showClearCacheDialog(context),
-              ),
-              const Divider(height: 1),
-              ListTile(
-                leading: const Icon(Icons.video_settings_outlined,
-                    color: AppTheme.primary),
-                title: Text('Clear Proxy Cache',
-                    style: context.textTheme.bodyMedium),
-                subtitle: Text(
-                  _proxyCacheSizeDisplay != null
-                      ? 'Current size: $_proxyCacheSizeDisplay'
-                      : 'Free up disk space used by proxy videos',
-                  style: context.textTheme.bodySmall,
-                ),
-                trailing: _isClearingProxyCache
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : Icon(Icons.chevron_right, color: AppTheme.textDisabled),
-                onTap: _isClearingProxyCache
-                    ? null
-                    : () => _showClearProxyCacheDialog(context),
+              const ListTile(
+                leading: Icon(Icons.info_outline),
+                title: Text('Cache cleanup unavailable'),
+                subtitle:
+                    Text('This engine build does not expose cache cleanup.'),
+                enabled: false,
               ),
               const Divider(height: 1),
               ListTile(
@@ -455,11 +275,19 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     color: AppTheme.error),
                 title: Text('Delete All Projects',
                     style: context.textTheme.bodyMedium),
-                subtitle: Text('Permanently remove all projects and assets',
+                subtitle: Text(
+                    'Remove saved projects; keep original media files',
                     style: context.textTheme.bodySmall),
-                trailing:
-                    Icon(Icons.chevron_right, color: AppTheme.textDisabled),
-                onTap: () => _showDeleteAllDialog(context),
+                trailing: _isDeletingAllProjects
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : Icon(Icons.chevron_right, color: AppTheme.textDisabled),
+                onTap: _isDeletingAllProjects
+                    ? null
+                    : () => _showDeleteAllDialog(context),
               ),
             ],
           ),
@@ -739,42 +567,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     );
   }
 
-  void _showClearCacheDialog(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Clear Preview Cache?'),
-        content: const Text(
-          'This will delete all cached preview frames and thumbnails. '
-          'Your projects will not be affected.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(ctx);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Cache cleared')),
-              );
-            },
-            child: const Text('Clear'),
-          ),
-        ],
-      ),
-    );
-  }
-
   void _showDeleteAllDialog(BuildContext context) {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Delete All Projects?'),
         content: const Text(
-          'This will permanently delete ALL projects and their associated media. '
-          'This action cannot be undone.',
+          'This permanently deletes all saved project timelines and snapshots. '
+          'Original media files will remain untouched. This action cannot be undone.',
         ),
         actions: [
           TextButton(
@@ -783,40 +583,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: AppTheme.error),
-            onPressed: () {
-              Navigator.pop(ctx);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('All projects deleted')),
-              );
-            },
+            onPressed: _isDeletingAllProjects
+                ? null
+                : () {
+                    Navigator.pop(ctx);
+                    unawaited(_deleteAllProjects());
+                  },
             child: const Text('Delete All'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showClearProxyCacheDialog(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Clear Proxy Cache?'),
-        content: const Text(
-          'This will delete all proxy video files from the cache. '
-          'Proxies will be regenerated automatically when needed. '
-          'Your original media files will not be affected.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(ctx);
-              _clearProxyCache();
-            },
-            child: const Text('Clear'),
           ),
         ],
       ),

@@ -75,10 +75,8 @@ class ProjectSnapshots {
       final now = DateTime.now();
       // Use ISO 8601 with hyphens instead of colons (colons are
       // illegal in filenames on Windows).
-      final stamp = now
-          .toIso8601String()
-          .replaceAll(':', '-')
-          .replaceAll('.', '-');
+      final stamp =
+          now.toIso8601String().replaceAll(':', '-').replaceAll('.', '-');
       final filename = '$stamp.epp';
       final file = File(p.join(dir.path, filename));
       await file.writeAsBytes(eppBytes);
@@ -108,8 +106,7 @@ class ProjectSnapshots {
   /// Returns a list of [ProjectSnapshot] records with the snapshot ID,
   /// timestamp, and file size. Returns an empty list if the project
   /// has no snapshots (or the directory doesn't exist).
-  static Future<List<ProjectSnapshot>> listForProject(
-      String projectId) async {
+  static Future<List<ProjectSnapshot>> listForProject(String projectId) async {
     try {
       final root = await _snapshotsRoot();
       final dir = Directory(p.join(root.path, projectId));
@@ -196,7 +193,12 @@ class ProjectSnapshots {
   static Future<void> deleteAllForProject(String projectId) async {
     try {
       final root = await _snapshotsRoot();
-      final dir = Directory(p.join(root.path, projectId));
+      final rootPath = p.normalize(root.path);
+      final dirPath = p.normalize(p.join(rootPath, projectId));
+      if (!p.isWithin(rootPath, dirPath)) {
+        throw ArgumentError.value(projectId, 'projectId', 'Invalid project ID');
+      }
+      final dir = Directory(dirPath);
       if (dir.existsSync()) {
         await dir.delete(recursive: true);
       }
@@ -205,6 +207,7 @@ class ProjectSnapshots {
         'Failed to delete all snapshots for project $projectId: $e',
         name: 'ProjectSnapshots',
       );
+      rethrow;
     }
   }
 
@@ -294,8 +297,18 @@ class ProjectSnapshot {
 
   static String _monthAbbrev(int month) {
     const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec'
     ];
     return months[month - 1];
   }
