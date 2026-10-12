@@ -1,21 +1,21 @@
 import 'dart:async';
 import 'dart:collection';
-import 'dart:math' as math;
-import 'dart:typed_data';
 import 'dart:developer' as developer;
+import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../core/theme/app_theme.dart';
 import '../../../core/extensions/context_extensions.dart';
 import '../../../core/services/engine_service.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../data/models/project_model.dart';
 import '../../projects/providers/project_provider.dart';
 import '../providers/editor_provider.dart';
+import 'safe_zones_overlay.dart';
 import 'text_overlay_handle.dart';
 import 'transform_handles.dart';
-import 'safe_zones_overlay.dart';
 
 enum SafeZoneType { actionSafe, titleSafe, centerCross, thirds, centerMarker }
 
@@ -466,6 +466,30 @@ class _PreviewViewportState extends ConsumerState<PreviewViewport> {
   }
 
   Widget _buildPreviewContent(BuildContext context, EditorState state) {
+    final stillImage = _stillImageAtTime(
+      ref.watch(currentProjectProvider),
+      state.currentTimeMs,
+    );
+    if (stillImage != null) {
+      return LayoutBuilder(
+        builder: (context, constraints) {
+          final pixelRatio = MediaQuery.devicePixelRatioOf(context);
+          final cacheWidth = constraints.maxWidth.isFinite
+              ? (constraints.maxWidth * pixelRatio).round()
+              : null;
+          return Image.file(
+            File(stillImage.filePath),
+            fit: BoxFit.contain,
+            gaplessPlayback: true,
+            cacheWidth:
+                cacheWidth != null && cacheWidth > 0 ? cacheWidth : null,
+            errorBuilder: (context, error, stackTrace) =>
+                _buildImageUnavailable(context, stillImage.fileName),
+          );
+        },
+      );
+    }
+
     // If we have decoded frame bytes, display them.
     if (_currentFrameBytes != null && _currentFrameBytes!.isNotEmpty) {
       return Image.memory(
@@ -480,6 +504,64 @@ class _PreviewViewportState extends ConsumerState<PreviewViewport> {
     }
 
     return _buildPlaceholder(context, state);
+  }
+
+  MediaAssetModel? _stillImageAtTime(ProjectModel? project, int timeMs) {
+    if (project == null) return null;
+
+    final activeClips = [
+      for (final track in project.tracks)
+        if (track.visible && track.trackType == TrackType.video)
+          for (final clip in track.clips)
+            if (timeMs >= clip.startMs &&
+                timeMs < clip.startMs + clip.durationMs)
+              clip,
+    ];
+
+    // Do not guess which layer to show when clips overlap; the native engine
+    // must composite those cases.
+    if (activeClips.length != 1) return null;
+
+    final clip = activeClips.single;
+    for (final asset in project.mediaAssets) {
+      if (asset.id == clip.assetId &&
+          asset.mediaType == MediaType.image &&
+          asset.filePath.isNotEmpty) {
+        return asset;
+      }
+    }
+    return null;
+  }
+
+  Widget _buildImageUnavailable(BuildContext context, String fileName) {
+    return Container(
+      color: const Color(0xFF111122),
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.broken_image_outlined,
+                size: 40, color: AppTheme.textDisabled),
+            const SizedBox(height: 8),
+            Text(
+              'Image unavailable',
+              style: context.textTheme.titleSmall?.copyWith(
+                color: AppTheme.textSecondary,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              fileName,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: context.textTheme.bodySmall?.copyWith(
+                color: AppTheme.textDisabled,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Widget _buildPlaceholder(BuildContext context, EditorState state) {

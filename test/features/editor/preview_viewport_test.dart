@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_test/flutter_test.dart';
 
 import 'package:editors_pro/core/services/engine_service.dart';
 import 'package:editors_pro/core/services/project_repository.dart';
 import 'package:editors_pro/data/models/project_model.dart';
 import 'package:editors_pro/features/editor/providers/editor_provider.dart';
 import 'package:editors_pro/features/editor/widgets/preview_viewport.dart';
+import 'package:editors_pro/features/projects/providers/project_provider.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -33,10 +34,11 @@ void main() {
             // Provide a fake project repository so database isn't needed.
             projectRepositoryProvider
                 .overrideWith((ref) => _FakeProjectRepository()),
+            currentProjectProvider.overrideWithValue(project),
 
             // Override the editor provider so we control the state.
             editorProvider.overrideWith((ref) {
-              return _TestEditorNotifier(editorState);
+              return _TestEditorNotifier(ref, editorState);
             }),
           ],
           child: MaterialApp(
@@ -65,6 +67,54 @@ void main() {
       // The placeholder shows a movie icon and "Preview" text.
       expect(find.byIcon(Icons.movie_creation_outlined), findsOneWidget);
       expect(find.text('Preview'), findsOneWidget);
+    });
+
+    testWidgets('shows the active still image from the project media library',
+        (tester) async {
+      const imagePath = '/media/project/photo.jpg';
+      final project = ProjectModel(
+        id: 'project-1',
+        name: 'Image preview test',
+        createdAt: 0,
+        updatedAt: 0,
+        width: 1920,
+        height: 1080,
+        fps: 30,
+        tracks: const [
+          TrackModel(
+            id: 'video-1',
+            name: 'Video 1',
+            trackType: TrackType.video,
+            clips: [
+              ClipModel(
+                id: 'clip-1',
+                assetId: 'asset-1',
+                startMs: 1000,
+                durationMs: 5000,
+              ),
+            ],
+          ),
+        ],
+        mediaAssets: const [
+          MediaAssetModel(
+            id: 'asset-1',
+            filePath: imagePath,
+            fileName: 'photo.jpg',
+            mediaType: MediaType.image,
+          ),
+        ],
+      );
+
+      await pumpViewport(
+        tester,
+        editorState: const EditorState(currentTimeMs: 2500),
+        project: project,
+      );
+
+      final image = tester.widget<Image>(find.byType(Image));
+      final resizedImage = image.image as ResizeImage;
+      expect((resizedImage.imageProvider as FileImage).file.path, imagePath);
+      expect(find.text('Preview'), findsNothing);
     });
 
     testWidgets('shows play button when not playing', (tester) async {
@@ -152,35 +202,19 @@ void main() {
 
 /// A [EditorNotifier] that starts with a given [EditorState] and does
 /// not try to initialize the Rust engine.
-class _TestEditorNotifier extends StateNotifier<EditorState> {
-  _TestEditorNotifier(EditorState initialState) : super(initialState);
+class _TestEditorNotifier extends EditorNotifier {
+  _TestEditorNotifier(super.ref, EditorState initialState) {
+    state = initialState;
+  }
 
   @override
   Future<void> initialize() async {
     // No-op in tests
   }
 
+  @override
   void togglePlayback() {
     state = state.copyWith(isPlaying: !state.isPlaying);
-  }
-
-  void seekTo(int timeMs) {
-    state = state.copyWith(currentTimeMs: timeMs);
-  }
-
-  void selectClip(String? clipId) {
-    state = state.copyWith(
-      selectedClipId: clipId,
-      showInspector: clipId != null,
-    );
-  }
-
-  void zoomIn() {
-    state = state.copyWith(zoomLevel: (state.zoomLevel * 1.2).clamp(0.1, 10.0));
-  }
-
-  void zoomOut() {
-    state = state.copyWith(zoomLevel: (state.zoomLevel / 1.2).clamp(0.1, 10.0));
   }
 }
 
@@ -221,7 +255,13 @@ class _FakeProjectRepository implements ProjectRepository {
   Future<void> loadProjectFromEngine(String eppFilePath) async {}
 
   @override
+  Future<List<int>?> readProjectEppBytes(String projectId) async => null;
+
+  @override
   Future<void> addMediaAsset(String projectId, MediaAssetModel asset) async {}
+
+  @override
+  Future<void> restoreMediaAssetInEngine(MediaAssetModel asset) async {}
 
   @override
   Future<void> deleteProject(String projectId) async {}
