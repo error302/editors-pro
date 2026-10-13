@@ -239,7 +239,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('720 x 1280  ·  60 fps'), findsOneWidget);
-      await tester.tap(find.text('Create project'));
+      await tester.tap(find.text('Create'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 500));
 

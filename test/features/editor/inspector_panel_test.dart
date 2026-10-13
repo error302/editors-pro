@@ -125,11 +125,31 @@ void main() {
 
       // Header should say "Inspector"
       expect(find.text('Inspector'), findsOneWidget);
-      // Section headers should be visible
+      // The selected clip inspector is a scrollable phone-friendly panel.
       expect(find.text('TIMING'), findsOneWidget);
+      await tester.scrollUntilVisible(
+        find.text('SPEED'),
+        180,
+        scrollable: find.byType(Scrollable).first,
+      );
       expect(find.text('SPEED'), findsOneWidget);
+      await tester.scrollUntilVisible(
+        find.text('OPACITY'),
+        180,
+        scrollable: find.byType(Scrollable).first,
+      );
       expect(find.text('OPACITY'), findsOneWidget);
+      await tester.scrollUntilVisible(
+        find.text('EFFECTS'),
+        180,
+        scrollable: find.byType(Scrollable).first,
+      );
       expect(find.text('EFFECTS'), findsOneWidget);
+      await tester.scrollUntilVisible(
+        find.text('TRANSITIONS'),
+        180,
+        scrollable: find.byType(Scrollable).first,
+      );
       expect(find.text('TRANSITIONS'), findsOneWidget);
     });
 
@@ -303,7 +323,11 @@ void main() {
         project: project,
       );
 
-      // The effect name should be visible
+      await tester.scrollUntilVisible(
+        find.text('Brightness'),
+        180,
+        scrollable: find.byType(Scrollable).first,
+      );
       expect(find.text('Brightness'), findsOneWidget);
     });
 
@@ -383,7 +407,7 @@ void main() {
       // Track inspector header
       expect(find.text('Track Inspector'), findsOneWidget);
       // Track type badge
-      expect(find.text('AUDIO'), findsOneWidget);
+      expect(find.text('AUDIO TRACK'), findsOneWidget);
       // Track name
       expect(find.text('Audio 1'), findsOneWidget);
       // Properties

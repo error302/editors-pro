@@ -421,6 +421,19 @@ String _trackIconPath(TrackType type) {
   }
 }
 
+String _trackTypeLabel(TrackType type) {
+  switch (type) {
+    case TrackType.video:
+      return 'Video';
+    case TrackType.audio:
+      return 'Audio';
+    case TrackType.text:
+      return 'Text';
+    case TrackType.effect:
+      return 'Effect';
+  }
+}
+
 /// Time ruler at the top of the timeline.
 class _TimeRuler extends StatelessWidget {
   const _TimeRuler({
@@ -977,12 +990,15 @@ class _TrackHeaderItem extends StatelessWidget {
                 padding: const EdgeInsets.only(left: 8, top: 4, right: 4),
                 child: Row(
                   children: [
-                    Opacity(
-                      opacity: 0.8,
-                      child: AppIcon(
-                        _trackIconPath(track.trackType),
-                        size: 14,
-                        color: color,
+                    Semantics(
+                      label: '${_trackTypeLabel(track.trackType)} track',
+                      child: Opacity(
+                        opacity: 0.8,
+                        child: AppIcon(
+                          _trackIconPath(track.trackType),
+                          size: 14,
+                          color: color,
+                        ),
                       ),
                     ),
                     const SizedBox(width: 6),
@@ -1008,6 +1024,7 @@ class _TrackHeaderItem extends StatelessWidget {
               children: [
                 _TimelineIconButton(
                   icon: track.visible ? AppIcons.visible : AppIcons.hidden,
+                  tooltip: track.visible ? 'Hide track' : 'Show track',
                   size: 14,
                   color: track.visible
                       ? AppTheme.primary
@@ -1016,6 +1033,7 @@ class _TrackHeaderItem extends StatelessWidget {
                 ),
                 _TimelineIconButton(
                   icon: track.locked ? AppIcons.lock : AppIcons.unlock,
+                  tooltip: track.locked ? 'Unlock track' : 'Lock track',
                   size: 14,
                   color: track.locked
                       ? AppTheme.error
@@ -1025,6 +1043,8 @@ class _TrackHeaderItem extends StatelessWidget {
                 if (isAudio) ...[
                   _TimelineIconButton(
                     icon: AppIcons.audio,
+                    tooltip:
+                        muted ? 'Unmute audio track' : 'Mute audio track',
                     size: 14,
                     color: muted ? AppTheme.error : AppTheme.textDisabled,
                     onTap: onToggleMute,

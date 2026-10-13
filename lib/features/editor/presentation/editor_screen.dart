@@ -112,10 +112,11 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
     final editorState = ref.watch(editorProvider);
     final project = ref.watch(currentProjectProvider);
     final screenWidth = MediaQuery.of(context).size.width;
-    final isNarrowScreen = screenWidth < 600;
-    // Phase E.19: tablet/large-screen breakpoint. On tablets (>=1200px)
-    // the left panel is wider (320px vs 240px) and the inspector takes
-    // more space, giving professional editors room to work.
+    // The full three-column editor needs a wide canvas plus usable sidebars.
+    // Keep the compact preview-first layout until a tablet can fit all panels.
+    final isNarrowScreen = screenWidth < 900;
+    // On large tablets (>=1200px) the left panel is wider and the inspector
+    // takes more space, giving professional editors room to work.
     final isTablet = screenWidth >= 1200;
 
     return Scaffold(

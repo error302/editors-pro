@@ -125,10 +125,10 @@ void main() {
 
       await pumpTimeline(tester, project: project);
 
-      expect(find.byIcon(Icons.videocam), findsOneWidget);
-      expect(find.byIcon(Icons.audiotrack), findsOneWidget);
-      expect(find.byIcon(Icons.text_fields), findsOneWidget);
-      expect(find.byIcon(Icons.auto_fix_high), findsOneWidget);
+      expect(find.bySemanticsLabel('Video track'), findsOneWidget);
+      expect(find.bySemanticsLabel('Audio track'), findsOneWidget);
+      expect(find.bySemanticsLabel('Text track'), findsOneWidget);
+      expect(find.bySemanticsLabel('Effect track'), findsOneWidget);
     });
 
     testWidgets('shows clips on tracks', (tester) async {
@@ -190,7 +190,7 @@ void main() {
 
       await pumpTimeline(tester, project: project);
 
-      expect(find.byIcon(Icons.volume_up), findsOneWidget);
+      expect(find.byTooltip('Mute audio track'), findsOneWidget);
     });
 
     testWidgets('shows muted icon for hidden audio tracks', (tester) async {
@@ -207,7 +207,7 @@ void main() {
             id: 'a1',
             name: 'Audio 1',
             trackType: TrackType.audio,
-            visible: false,
+            volume: 0,
             orderIndex: 0,
           ),
         ],
@@ -215,7 +215,7 @@ void main() {
 
       await pumpTimeline(tester, project: project);
 
-      expect(find.byIcon(Icons.volume_off), findsOneWidget);
+      expect(find.byTooltip('Unmute audio track'), findsOneWidget);
     });
 
     testWidgets('shows locked icon for locked tracks', (tester) async {
@@ -240,7 +240,7 @@ void main() {
 
       await pumpTimeline(tester, project: project);
 
-      expect(find.byIcon(Icons.lock), findsOneWidget);
+      expect(find.byTooltip('Unlock track'), findsOneWidget);
     });
 
     testWidgets('zoom in button tap works', (tester) async {

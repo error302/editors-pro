@@ -90,28 +90,37 @@ class _ProjectHomeScreenState extends ConsumerState<ProjectHomeScreen>
             ),
           ),
           const SizedBox(width: 12),
-          // Title + subtitle
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'EDITORS-PRO',
-                style: context.textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 2.0,
-                ),
+          // Let the brand name yield space to the action buttons on narrow
+          // phones instead of forcing the header row wider than the screen.
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'EDITORS-PRO',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: context.textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 2.0,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Video Editor',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: context.textTheme.bodySmall?.copyWith(
+                      color: AppTheme.textSecondary,
+                      letterSpacing: 0.3,
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(height: 2),
-              Text(
-                'Video Editor',
-                style: context.textTheme.bodySmall?.copyWith(
-                  color: AppTheme.textSecondary,
-                  letterSpacing: 0.3,
-                ),
-              ),
-            ],
+            ),
           ),
-          const Spacer(),
           // Search
           _buildHeaderIconButton(
             icon: AppIcons.search,
@@ -492,33 +501,6 @@ class _ProjectHomeScreenState extends ConsumerState<ProjectHomeScreen>
       context.go('/editor/${project.id}');
     }
     return project;
-  }
-
-  void _duplicateProject(ProjectModel project) {
-    unawaited(_duplicateProjectAsync(project));
-  }
-
-  Future<void> _duplicateProjectAsync(ProjectModel project) async {
-    final duplicate = await ref
-        .read(projectProvider.notifier)
-        .createProject('${project.name} (Copy)');
-    if (!mounted) return;
-    if (duplicate == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(ref.read(projectProvider).error ??
-              'Could not duplicate the project.'),
-        ),
-      );
-      return;
-    }
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Duplicated "${project.name}"'),
-        behavior: SnackBarBehavior.floating,
-        duration: const Duration(seconds: 2),
-      ),
-    );
   }
 
   void _showDeleteConfirmation(BuildContext context, ProjectModel project) {
@@ -1038,7 +1020,7 @@ class _CreateProjectDialogState extends State<_CreateProjectDialog> {
     return AlertDialog(
       scrollable: true,
       insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-      contentPadding: const EdgeInsets.fromLTRB(24, 8, 24, 8),
+      contentPadding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
       actionsPadding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
       backgroundColor: AppTheme.cardColor,
       shape: RoundedRectangleBorder(
@@ -1167,7 +1149,7 @@ class _CreateProjectDialogState extends State<_CreateProjectDialog> {
         ),
         _GradientButton(
           icon: AppIcons.plus,
-          label: _isCreating ? 'Creating...' : 'Create project',
+          label: _isCreating ? 'Creating...' : 'Create',
           gradient: AppTheme.primaryGradient,
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           onPressed: _submit,

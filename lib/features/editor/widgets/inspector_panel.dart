@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:developer' as developer;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -185,7 +186,7 @@ class InspectorPanel extends ConsumerWidget {
           // Effects section
           _SectionHeader(title: 'Effects'),
           const SizedBox(height: 8),
-          _EffectsSection(clipId: clip.id),
+          _EffectsSection(clipId: clip.id, initialEffects: clip.effects),
           const SizedBox(height: 16),
 
           // Color Grading section
@@ -284,7 +285,7 @@ class InspectorPanel extends ConsumerWidget {
               borderRadius: BorderRadius.circular(4),
             ),
             child: Text(
-              _trackTypeName(track.trackType),
+              _trackInspectorTypeName(track.trackType),
               style: context.textTheme.labelMedium?.copyWith(
                 color: _trackColor(track.trackType),
               ),
@@ -478,6 +479,16 @@ class InspectorPanel extends ConsumerWidget {
       default: return 'CLIP';
     }
   }
+
+  String _trackInspectorTypeName(TrackType? type) {
+    switch (type) {
+      case TrackType.video: return 'VIDEO TRACK';
+      case TrackType.audio: return 'AUDIO TRACK';
+      case TrackType.text: return 'TEXT TRACK';
+      case TrackType.effect: return 'EFFECT TRACK';
+      default: return 'TRACK';
+    }
+  }
 }
 
 class _SectionHeader extends StatelessWidget {
@@ -489,14 +500,15 @@ class _SectionHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
+    return Wrap(
+      crossAxisAlignment: WrapCrossAlignment.center,
+      spacing: 6,
       children: [
-        if (icon != null) ...[
+        if (icon != null)
           Icon(icon, size: 14, color: iconColor ?? AppTheme.textDisabled),
-          const SizedBox(width: 6),
-        ],
         Text(
           title.toUpperCase(),
+          softWrap: true,
           style: context.textTheme.labelMedium?.copyWith(
             color: AppTheme.textDisabled,
             letterSpacing: 1,
@@ -520,11 +532,27 @@ class _PropertyRow extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: context.textTheme.bodySmall),
-          Text(value, style: context.textTheme.bodySmall?.copyWith(
-            fontFamily: 'monospace',
-            color: AppTheme.textPrimary,
-          )),
+          Flexible(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: context.textTheme.bodySmall,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Flexible(
+            child: Text(
+              value,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.right,
+              style: context.textTheme.bodySmall?.copyWith(
+                fontFamily: 'monospace',
+                color: AppTheme.textPrimary,
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -554,15 +582,28 @@ class _SettingsRow extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: context.textTheme.bodySmall),
+          Flexible(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: context.textTheme.bodySmall,
+            ),
+          ),
+          const SizedBox(width: 8),
           if (child != null)
             child!
           else
-            Text(
-              value ?? '',
-              style: context.textTheme.bodySmall?.copyWith(
-                fontFamily: 'monospace',
-                color: valueColor ?? AppTheme.textPrimary,
+            Flexible(
+              child: Text(
+                value ?? '',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.right,
+                style: context.textTheme.bodySmall?.copyWith(
+                  fontFamily: 'monospace',
+                  color: valueColor ?? AppTheme.textPrimary,
+                ),
               ),
             ),
         ],
@@ -769,28 +810,41 @@ class _DuckingControl extends StatelessWidget {
 /// Effects section — shows applied effects with parameter sliders
 class _EffectsSection extends ConsumerStatefulWidget {
   final String clipId;
+  final List<EffectModel> initialEffects;
 
-  const _EffectsSection({required this.clipId});
+  const _EffectsSection({required this.clipId, required this.initialEffects});
 
   @override
   ConsumerState<_EffectsSection> createState() => _EffectsSectionState();
 }
 
 class _EffectsSectionState extends ConsumerState<_EffectsSection> {
-  List<Map<String, dynamic>> _effects = [];
+  late List<Map<String, dynamic>> _effects = _effectsFromModels(
+    widget.initialEffects,
+  );
 
   @override
   void initState() {
     super.initState();
-    _updateEffectsFromTimeline();
+    unawaited(_updateEffectsFromTimeline());
   }
 
-  void _updateEffectsFromTimeline() async {
+  @override
+  void didUpdateWidget(covariant _EffectsSection oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.clipId != widget.clipId) {
+      _effects = _effectsFromModels(widget.initialEffects);
+      unawaited(_updateEffectsFromTimeline());
+    }
+  }
+
+  Future<void> _updateEffectsFromTimeline() async {
     if (!EngineService.instance.isInitialized) return;
+    final clipId = widget.clipId;
     try {
       final api = EngineService.instance.api;
-      final effects = await api.getClipEffects(clipId: widget.clipId);
-      if (mounted) {
+      final effects = await api.getClipEffects(clipId: clipId);
+      if (mounted && widget.clipId == clipId && effects.isNotEmpty) {
         setState(() {
           _effects = effects.map((e) => <String, dynamic>{
             'id': e.id,
@@ -808,12 +862,26 @@ class _EffectsSectionState extends ConsumerState<_EffectsSection> {
         });
       }
     } catch (e) {
-      // Engine not ready or clip has no effects yet
-      if (mounted) {
-        setState(() { _effects = []; });
-      }
+      // Preserve effects restored from the project model if the engine is
+      // unavailable; those remain editable in the inspector.
     }
   }
+
+  List<Map<String, dynamic>> _effectsFromModels(List<EffectModel> effects) =>
+      effects.map((effect) => <String, dynamic>{
+        'id': effect.id,
+        'name': effect.name,
+        'effect_type': effect.effectType,
+        'enabled': effect.enabled,
+        'parameters': effect.parameters.map((parameter) => <String, dynamic>{
+          'name': parameter.name,
+          'display_name': parameter.displayName,
+          'value': parameter.value,
+          'min_value': parameter.minValue,
+          'max_value': parameter.maxValue,
+          'step': parameter.step,
+        }).toList(),
+      }).toList();
 
   @override
   Widget build(BuildContext context) {
@@ -863,15 +931,21 @@ class _EffectsSectionState extends ConsumerState<_EffectsSection> {
               effectId, paramName, value,
             );
           },
-          onToggleEnabled: () {
+          onToggleEnabled: () async {
             final effectId = effect['id'] as String? ?? '';
-            ref.read(editorProvider.notifier).toggleEffect(effectId);
-            _updateEffectsFromTimeline();
+            setState(() {
+              effect['enabled'] = !(effect['enabled'] as bool? ?? true);
+            });
+            await ref.read(editorProvider.notifier).toggleEffect(effectId);
+            await _updateEffectsFromTimeline();
           },
-          onRemove: () {
+          onRemove: () async {
             final effectId = effect['id'] as String? ?? '';
-            ref.read(editorProvider.notifier).removeEffect(effectId);
-            _updateEffectsFromTimeline();
+            setState(() {
+              _effects.removeWhere((item) => item['id'] == effectId);
+            });
+            await ref.read(editorProvider.notifier).removeEffect(effectId);
+            await _updateEffectsFromTimeline();
           },
         )),
 

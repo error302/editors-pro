@@ -48,7 +48,7 @@ class _EditorToolbarState extends ConsumerState<EditorToolbar> {
     final editorState = ref.watch(editorProvider);
     final project = ref.watch(currentProjectProvider);
     final hasSelection = editorState.selectedClipId != null;
-    if (MediaQuery.sizeOf(context).width < 600) {
+    if (MediaQuery.sizeOf(context).width < 900) {
       return _buildCompactToolbar(
           context, project?.name ?? 'Untitled', project?.id);
     }
