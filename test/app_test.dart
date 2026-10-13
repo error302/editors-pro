@@ -99,7 +99,10 @@ void main() {
     });
 
     /// Pump the app with a fake repository so database calls don't crash.
-    Future<void> pumpApp(WidgetTester tester) async {
+    Future<void> pumpApp(
+      WidgetTester tester, {
+      List<ProjectModel> projects = const [],
+    }) async {
       SharedPreferences.setMockInitialValues({
         'onboarding_completed': true,
         'settings_theme_mode': 'dark',
@@ -109,14 +112,15 @@ void main() {
         ProviderScope(
           overrides: [
             projectRepositoryProvider
-                .overrideWith((ref) => _FakeProjectRepository()),
+                .overrideWith(
+                  (ref) => _FakeProjectRepository(projects: projects),
+                ),
             sharedPreferencesProvider.overrideWithValue(preferences),
           ],
           child: const EditorsProApp(),
         ),
       );
-      // Give GoRouter + async providers a frame to settle.
-      await tester.pump(const Duration(milliseconds: 300));
+      await tester.pumpAndSettle();
     }
 
     testWidgets('renders MaterialApp without crashing', (tester) async {
@@ -209,6 +213,70 @@ void main() {
       await pumpApp(tester);
 
       expect(find.text('New Project'), findsOneWidget);
+    });
+
+    testWidgets('project setup fits a phone and creates the chosen format',
+        (tester) async {
+      tester.view.physicalSize = const Size(393, 852);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await pumpApp(tester);
+      await tester.tap(find.text('New Project'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Canvas'), findsOneWidget);
+      expect(find.text('Resolution'), findsOneWidget);
+      expect(find.text('Frame rate'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+
+      await tester.tap(find.text('9:16'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('720p'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('60 fps'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('720 x 1280  ·  60 fps'), findsOneWidget);
+      await tester.tap(find.text('Create project'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+
+      final element = tester.element(find.byType(MaterialApp).first);
+      final container = ProviderScope.containerOf(element);
+      final project = container.read(projectProvider).currentProject;
+      expect(project, isNotNull);
+      expect(project!.width, 720);
+      expect(project.height, 1280);
+      expect(project.fps, 60);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('recent project card has no phone-width overflow',
+        (tester) async {
+      tester.view.physicalSize = const Size(393, 852);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await pumpApp(
+        tester,
+        projects: [
+          ProjectModel(
+            id: 'phone-project',
+            name: 'Mobile edit',
+            createdAt: 1,
+            updatedAt: 1,
+            width: 1920,
+            height: 1080,
+            fps: 30,
+          ),
+        ],
+      );
+
+      expect(find.text('Mobile edit'), findsOneWidget);
+      expect(tester.takeException(), isNull);
     });
   });
 

@@ -64,9 +64,9 @@ class ProjectNotifier extends StateNotifier<ProjectState> {
 
   /// Create a new project — persists to database and initializes in the
   /// Rust engine.
-  Future<void> createProject(String name,
+  Future<ProjectModel?> createProject(String name,
       {int width = 1920, int height = 1080, double fps = 30.0}) async {
-    state = state.copyWith(isLoading: true, error: null);
+    state = state.copyWith(isLoading: true, clearError: true);
 
     try {
       final project = await _repo.createProject(name,
@@ -78,9 +78,11 @@ class ProjectNotifier extends StateNotifier<ProjectState> {
         isLoading: false,
       );
       await syncFromEngine();
+      return project;
     } catch (e) {
       developer.log('createProject failed: $e', name: 'ProjectNotifier');
       state = state.copyWith(isLoading: false, error: e.toString());
+      return null;
     }
   }
 

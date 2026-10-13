@@ -223,7 +223,9 @@ class _ProjectHomeScreenState extends ConsumerState<ProjectHomeScreen>
             crossAxisCount: crossAxisCount,
             crossAxisSpacing: 16,
             mainAxisSpacing: 16,
-            childAspectRatio: isWide ? 1.15 : 1.4,
+            // The 16:9 preview and project metadata need more vertical room
+            // on phones than the old 1.4 ratio allowed.
+            childAspectRatio: isWide ? 1.15 : 1.22,
           ),
           itemCount: state.recentProjects.length,
           itemBuilder: (context, index) {
@@ -434,9 +436,22 @@ class _ProjectHomeScreenState extends ConsumerState<ProjectHomeScreen>
     showDialog(
       context: context,
       builder: (dialogContext) => _CreateProjectDialog(
-        onCreate: (name, width, height) {
+        onCreate: (name, width, height, fps) async {
+          final project = await _createProject(
+            name,
+            width: width,
+            height: height,
+            fps: fps,
+            navigate: false,
+          );
+          if (project == null) {
+            return ref.read(projectProvider).error ??
+                'Could not create the project. Please try again.';
+          }
+          if (!mounted || !dialogContext.mounted) return null;
           Navigator.pop(dialogContext);
-          unawaited(_createProject(name, width: width, height: height));
+          context.go('/editor/${project.id}');
+          return null;
         },
       ),
     );
@@ -451,24 +466,52 @@ class _ProjectHomeScreenState extends ConsumerState<ProjectHomeScreen>
     unawaited(_createProject(templateName, width: width, height: height));
   }
 
-  Future<void> _createProject(
+  Future<ProjectModel?> _createProject(
     String name, {
     int width = 1920,
     int height = 1080,
+    double fps = 30,
+    bool navigate = true,
   }) async {
     final effectiveName = name.trim().isEmpty ? 'Untitled Project' : name.trim();
-    await ref
+    final project = await ref
         .read(projectProvider.notifier)
-        .createProject(effectiveName, width: width, height: height);
-    if (!mounted) return;
-    final project = ref.read(projectProvider).currentProject;
-    if (project != null) {
+        .createProject(effectiveName, width: width, height: height, fps: fps);
+    if (!mounted) return null;
+    if (project == null) {
+      if (navigate) {
+        final message = ref.read(projectProvider).error ??
+            'Could not create the project. Please try again.';
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(message)),
+        );
+      }
+      return null;
+    }
+    if (navigate) {
       context.go('/editor/${project.id}');
     }
+    return project;
   }
 
   void _duplicateProject(ProjectModel project) {
-    ref.read(projectProvider.notifier).createProject('${project.name} (Copy)');
+    unawaited(_duplicateProjectAsync(project));
+  }
+
+  Future<void> _duplicateProjectAsync(ProjectModel project) async {
+    final duplicate = await ref
+        .read(projectProvider.notifier)
+        .createProject('${project.name} (Copy)');
+    if (!mounted) return;
+    if (duplicate == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(ref.read(projectProvider).error ??
+              'Could not duplicate the project.'),
+        ),
+      );
+      return;
+    }
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text('Duplicated "${project.name}"'),
@@ -698,24 +741,22 @@ class _ProjectCard extends StatelessWidget {
                   ),
                   // More options button (top-right)
                   Positioned(
-                    top: 6,
-                    right: 6,
-                    child: GestureDetector(
-                      onTap: onMore,
-                      behavior: HitTestBehavior.opaque,
-                      child: Container(
-                        width: 28,
-                        height: 28,
-                        decoration: BoxDecoration(
-                          color: Colors.black.withOpacity(0.55),
-                          shape: BoxShape.circle,
-                        ),
-                        alignment: Alignment.center,
-                        child: AppIcon(
-                          AppIcons.moreHorizontal,
-                          size: 14,
-                          color: Colors.white,
-                        ),
+                    top: 2,
+                    right: 2,
+                    child: IconButton(
+                      tooltip: 'Project actions',
+                      onPressed: onMore,
+                      constraints:
+                          const BoxConstraints.tightFor(width: 44, height: 44),
+                      padding: EdgeInsets.zero,
+                      style: IconButton.styleFrom(
+                        backgroundColor: Colors.black.withOpacity(0.58),
+                        foregroundColor: Colors.white,
+                      ),
+                      icon: const AppIcon(
+                        AppIcons.moreHorizontal,
+                        size: 18,
+                        color: Colors.white,
                       ),
                     ),
                   ),
@@ -895,6 +936,8 @@ class _GradientButton extends StatelessWidget {
   final List<BoxShadow>? shadow;
   final VoidCallback onPressed;
   final EdgeInsets padding;
+  final bool isLoading;
+  final bool enabled;
 
   const _GradientButton({
     required this.icon,
@@ -903,6 +946,8 @@ class _GradientButton extends StatelessWidget {
     required this.onPressed,
     this.shadow,
     this.padding = const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
+    this.isLoading = false,
+    this.enabled = true,
   });
 
   @override
@@ -916,14 +961,24 @@ class _GradientButton extends StatelessWidget {
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          onTap: onPressed,
+          onTap: enabled ? onPressed : null,
           borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
           child: Padding(
             padding: padding,
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                AppIcon(icon, size: 18, color: Colors.white),
+                if (isLoading)
+                  const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
+                else
+                  AppIcon(icon, size: 18, color: Colors.white),
                 const SizedBox(width: 8),
                 Text(
                   label,
@@ -945,7 +1000,12 @@ class _GradientButton extends StatelessWidget {
 
 // ─── Create Project Dialog ───────────────────────────────────────
 class _CreateProjectDialog extends StatefulWidget {
-  final void Function(String name, int width, int height) onCreate;
+  final Future<String?> Function(
+    String name,
+    int width,
+    int height,
+    double fps,
+  ) onCreate;
 
   const _CreateProjectDialog({required this.onCreate});
 
@@ -956,6 +1016,10 @@ class _CreateProjectDialog extends StatefulWidget {
 class _CreateProjectDialogState extends State<_CreateProjectDialog> {
   final _nameController = TextEditingController(text: 'Untitled Project');
   String _selectedResolution = '1080p';
+  _CanvasPreset _selectedCanvas = _CanvasPreset.landscape;
+  double _selectedFrameRate = 30;
+  bool _isCreating = false;
+  String? _errorMessage;
 
   static const _resolutions = <_ResolutionOption>[
     _ResolutionOption('720p', 1280, 720),
@@ -972,127 +1036,196 @@ class _CreateProjectDialogState extends State<_CreateProjectDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      backgroundColor: AppTheme.surface,
+      scrollable: true,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+      contentPadding: const EdgeInsets.fromLTRB(24, 8, 24, 8),
+      actionsPadding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+      backgroundColor: AppTheme.cardColor,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
       ),
       title: Row(
         children: [
-          Container(
-            width: 40,
-            height: 40,
+          DecoratedBox(
             decoration: BoxDecoration(
-              gradient: AppTheme.primaryGradient,
+              color: AppTheme.primary.withOpacity(0.16),
               borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
-              boxShadow: AppTheme.primaryGlow(opacity: 0.4),
             ),
-            alignment: Alignment.center,
-            child: AppIcon(AppIcons.plus, size: 20, color: Colors.white),
+            child: const SizedBox(
+              width: 40,
+              height: 40,
+              child: Icon(
+                Icons.movie_creation_outlined,
+                color: AppTheme.primaryLight,
+                size: 21,
+              ),
+            ),
           ),
           const SizedBox(width: 12),
-          const Text('New Project'),
+          const Expanded(child: Text('New Project')),
         ],
       ),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'Project Name',
-            style: context.textTheme.labelLarge?.copyWith(
-              color: AppTheme.textSecondary,
-              fontWeight: FontWeight.w600,
-              letterSpacing: 0.4,
-            ),
-          ),
+          _sectionLabel(context, 'Project name'),
           const SizedBox(height: 8),
           TextField(
             controller: _nameController,
             decoration: const InputDecoration(
               hintText: 'Enter project name',
+              counterText: '',
             ),
-            autofocus: true,
+            autofocus: false,
+            maxLength: 60,
             textCapitalization: TextCapitalization.words,
+            textInputAction: TextInputAction.done,
+            onChanged: (_) {
+              if (_errorMessage != null) {
+                setState(() => _errorMessage = null);
+              }
+            },
           ),
-          const SizedBox(height: 20),
-          Text(
-            'Resolution',
-            style: context.textTheme.labelLarge?.copyWith(
-              color: AppTheme.textSecondary,
-              fontWeight: FontWeight.w600,
-              letterSpacing: 0.4,
+          const SizedBox(height: 18),
+          _sectionLabel(context, 'Canvas'),
+          const SizedBox(height: 8),
+          SegmentedButton<_CanvasPreset>(
+            showSelectedIcon: false,
+            segments: const [
+              ButtonSegment(value: _CanvasPreset.landscape, label: Text('16:9')),
+              ButtonSegment(value: _CanvasPreset.portrait, label: Text('9:16')),
+              ButtonSegment(value: _CanvasPreset.square, label: Text('1:1')),
+            ],
+            selected: {_selectedCanvas},
+            onSelectionChanged: (selection) => setState(
+              () => _selectedCanvas = selection.first,
             ),
           ),
-          const SizedBox(height: 10),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: _resolutions.map((option) {
-              final isSelected = _selectedResolution == option.label;
-              return GestureDetector(
-                onTap: () => setState(() => _selectedResolution = option.label),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 10,
-                  ),
-                  decoration: BoxDecoration(
-                    gradient: isSelected ? AppTheme.primaryGradient : null,
-                    color: isSelected ? null : AppTheme.surfaceVariant,
-                    borderRadius:
-                        BorderRadius.circular(AppTheme.radiusMedium),
-                    border: Border.all(
-                      color: isSelected
-                          ? AppTheme.primaryLight
-                          : AppTheme.border,
-                      width: 1.5,
-                    ),
-                    boxShadow:
-                        isSelected ? AppTheme.primaryGlow(opacity: 0.35) : null,
-                  ),
-                  child: Text(
-                    option.label,
-                    style: TextStyle(
-                      color:
-                          isSelected ? Colors.white : AppTheme.textSecondary,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 13,
-                      letterSpacing: 0.3,
-                    ),
-                  ),
-                ),
-              );
-            }).toList(),
+          const SizedBox(height: 18),
+          _sectionLabel(context, 'Resolution'),
+          const SizedBox(height: 8),
+          SegmentedButton<String>(
+            showSelectedIcon: false,
+            segments: _resolutions
+                .map((option) => ButtonSegment<String>(
+                      value: option.label,
+                      label: Text(option.label),
+                    ))
+                .toList(),
+            selected: {_selectedResolution},
+            onSelectionChanged: (selection) => setState(
+              () => _selectedResolution = selection.first,
+            ),
           ),
+          const SizedBox(height: 18),
+          _sectionLabel(context, 'Frame rate'),
+          const SizedBox(height: 8),
+          SegmentedButton<double>(
+            showSelectedIcon: false,
+            segments: const [
+              ButtonSegment(value: 24.0, label: Text('24 fps')),
+              ButtonSegment(value: 30.0, label: Text('30 fps')),
+              ButtonSegment(value: 60.0, label: Text('60 fps')),
+            ],
+            selected: {_selectedFrameRate},
+            onSelectionChanged: (selection) => setState(
+              () => _selectedFrameRate = selection.first,
+            ),
+          ),
+          const SizedBox(height: 14),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: AppTheme.surfaceVariant,
+              borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
+            ),
+            child: Text(
+              '${_dimensions.width} x ${_dimensions.height}  ·  ${_selectedFrameRate.toInt()} fps',
+              textAlign: TextAlign.center,
+              style: context.textTheme.labelLarge?.copyWith(
+                color: AppTheme.textSecondary,
+              ),
+            ),
+          ),
+          if (_errorMessage != null) ...[
+            const SizedBox(height: 12),
+            Text(
+              _errorMessage!,
+              style: context.textTheme.bodySmall?.copyWith(
+                color: AppTheme.error,
+              ),
+            ),
+          ],
         ],
       ),
       actions: [
         TextButton(
-          onPressed: () => Navigator.pop(context),
+          onPressed: _isCreating ? null : () => Navigator.pop(context),
           child: const Text('Cancel'),
         ),
         _GradientButton(
           icon: AppIcons.plus,
-          label: 'Create',
+          label: _isCreating ? 'Creating...' : 'Create project',
           gradient: AppTheme.primaryGradient,
-          shadow: AppTheme.primaryGlow(opacity: 0.4),
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-          onPressed: () {
-            final selected = _resolutions.firstWhere(
-              (r) => r.label == _selectedResolution,
-            );
-            widget.onCreate(
-              _nameController.text,
-              selected.width,
-              selected.height,
-            );
-          },
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          onPressed: _submit,
+          isLoading: _isCreating,
+          enabled: !_isCreating,
         ),
       ],
     );
   }
+
+  _ResolutionOption get _selectedResolutionOption =>
+      _resolutions.firstWhere((option) => option.label == _selectedResolution);
+
+  ({int width, int height}) get _dimensions {
+    final resolution = _selectedResolutionOption;
+    return switch (_selectedCanvas) {
+      _CanvasPreset.landscape =>
+        (width: resolution.width, height: resolution.height),
+      _CanvasPreset.portrait =>
+        (width: resolution.height, height: resolution.width),
+      _CanvasPreset.square =>
+        (width: resolution.height, height: resolution.height),
+    };
+  }
+
+  Widget _sectionLabel(BuildContext context, String label) => Padding(
+        padding: const EdgeInsets.only(left: 2),
+        child: Text(
+          label,
+          style: context.textTheme.labelLarge?.copyWith(
+            color: AppTheme.textSecondary,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      );
+
+  Future<void> _submit() async {
+    if (_isCreating) return;
+    setState(() {
+      _isCreating = true;
+      _errorMessage = null;
+    });
+    final dimensions = _dimensions;
+    final error = await widget.onCreate(
+      _nameController.text,
+      dimensions.width,
+      dimensions.height,
+      _selectedFrameRate,
+    );
+    if (!mounted) return;
+    setState(() {
+      _isCreating = false;
+      _errorMessage = error;
+    });
+  }
 }
+
+enum _CanvasPreset { landscape, portrait, square }
 
 class _ResolutionOption {
   final String label;
