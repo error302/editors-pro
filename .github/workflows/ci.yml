@@ -546,7 +546,9 @@ jobs:
         run: |
           build_log="$RUNNER_TEMP/flutter-apk-build.log"
           set +e
-          flutter build apk --release --dart-define=FFMPEG_LICENSE_PROFILE=lgpl-2.1 2>&1 | tee "$build_log"
+          flutter build apk --release --target-platform android-arm64,android-x64 \
+            -Pdisable-abi-filtering=true --dart-define=FFMPEG_LICENSE_PROFILE=lgpl-2.1 \
+            2>&1 | tee "$build_log"
           build_status=${PIPESTATUS[0]}
           set -e
           if (( build_status != 0 )); then
@@ -569,7 +571,9 @@ jobs:
         run: |
           build_log="$RUNNER_TEMP/flutter-aab-build.log"
           set +e
-          flutter build appbundle --release --dart-define=FFMPEG_LICENSE_PROFILE=lgpl-2.1 2>&1 | tee "$build_log"
+          flutter build appbundle --release --target-platform android-arm64,android-x64 \
+            -Pdisable-abi-filtering=true --dart-define=FFMPEG_LICENSE_PROFILE=lgpl-2.1 \
+            2>&1 | tee "$build_log"
           build_status=${PIPESTATUS[0]}
           set -e
           if (( build_status != 0 )); then
@@ -587,9 +591,25 @@ jobs:
       - name: Verify APK packages Android FFmpeg and excludes FFmpegKit
         run: |
           unzip -Z1 build/app/outputs/flutter-apk/app-release.apk > "$RUNNER_TEMP/apk-files.txt"
-          grep -Fxq 'lib/arm64-v8a/libavcodec.so' "$RUNNER_TEMP/apk-files.txt"
+          for abi in arm64-v8a x86_64; do
+            grep -Fxq "lib/$abi/libeditors_pro_engine.so" "$RUNNER_TEMP/apk-files.txt"
+            grep -Fxq "lib/$abi/libavcodec.so" "$RUNNER_TEMP/apk-files.txt"
+          done
+          if grep -q '^lib/armeabi-v7a/' "$RUNNER_TEMP/apk-files.txt"; then
+            echo "Unsupported 32-bit ARM libraries unexpectedly packaged" >&2
+            exit 1
+          fi
           if grep -q 'libffmpegkit' "$RUNNER_TEMP/apk-files.txt"; then
             echo "Legacy FFmpegKit wrapper unexpectedly packaged" >&2
+            exit 1
+          fi
+          unzip -Z1 build/app/outputs/bundle/release/app-release.aab > "$RUNNER_TEMP/aab-files.txt"
+          for abi in arm64-v8a x86_64; do
+            grep -Fxq "base/lib/$abi/libeditors_pro_engine.so" "$RUNNER_TEMP/aab-files.txt"
+            grep -Fxq "base/lib/$abi/libavcodec.so" "$RUNNER_TEMP/aab-files.txt"
+          done
+          if grep -q '^base/lib/armeabi-v7a/' "$RUNNER_TEMP/aab-files.txt"; then
+            echo "Unsupported 32-bit ARM libraries unexpectedly packaged in AAB" >&2
             exit 1
           fi
 

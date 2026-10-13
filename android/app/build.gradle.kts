@@ -74,7 +74,8 @@ android {
         // doubles the Rust .so build time. Re-enable in a follow-up if
         // legacy 32-bit ARM support is needed.
         ndk {
-            abiFilters += listOf("arm64-v8a", "x86_64")
+            abiFilters.clear()
+            abiFilters.addAll(listOf("arm64-v8a", "x86_64"))
         }
 
         // Rust library loading
