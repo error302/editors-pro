@@ -991,6 +991,8 @@ class _TrackHeaderItem extends StatelessWidget {
                 child: Row(
                   children: [
                     Semantics(
+                      container: true,
+                      excludeSemantics: true,
                       label: '${_trackTypeLabel(track.trackType)} track',
                       child: Opacity(
                         opacity: 0.8,

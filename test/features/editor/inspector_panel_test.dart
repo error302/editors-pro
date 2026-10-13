@@ -324,7 +324,7 @@ void main() {
       );
 
       await tester.scrollUntilVisible(
-        find.text('Brightness').first,
+        find.widgetWithText(Card, 'Brightness'),
         180,
         scrollable: find.byType(Scrollable).first,
       );
