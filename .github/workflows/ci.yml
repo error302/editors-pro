@@ -340,12 +340,17 @@ jobs:
           build_status=${PIPESTATUS[0]}
           set -e
           if (( build_status != 0 )); then
-            diagnostics="$(tail -n 18 "$build_log" | tr '\r\n' ' ' | sed -e 's/%/%25/g' -e 's/:/%3A/g' -e 's/,/%2C/g')"
+            error_list="$(awk '
+              /^error(\[[^]]+\])?:/ { message = $0; waiting = 1; next }
+              waiting && /^[[:space:]]*--> / { printf "%s | %s\n", message, $0; waiting = 0 }
+            ' "$build_log")"
+            diagnostics="$(printf '%s' "$error_list" | tr '\r\n' ' ' | sed -e 's/%/%25/g' -e 's/:/%3A/g' -e 's/,/%2C/g')"
             printf '::error title=Rust Android build diagnostics::%s\n' "$diagnostics"
             {
               echo '### Rust Android build diagnostics'
               echo '```text'
-              tail -n 80 "$build_log"
+              printf '%s\n' "$error_list"
+              tail -n 12 "$build_log"
               echo '```'
             } >> "$GITHUB_STEP_SUMMARY"
             exit "$build_status"
