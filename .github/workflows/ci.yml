@@ -287,6 +287,8 @@ jobs:
           build_status=${PIPESTATUS[0]}
           set -e
           if (( build_status != 0 )); then
+            diagnostics="$(tail -n 18 "$build_log" | tr '\r\n' ' ' | sed -e 's/%/%25/g' -e 's/:/%3A/g' -e 's/,/%2C/g')"
+            printf '::error title=FFmpeg build diagnostics::%s\n' "$diagnostics"
             {
               echo '### FFmpeg Android build diagnostics'
               echo '```text'
