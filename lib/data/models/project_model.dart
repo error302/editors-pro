@@ -70,10 +70,34 @@ class ProjectModel {
       identical(this, other) ||
       other is ProjectModel &&
           runtimeType == other.runtimeType &&
-          id == other.id;
+          id == other.id &&
+          name == other.name &&
+          createdAt == other.createdAt &&
+          updatedAt == other.updatedAt &&
+          width == other.width &&
+          height == other.height &&
+          fps == other.fps &&
+          durationMs == other.durationMs &&
+          listEquals(tracks, other.tracks) &&
+          listEquals(mediaAssets, other.mediaAssets) &&
+          thumbnailPath == other.thumbnailPath &&
+          eppFilePath == other.eppFilePath;
 
   @override
-  int get hashCode => id.hashCode;
+  int get hashCode => Object.hash(
+        id,
+        name,
+        createdAt,
+        updatedAt,
+        width,
+        height,
+        fps,
+        durationMs,
+        Object.hashAll(tracks),
+        Object.hashAll(mediaAssets),
+        thumbnailPath,
+        eppFilePath,
+      );
 }
 
 /// Track data model

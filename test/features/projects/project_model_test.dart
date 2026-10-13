@@ -45,7 +45,7 @@ void main() {
       expect(updated.id, equals('test-id')); // unchanged
     });
 
-    test('ProjectModel equality is based on id', () {
+    test('ProjectModel equality reflects changes to the project snapshot', () {
       const model1 = ProjectModel(
         id: 'same-id',
         name: 'Project A',
@@ -65,8 +65,8 @@ void main() {
         fps: 24.0,
       );
 
-      expect(model1, equals(model2));
-      expect(model1.hashCode, equals(model2.hashCode));
+      expect(model1, isNot(equals(model2)));
+      expect(model1.copyWith(), equals(model1));
     });
 
     test('TrackModel stores track properties', () {
