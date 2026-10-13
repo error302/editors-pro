@@ -245,7 +245,7 @@ fn transcode_with_ffmpeg(
     codec_opts.set("crf", "23");
 
     // Open the encoder
-    let encoder = encoder_ctx
+    let mut encoder = encoder_ctx
         .open_with(codec_opts)
         .map_err(|e| format!("Failed to open encoder: {}", e))?;
 

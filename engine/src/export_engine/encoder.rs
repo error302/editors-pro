@@ -130,8 +130,8 @@ fn build_yuv420p_frame(
 
     // Copy Y plane
     let y_src = &yuv_data[..y_size];
-    let y_dst = frame.data_mut(0);
     let y_stride = frame.stride(0);
+    let y_dst = frame.data_mut(0);
     for row in 0..h {
         let src_start = row * w;
         let src_end = src_start + w;
@@ -146,8 +146,8 @@ fn build_yuv420p_frame(
     let uv_h = h / 2;
     let uv_size = uv_w * uv_h;
     let cb_src = &yuv_data[y_size..y_size + uv_size];
-    let cb_dst = frame.data_mut(1);
     let cb_stride = frame.stride(1);
+    let cb_dst = frame.data_mut(1);
     for row in 0..uv_h {
         let src_start = row * uv_w;
         let src_end = src_start + uv_w;
@@ -159,8 +159,8 @@ fn build_yuv420p_frame(
 
     // Copy Cr plane
     let cr_src = &yuv_data[y_size + uv_size..];
-    let cr_dst = frame.data_mut(2);
     let cr_stride = frame.stride(2);
+    let cr_dst = frame.data_mut(2);
     for row in 0..uv_h {
         let src_start = row * uv_w;
         let src_end = src_start + uv_w;

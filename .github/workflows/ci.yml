@@ -49,7 +49,24 @@ jobs:
             pkg-config
 
       - name: Cargo check
-        run: cargo check --manifest-path engine/Cargo.toml
+        shell: bash
+        run: |
+          build_log="$RUNNER_TEMP/cargo-check.log"
+          set +e
+          cargo check --manifest-path engine/Cargo.toml 2>&1 | tee "$build_log"
+          build_status=${PIPESTATUS[0]}
+          set -e
+          if (( build_status != 0 )); then
+            diagnostics="$(tail -n 24 "$build_log" | tr '\r\n' ' ' | sed -e 's/%/%25/g' -e 's/:/%3A/g' -e 's/,/%2C/g')"
+            printf '::error title=Cargo check diagnostics::%s\n' "$diagnostics"
+            {
+              echo '### Cargo check diagnostics'
+              echo '```text'
+              tail -n 32 "$build_log"
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit "$build_status"
+          fi
 
       - name: Clippy
         run: cargo clippy --manifest-path engine/Cargo.toml -- -D warnings
@@ -166,7 +183,24 @@ jobs:
         run: flutter pub get
 
       - name: Flutter analyze
-        run: flutter analyze
+        shell: bash
+        run: |
+          analysis_log="$RUNNER_TEMP/flutter-analyze.log"
+          set +e
+          flutter analyze 2>&1 | tee "$analysis_log"
+          analysis_status=${PIPESTATUS[0]}
+          set -e
+          if (( analysis_status != 0 )); then
+            diagnostics="$(tail -n 32 "$analysis_log" | tr '\r\n' ' ' | sed -e 's/%/%25/g' -e 's/:/%3A/g' -e 's/,/%2C/g')"
+            printf '::error title=Flutter analyze diagnostics::%s\n' "$diagnostics"
+            {
+              echo '### Flutter analyze diagnostics'
+              echo '```text'
+              tail -n 40 "$analysis_log"
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit "$analysis_status"
+          fi
 
       - name: Flutter test with coverage
         run: flutter test --coverage
