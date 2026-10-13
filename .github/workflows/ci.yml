@@ -2,7 +2,8 @@ name: CI/CD
 
 on:
   push:
-    branches: [main, develop]
+    branches: [main, develop, 'codex/**']
+    tags: ['v*']
   pull_request:
     branches: [main]
 
@@ -184,14 +185,59 @@ jobs:
 
   # ─── Android Release Build ──────────────────────────────────────────
   build-android:
-    name: Build Android APK (arm64-v8a)
+    name: Build Android APK/AAB (arm64-v8a + x86_64)
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop' || startsWith(github.ref, 'refs/heads/codex/') || startsWith(github.ref, 'refs/tags/v'))
     needs: [rust-check, flutter-check]
+    outputs:
+      release_signing_configured: ${{ steps.release_signing.outputs.configured }}
+    env:
+      EDITORS_PRO_STORE_FILE: ${{ secrets.EDITORS_PRO_STORE_FILE }}
+      EDITORS_PRO_STORE_PASSWORD: ${{ secrets.EDITORS_PRO_STORE_PASSWORD }}
+      EDITORS_PRO_KEY_ALIAS: ${{ secrets.EDITORS_PRO_KEY_ALIAS }}
+      EDITORS_PRO_KEY_PASSWORD: ${{ secrets.EDITORS_PRO_KEY_PASSWORD }}
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Configure optional Android upload key
+        id: release_signing
+        shell: bash
+        env:
+          EDITORS_PRO_KEYSTORE_BASE64: ${{ secrets.EDITORS_PRO_KEYSTORE_BASE64 }}
+        run: |
+          values=(
+            "$EDITORS_PRO_STORE_FILE"
+            "$EDITORS_PRO_STORE_PASSWORD"
+            "$EDITORS_PRO_KEY_ALIAS"
+            "$EDITORS_PRO_KEY_PASSWORD"
+            "$EDITORS_PRO_KEYSTORE_BASE64"
+          )
+          any_set=false
+          all_set=true
+          for value in "${values[@]}"; do
+            if [[ -n "$value" ]]; then any_set=true; else all_set=false; fi
+          done
+
+          if [[ "$any_set" == true && "$all_set" != true ]]; then
+            echo "Android upload signing secrets are incomplete." >&2
+            exit 1
+          fi
+
+          if [[ "$all_set" == true ]]; then
+            case "$EDITORS_PRO_STORE_FILE" in
+              /*) ;;
+              *) echo "EDITORS_PRO_STORE_FILE must be an absolute path." >&2; exit 1 ;;
+            esac
+            mkdir -p "$(dirname "$EDITORS_PRO_STORE_FILE")"
+            printf '%s' "$EDITORS_PRO_KEYSTORE_BASE64" | base64 --decode > "$EDITORS_PRO_STORE_FILE"
+            test -s "$EDITORS_PRO_STORE_FILE"
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::No upload keystore configured; Android artifacts are test builds signed with the debug key."
+          fi
 
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
@@ -214,17 +260,6 @@ jobs:
         # for ~10x faster CI (pre-built binary vs compiling from source).
         uses: taiki-e/install-action@cargo-ndk
 
-      - name: Install FFmpeg dev libraries
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libavcodec-dev \
-            libavformat-dev \
-            libavutil-dev \
-            libswscale-dev \
-            libswresample-dev \
-            pkg-config
-
       - name: Install Flutter stable
         uses: subosito/flutter-action@v2
         with:
@@ -235,14 +270,47 @@ jobs:
       - name: Set up Android NDK
         uses: android-actions/setup-android@v3
 
-      - name: Install NDK ${{ vars.ANDROID_NDK_VERSION || '27.0.12077973' }}
-        run: sdkmanager --install "ndk;27.0.12077973"
+      - name: Install NDK r28c
+        run: sdkmanager --install "ndk;28.2.13676358"
+
+      - name: Configure Android NDK for FFmpeg
+        run: |
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/28.2.13676358" >> "$GITHUB_ENV"
+          echo "FFMPEG_JOBS=4" >> "$GITHUB_ENV"
+
+      - name: Build LGPL FFmpeg for Android
+        run: bash scripts/build_ffmpeg_android.sh arm64-v8a x86_64
+
+      - name: Verify FFmpeg shared libraries use 16 KB page alignment
+        shell: bash
+        run: |
+          readelf="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-readelf"
+          for lib_dir in engine/ffmpeg-android-lgpl/lib/arm64 engine/ffmpeg-android-lgpl/lib/amd64; do
+            for library in "$lib_dir"/*.so; do
+              load_count=0
+              while read -r type _ _ _ _ _ _ alignment; do
+                [[ "$type" == "LOAD" ]] || continue
+                load_count=$((load_count + 1))
+                alignment_value=$((16#${alignment#0x}))
+                if (( alignment_value < 16384 )); then
+                  echo "Insufficient ELF page alignment in $library: $alignment" >&2
+                  exit 1
+                fi
+              done < <("$readelf" -lW "$library")
+              if (( load_count == 0 )); then
+                echo "No loadable ELF segments found in $library" >&2
+                exit 1
+              fi
+            done
+          done
 
       # ── Build Rust engine for Android ───────────────────────────────
       # Phase E.3: build for both arm64-v8a (physical devices) and x86_64
       # (emulators) so the same APK works in both environments.
       - name: Build Rust engine (arm64-v8a + x86_64)
         run: cargo ndk -t arm64-v8a -t x86_64 build --release --manifest-path engine/Cargo.toml
+        env:
+          FFMPEG_DIR: ${{ github.workspace }}/engine/ffmpeg-android-lgpl
 
       - name: Copy native libraries to jniLibs
         run: |
@@ -252,28 +320,61 @@ jobs:
              android/app/src/main/jniLibs/arm64-v8a/
           cp engine/target/x86_64-linux-android/release/libeditors_pro_engine.so \
              android/app/src/main/jniLibs/x86_64/
+          cp engine/ffmpeg-android-lgpl/lib/arm64/*.so android/app/src/main/jniLibs/arm64-v8a/
+          cp engine/ffmpeg-android-lgpl/lib/amd64/*.so android/app/src/main/jniLibs/x86_64/
+
+      - name: Verify Rust engine links Android FFmpeg
+        run: |
+          readelf="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-readelf"
+          "$readelf" -d android/app/src/main/jniLibs/arm64-v8a/libeditors_pro_engine.so \
+            | grep -Fq 'Shared library: [libavformat.so]'
 
       # ── Build Flutter APK ───────────────────────────────────────────
       - name: Build Flutter APK
-        run: flutter build apk --release
+        run: flutter build apk --release --dart-define=FFMPEG_LICENSE_PROFILE=lgpl-2.1
 
       # Phase E.3: also build an App Bundle (AAB) for Play Store distribution.
       # The AAB is the required format for new Play Store submissions since
       # August 2021; the APK is still useful for sideloading and testing.
       - name: Build Flutter AAB
-        run: flutter build appbundle --release
+        run: flutter build appbundle --release --dart-define=FFMPEG_LICENSE_PROFILE=lgpl-2.1
+
+      - name: Verify APK packages Android FFmpeg and excludes FFmpegKit
+        run: |
+          unzip -Z1 build/app/outputs/flutter-apk/app-release.apk > "$RUNNER_TEMP/apk-files.txt"
+          grep -Fxq 'lib/arm64-v8a/libavcodec.so' "$RUNNER_TEMP/apk-files.txt"
+          if grep -q 'libffmpegkit' "$RUNNER_TEMP/apk-files.txt"; then
+            echo "Legacy FFmpegKit wrapper unexpectedly packaged" >&2
+            exit 1
+          fi
+
+      - name: Upload FFmpeg LGPL source and build materials
+        uses: actions/upload-artifact@v4
+        with:
+          name: ffmpeg-lgpl-source-and-build
+          path: |
+            engine/ffmpeg-android-lgpl/BUILDINFO.txt
+            engine/ffmpeg-android-lgpl/COPYING.LGPLv2.1
+            engine/ffmpeg-android-lgpl/lib/arm64/*.so
+            engine/ffmpeg-android-lgpl/lib/amd64/*.so
+            engine/ffmpeg-android-lgpl/.build/ffmpeg-7.1.5.tar.xz
+            engine/ffmpeg-android-lgpl/.build/ffmpeg-7.1.5.tar.xz.asc
+            engine/ffmpeg-android-lgpl/.build/ffmpeg-devel.asc
+            engine/ffmpeg-android-lgpl/.build/signature-check.txt
+          include-hidden-files: true
+          retention-days: 14
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: editors-pro-arm64-release
+          name: editors-pro-android-apk
           path: build/app/outputs/flutter-apk/app-release.apk
           retention-days: 14
 
       - name: Upload AAB artifact
         uses: actions/upload-artifact@v4
         with:
-          name: editors-pro-aab-release
+          name: editors-pro-android-aab
           path: build/app/outputs/bundle/release/app-release.aab
           retention-days: 14
 
@@ -281,8 +382,10 @@ jobs:
   release:
     name: Create GitHub Release
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: startsWith(github.ref, 'refs/tags/v') && needs.build-android.outputs.release_signing_configured == 'true'
     needs: [build-android]
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout repository
@@ -291,15 +394,26 @@ jobs:
       - name: Download APK artifact
         uses: actions/download-artifact@v4
         with:
-          name: editors-pro-arm64-release
+          name: editors-pro-android-apk
           path: ./artifacts/
 
       # Phase E.3: also include the AAB in the release for Play Store uploads.
       - name: Download AAB artifact
         uses: actions/download-artifact@v4
         with:
-          name: editors-pro-aab-release
+          name: editors-pro-android-aab
           path: ./artifacts/
+
+      - name: Download FFmpeg LGPL source and build materials
+        uses: actions/download-artifact@v4
+        with:
+          name: ffmpeg-lgpl-source-and-build
+          path: ./artifacts/ffmpeg-lgpl
+
+      - name: Package FFmpeg LGPL corresponding source
+        run: |
+          cd ./artifacts
+          zip -qr editors-pro-ffmpeg-lgpl-source.zip ffmpeg-lgpl
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -307,6 +421,7 @@ jobs:
           files: |
             ./artifacts/app-release.apk
             ./artifacts/app-release.aab
+            ./artifacts/editors-pro-ffmpeg-lgpl-source.zip
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -71,17 +71,10 @@ base64 -w 0 editors-pro-upload.jks > keystore.b64
 # Copy the contents of keystore.b64 into the EDITORS_PRO_KEYSTORE_BASE64 secret
 ```
 
-The CI workflow in `.github/workflows/ci.yml` already reads these env
-vars in the `signingConfigs` block of `android/app/build.gradle.kts`.
-To decode the keystore onto the runner, add this step before the
-`Build Flutter AAB` step:
-
-```yaml
-- name: Decode release keystore
-  if: env.EDITORS_PRO_KEYSTORE_BASE64 != ''
-  run: |
-    echo "${{ secrets.EDITORS_PRO_KEYSTORE_BASE64 }}" | base64 -d > ${{ secrets.EDITORS_PRO_STORE_FILE }}
-```
+The CI workflow reads the signing values and decodes the keystore before
+building. Configure all five secrets together; partial configuration fails
+the build. Without them, CI can still produce test APK/AAB artifacts using
+the debug key, but a `v*` tag will not create a GitHub release.
 
 ## 4. Play Store upload
 
