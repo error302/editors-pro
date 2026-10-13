@@ -23,6 +23,7 @@ import 'dart:io' show Platform;
 import 'package:ffi/ffi.dart';
 
 import 'api/bridge_api.dart';
+import 'ffi_dispatch_worker.dart';
 
 /// Signature of the native `editors_pro_dispatch` function.
 typedef _DispatchNative = ffi.Pointer<Utf8> Function(
@@ -39,6 +40,12 @@ typedef _DispatchDart = ffi.Pointer<Utf8> Function(
 /// Signature of the native `editors_pro_free_string` function.
 typedef _FreeStringNative = ffi.Void Function(ffi.Pointer<Utf8>);
 typedef _FreeStringDart = void Function(ffi.Pointer<Utf8>);
+typedef _CancelExportNative = ffi.Void Function();
+typedef _CancelExportDart = void Function();
+typedef _PrepareExportNative = ffi.Void Function();
+typedef _PrepareExportDart = void Function();
+typedef _ExportStatusNative = ffi.Pointer<Utf8> Function();
+typedef _ExportStatusDart = ffi.Pointer<Utf8> Function();
 
 /// The flutter_rust_bridge runtime singleton.
 ///
@@ -71,6 +78,10 @@ class RustLib {
   ffi.DynamicLibrary? _dylib;
   _DispatchDart? _dispatch;
   _FreeStringDart? _freeString;
+  _CancelExportDart? _cancelExport;
+  _PrepareExportDart? _prepareExport;
+  _ExportStatusDart? _exportStatus;
+  FfiDispatchWorker? _worker;
 
   /// Initialize the bridge. Call this exactly once at app startup.
   ///
@@ -101,13 +112,41 @@ class RustLib {
         inst._dylib = dylib;
         inst._dispatch = dispatchPtr;
         inst._freeString = freePtr;
+        try {
+          inst._cancelExport =
+              dylib.lookupFunction<_CancelExportNative, _CancelExportDart>(
+                  'editors_pro_cancel_export');
+        } catch (e) {
+          print('RustLib: native export cancellation unavailable: $e');
+        }
+        try {
+          inst._prepareExport =
+              dylib.lookupFunction<_PrepareExportNative, _PrepareExportDart>(
+                  'editors_pro_prepare_export');
+        } catch (e) {
+          print('RustLib: native export preparation unavailable: $e');
+        }
+        try {
+          inst._exportStatus =
+              dylib.lookupFunction<_ExportStatusNative, _ExportStatusDart>(
+                  'editors_pro_export_status');
+        } catch (e) {
+          print('RustLib: native export progress unavailable: $e');
+        }
       } catch (e, st) {
         // Library not found or symbols missing — fall back to noOp.
         print('RustLib: failed to load native engine: $e\n$st');
       }
 
       if (inst._dispatch != null && inst._freeString != null) {
-        inst.api = EditorsProEngineApi(runtime: inst);
+        try {
+          inst._worker = await FfiDispatchWorker.start(_nativeLibraryName());
+        } catch (e, st) {
+          print('RustLib: background dispatch worker failed: $e\n$st');
+        }
+        inst.api = inst._worker == null
+            ? EditorsProEngineApi.noOp()
+            : EditorsProEngineApi(runtime: inst);
       } else {
         // No native engine available — degrade gracefully.
         inst.api = EditorsProEngineApi.noOp();
@@ -119,8 +158,49 @@ class RustLib {
 
   /// Dispose of the bridge and release native resources.
   static void dispose() {
+    _instance?._worker?.dispose();
     _instance?._dylib?.close();
     _instance = null;
+  }
+
+  /// Dispatch an engine operation without blocking Flutter's UI isolate.
+  Future<String> dispatchAsync(String method, String argsJson) {
+    final worker = _worker;
+    if (worker != null) return worker.dispatch(method, argsJson);
+    throw StateError('Background native dispatch worker is unavailable.');
+  }
+
+  bool get hasDirectExportCancellation => _cancelExport != null;
+  bool get hasDirectExportProgress => _exportStatus != null;
+
+  /// Request cancellation without acquiring the engine's export mutex.
+  void requestExportCancellation() {
+    final cancel = _cancelExport;
+    if (cancel == null) {
+      throw StateError('Native export cancellation is unavailable.');
+    }
+    cancel();
+  }
+
+  void prepareExport() {
+    _prepareExport?.call();
+  }
+
+  String readExportStatus() {
+    final readStatus = _exportStatus;
+    final freeString = _freeString;
+    if (readStatus == null || freeString == null) {
+      throw StateError('Native export progress is unavailable.');
+    }
+    final resultPtr = readStatus();
+    if (resultPtr == ffi.nullptr) {
+      throw StateError('Native export status returned null.');
+    }
+    try {
+      return resultPtr.toDartString();
+    } finally {
+      freeString(resultPtr);
+    }
   }
 
   /// Invoke the native `editors_pro_dispatch` and return the raw JSON
@@ -185,6 +265,18 @@ ffi.DynamicLibrary _loadNativeLibrary() {
     // On iOS, statically linked symbols are accessible via the process handle.
     return ffi.DynamicLibrary.process();
   }
+  throw UnsupportedError(
+    'Native engine library not configured for platform ${Platform.operatingSystem}',
+  );
+}
+
+String? _nativeLibraryName() {
+  if (Platform.isAndroid || Platform.isLinux) {
+    return 'libeditors_pro_engine.so';
+  }
+  if (Platform.isMacOS) return 'libeditors_pro_engine.dylib';
+  if (Platform.isWindows) return 'editors_pro_engine.dll';
+  if (Platform.isIOS) return null;
   throw UnsupportedError(
     'Native engine library not configured for platform ${Platform.operatingSystem}',
   );

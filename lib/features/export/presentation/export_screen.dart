@@ -539,7 +539,9 @@ class _ExportScreenState extends ConsumerState<ExportScreen>
           ClipRRect(
             borderRadius: BorderRadius.circular(AppTheme.radiusFull),
             child: LinearProgressIndicator(
-              value: state.progress,
+              value: state.totalFrames == 0 && state.isExporting
+                  ? null
+                  : state.progress,
               backgroundColor: AppTheme.border,
               valueColor:
                   const AlwaysStoppedAnimation<Color>(AppTheme.accent),

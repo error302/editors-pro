@@ -1,6 +1,8 @@
-import 'package:flutter_test/flutter_test.dart';
+import 'dart:async';
 
 import 'package:editors_pro/features/export/providers/export_provider.dart';
+import 'package:editors_pro/src/rust/api/bridge_api.dart';
+import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -252,6 +254,36 @@ void main() {
       expect(notifier.state.outputPath, isNull);
       expect(notifier.state.fileSizeHuman, isNull);
     });
+
+    test('prepares cancellation before an immediate cancel can arrive',
+        () async {
+      final api = _FakeExportApi();
+      final notifier = ExportNotifier(engineApi: api);
+      final export = notifier.startExport(
+        preset: '720p',
+        outputPath: '/tmp/test-export.mp4',
+      );
+
+      expect(api.events, ['prepare']);
+      await notifier.cancelExport();
+      expect(api.events, containsAllInOrder(['prepare', 'cancel']));
+
+      await Future<void>.delayed(Duration.zero);
+      expect(api.events, contains('export'));
+      api.result.complete(
+        const BridgeExportResult(
+          success: false,
+          outputPath: '',
+          fileSizeHuman: '',
+          errorMessage: 'Export canceled',
+        ),
+      );
+      await export;
+
+      expect(notifier.state.isExporting, isFalse);
+      expect(notifier.state.error, 'Export canceled');
+      notifier.dispose();
+    });
   });
 
   // ─── ExportPreset ────────────────────────────────────────────────────
@@ -353,4 +385,28 @@ void main() {
       expect(names.length, equals(uniqueNames.length));
     });
   });
+}
+
+class _FakeExportApi extends EditorsProEngineApi {
+  _FakeExportApi() : super.noOp();
+
+  final events = <String>[];
+  final result = Completer<BridgeExportResult>();
+
+  @override
+  void prepareExport() => events.add('prepare');
+
+  @override
+  Future<void> cancelExport() async {
+    events.add('cancel');
+  }
+
+  @override
+  Future<BridgeExportResult> exportVideoWithCallback({
+    required String outputPath,
+    required BridgeExportSettings settings,
+  }) {
+    events.add('export');
+    return result.future;
+  }
 }

@@ -94,12 +94,26 @@ class ExportState {
 /// - Share the exported file
 /// - Track progress in real-time
 class ExportNotifier extends StateNotifier<ExportState> {
-  ExportNotifier() : super(const ExportState());
+  ExportNotifier({EditorsProEngineApi? engineApi})
+      : _engineApi = engineApi,
+        super(const ExportState());
+
+  final EditorsProEngineApi? _engineApi;
+  Timer? _progressTimer;
+  bool _cancelRequested = false;
+
+  EditorsProEngineApi get _api => _engineApi ?? EngineService.instance.api;
+
+  @override
+  void dispose() {
+    _progressTimer?.cancel();
+    super.dispose();
+  }
 
   /// Start exporting the project with the given settings.
   ///
-  /// The export runs on a background isolate via the Rust engine,
-  /// and progress is reported via the callback-based API.
+  /// The export runs on the native dispatch isolate; progress is read from
+  /// the lock-free status snapshot while the UI isolate remains responsive.
   Future<void> startExport({
     required String preset,
     String? outputPath,
@@ -110,6 +124,7 @@ class ExportNotifier extends StateNotifier<ExportState> {
     int? customBitrate,
   }) async {
     if (state.isExporting) return;
+    _cancelRequested = false;
 
     // Reset state
     state = const ExportState(
@@ -118,11 +133,12 @@ class ExportNotifier extends StateNotifier<ExportState> {
     );
 
     try {
+      final api = _api;
+      api.prepareExport();
+
       // Start the Android foreground service so export continues
       // when the app is minimized.
       await ExportForegroundService.instance.start();
-
-      final api = EngineService.instance.api;
 
       // Determine output path
       final outPath = outputPath ?? await _defaultOutputPath(format);
@@ -137,15 +153,14 @@ class ExportNotifier extends StateNotifier<ExportState> {
         customBitrate: customBitrate,
       );
 
-      // Run the export with callback-based progress reporting.
-      // The Rust engine calls our progress callback for each frame,
-      // which allows the UI to update in real-time.
+      _startProgressPolling(api);
       final result = await api.exportVideoWithCallback(
         outputPath: outPath,
         settings: settings,
       );
 
       if (result.success) {
+        _progressTimer?.cancel();
         // Stop foreground service and show completion notification
         await ExportForegroundService.instance.complete(
           result.outputPath,
@@ -159,18 +174,24 @@ class ExportNotifier extends StateNotifier<ExportState> {
           fileSizeHuman: result.fileSizeHuman,
         );
       } else {
+        _progressTimer?.cancel();
         await ExportForegroundService.instance.cancel();
         state = ExportState(
           isExporting: false,
-          error: result.errorMessage ?? 'Export failed',
+          error: _cancelRequested
+              ? 'Export canceled'
+              : result.errorMessage ?? 'Export failed',
         );
       }
     } catch (e) {
+      _progressTimer?.cancel();
       await ExportForegroundService.instance.cancel();
       state = ExportState(
         isExporting: false,
-        error: 'Export error: $e',
+        error: _cancelRequested ? 'Export canceled' : 'Export error: $e',
       );
+    } finally {
+      _cancelRequested = false;
     }
   }
 
@@ -178,21 +199,33 @@ class ExportNotifier extends StateNotifier<ExportState> {
   Future<void> cancelExport() async {
     if (!state.isExporting) return;
 
+    _cancelRequested = true;
     try {
-      final api = EngineService.instance.api;
-      await api.cancelExport();
-      await ExportForegroundService.instance.cancel();
-      state = const ExportState(
-        isExporting: false,
-        error: 'Export canceled',
-      );
+      await _api.cancelExport();
+      state = state.copyWith(stageName: 'Canceling');
     } catch (e) {
-      await ExportForegroundService.instance.cancel();
-      state = state.copyWith(
-        isExporting: false,
-        error: 'Cancel failed: $e',
-      );
+      _cancelRequested = false;
+      state = state.copyWith(error: 'Cancel request failed: $e');
     }
+  }
+
+  void _startProgressPolling(EditorsProEngineApi api) {
+    _progressTimer?.cancel();
+    _progressTimer = Timer.periodic(const Duration(milliseconds: 300), (_) {
+      if (!state.isExporting) return;
+      try {
+        final progress = api.getExportProgress();
+        state = state.copyWith(
+          progress: progress.progress,
+          currentFrame: progress.currentFrame,
+          totalFrames: progress.totalFrames,
+          estimatedSecondsRemaining: progress.estimatedSecondsRemaining,
+          stageName: _cancelRequested ? 'Canceling' : progress.stageName,
+        );
+      } catch (_) {
+        // Keep the export running if the optional status symbol is missing.
+      }
+    });
   }
 
   /// Share the exported video file using the Android share sheet.

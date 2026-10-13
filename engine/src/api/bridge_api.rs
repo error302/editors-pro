@@ -582,6 +582,7 @@ impl EditorsProEngineApi {
         let export_settings = ExportSettings::from(settings);
         self.with_engine_recovery(|engine| {
             let result = engine.export_video(&output_path, export_settings, &|progress| {
+                crate::api::export_status::report(&progress);
                 let bridge_progress = BridgeExportProgress::from(progress);
                 let _ = progress_sink.add(bridge_progress);
             })?;
@@ -600,8 +601,8 @@ impl EditorsProEngineApi {
     ) -> Result<BridgeExportResult, String> {
         let export_settings = ExportSettings::from(settings);
         self.with_engine_recovery(|engine| {
-            let result = engine.export_video(&output_path, export_settings, &|_progress| {
-                // No-op for synchronous export without progress reporting
+            let result = engine.export_video(&output_path, export_settings, &|progress| {
+                crate::api::export_status::report(&progress);
             })?;
             Ok(BridgeExportResult::from(result))
         })

@@ -335,6 +335,16 @@ class BridgeExportProgress {
     required this.estimatedSecondsRemaining,
     required this.stageName,
   });
+
+  factory BridgeExportProgress.fromJson(Map<String, dynamic> json) =>
+      BridgeExportProgress(
+        progress: (json['progress'] as num?)?.toDouble() ?? 0,
+        currentFrame: json['current_frame'] as int? ?? 0,
+        totalFrames: json['total_frames'] as int? ?? 0,
+        estimatedSecondsRemaining:
+            json['estimated_seconds_remaining'] as int? ?? 0,
+        stageName: json['stage_name'] as String? ?? '',
+      );
 }
 
 /// Phase C.14: A decoded frame streamed from the Rust engine.
@@ -1074,10 +1084,10 @@ class EditorsProEngineApi {
 
   /// The owning [RustLib] runtime, used to invoke the native dispatch
   /// function. Null when in noOp mode.
-  final dynamic _runtime;
+  final RustLib? _runtime;
 
   /// Create a real engine API instance backed by the FFI runtime.
-  EditorsProEngineApi({required dynamic runtime})
+  EditorsProEngineApi({required RustLib runtime})
       : _isNoOp = false,
         _runtime = runtime;
 
@@ -1104,7 +1114,8 @@ class EditorsProEngineApi {
   ///
   /// If the engine is not available, throws [UnimplementedError].
   Future<T> _call<T>(String method, Map<String, dynamic> args) async {
-    if (_isNoOp || _runtime == null) {
+    final runtime = _runtime;
+    if (_isNoOp || runtime == null) {
       throw UnimplementedError(
         'Bridge method "$method" cannot run: engine is in noOp mode. '
         'Ensure libeditors_pro_engine.so is bundled and RustLib.init() '
@@ -1113,10 +1124,10 @@ class EditorsProEngineApi {
     }
 
     final argsJson = args.isEmpty ? '{}' : _encodeArgs(args);
-    final responseJson = _runtime.dispatchRaw(method, argsJson);
+    final responseJson = await runtime.dispatchAsync(method, argsJson);
     final envelope = _decodeEnvelope(responseJson);
 
-    if (!envelope['ok']) {
+    if (envelope['ok'] != true) {
       final err = envelope['error'] ?? 'unknown error';
       throw Exception('Engine $method failed: $err');
     }
@@ -1367,7 +1378,35 @@ class EditorsProEngineApi {
 
   /// Request cancellation of an in-progress export.
   Future<void> cancelExport() async {
-    return await _call<void>('cancel_export', {});
+    final runtime = _runtime;
+    if (_isNoOp || runtime == null) {
+      throw UnimplementedError('Native export cancellation is unavailable.');
+    }
+    if (runtime.hasDirectExportCancellation) {
+      runtime.requestExportCancellation();
+      return;
+    }
+    await _call<void>('cancel_export', {});
+  }
+
+  /// Clear a previous cancellation before starting a new export.
+  void prepareExport() {
+    final runtime = _runtime;
+    if (_isNoOp || runtime == null) return;
+    runtime.prepareExport();
+  }
+
+  /// Read the lock-free export snapshot without waiting for the engine queue.
+  BridgeExportProgress getExportProgress() {
+    final runtime = _runtime;
+    if (_isNoOp || runtime == null || !runtime.hasDirectExportProgress) {
+      throw UnimplementedError('Native export progress is unavailable.');
+    }
+    final json = jsonDecode(runtime.readExportStatus());
+    if (json is! Map<String, dynamic>) {
+      throw const FormatException('Invalid native export progress response.');
+    }
+    return BridgeExportProgress.fromJson(json);
   }
 
   /// Export the project with progress reporting via callback.
@@ -1401,7 +1440,7 @@ class EditorsProEngineApi {
       ));
       controller.close();
     }).catchError((error) {
-      controller.addError(error);
+      controller.addError(error as Object);
       controller.close();
     });
     return controller.stream;

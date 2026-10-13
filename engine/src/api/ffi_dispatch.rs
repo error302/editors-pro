@@ -164,6 +164,24 @@ pub unsafe extern "C" fn editors_pro_dispatch(
     leak_cstring(&json_str)
 }
 
+/// Set the export cancellation signal without waiting for the engine mutex.
+#[no_mangle]
+pub extern "C" fn editors_pro_cancel_export() {
+    crate::api::request_export_cancel();
+}
+
+/// Clear a stale cancellation signal before a new export is scheduled.
+#[no_mangle]
+pub extern "C" fn editors_pro_prepare_export() {
+    crate::api::clear_export_cancel_request();
+}
+
+/// Read the lock-free export progress snapshot.
+#[no_mangle]
+pub extern "C" fn editors_pro_export_status() -> *mut c_char {
+    leak_cstring(&crate::api::export_status::snapshot_json())
+}
+
 /// Free a string returned by `editors_pro_dispatch`.
 ///
 /// # Safety

@@ -6,6 +6,7 @@
 
 pub mod bridge_api;
 pub mod commands;
+pub mod export_status;
 pub mod ffi_dispatch;
 pub mod managers;
 
@@ -47,6 +48,17 @@ use crate::timeline::track::TrackType;
 use crate::timeline::Timeline;
 use crate::system::SystemMetrics;
 use crate::EngineError;
+
+static EXTERNAL_EXPORT_CANCEL_REQUESTED: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+
+pub fn request_export_cancel() {
+    EXTERNAL_EXPORT_CANCEL_REQUESTED.store(true, std::sync::atomic::Ordering::Release);
+}
+
+pub fn clear_export_cancel_request() {
+    EXTERNAL_EXPORT_CANCEL_REQUESTED.store(false, std::sync::atomic::Ordering::Release);
+}
 
 /// The main engine API that Flutter interacts with
 pub struct EditorsProEngine {
@@ -569,6 +581,7 @@ impl EditorsProEngine {
 
         let pipeline = ExportPipeline::new(settings.clone());
         let total_frames = pipeline.total_frames(duration_ms);
+        let _status_guard = export_status::ExportStatusGuard::begin(total_frames);
 
         log::info!(
             "Starting export: {} frames ({}ms @ {}fps) → {}",
@@ -607,6 +620,8 @@ impl EditorsProEngine {
             if self
                 .export_canceled
                 .load(std::sync::atomic::Ordering::Relaxed)
+                || EXTERNAL_EXPORT_CANCEL_REQUESTED
+                    .load(std::sync::atomic::Ordering::Acquire)
             {
                 log::info!(
                     "Export canceled by user at frame {}/{}",
@@ -670,6 +685,7 @@ impl EditorsProEngine {
     pub fn cancel_export(&self) {
         self.export_canceled
             .store(true, std::sync::atomic::Ordering::Relaxed);
+        request_export_cancel();
         log::info!("Export cancellation requested");
     }
 
