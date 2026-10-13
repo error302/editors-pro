@@ -71,10 +71,6 @@ android {
         debug {
             isMinifyEnabled = false
             isShrinkResources = false
-            // Enable debug native symbols
-            ndk {
-                debugSymbolLevel = "FULL"
-            }
         }
         release {
             isMinifyEnabled = true
