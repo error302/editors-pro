@@ -233,21 +233,38 @@ impl EditorsProEngine {
         let media_type = Self::detect_media_type(file_path);
         let mut asset = MediaAsset::new(file_path, media_type);
 
-        if media_type == MediaType::Image {
-            let (width, height) = crate::decoder::still_image::dimensions(file_path)?;
-            asset.width = Some(width);
-            asset.height = Some(height);
-        } else if media_type == MediaType::Video {
-            let mut decoder = HardwareDecoder::new();
-            if let Ok(()) = decoder.open(file_path) {
-                if let Some(info) = decoder.get_video_info() {
-                    asset.width = Some(info.width);
-                    asset.height = Some(info.height);
-                    asset.duration_ms = Some(info.duration_ms);
-                    asset.codec = Some(info.codec_name.clone());
-                    asset.bitrate = Some(info.bitrate);
+        match media_type {
+            MediaType::Image => {
+                let (width, height) = crate::decoder::still_image::dimensions(file_path)?;
+                asset.width = Some(width);
+                asset.height = Some(height);
+            }
+            MediaType::Video => {
+                let mut decoder = HardwareDecoder::new();
+                decoder.open(file_path)?;
+                let info = decoder
+                    .get_video_info()
+                    .ok_or_else(|| "The selected video has no readable video stream".to_string())?;
+                if info.duration_ms == 0 {
+                    return Err("The selected video has no readable duration".to_string());
                 }
+                asset.width = Some(info.width);
+                asset.height = Some(info.height);
+                asset.duration_ms = Some(info.duration_ms);
+                asset.codec = Some(info.codec_name.clone());
+                asset.bitrate = Some(info.bitrate);
                 decoder.close();
+            }
+            MediaType::Audio => {
+                let mut decoder = AudioDecoder::new();
+                decoder.open(file_path)?;
+                let info = decoder.audio_info();
+                decoder.close();
+                if info.duration_ms == 0 {
+                    return Err("The selected audio has no readable duration".to_string());
+                }
+                asset.duration_ms = Some(info.duration_ms);
+                asset.codec = Some(info.codec_name);
             }
         }
 
