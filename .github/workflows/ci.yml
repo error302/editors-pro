@@ -332,10 +332,11 @@ jobs:
       # (emulators) so the same APK works in both environments.
       - name: Build Rust engine (arm64-v8a + x86_64)
         shell: bash
+        working-directory: engine
         run: |
           build_log="$RUNNER_TEMP/rust-android-build.log"
           set +e
-          cargo ndk -t arm64-v8a -t x86_64 build --release --manifest-path engine/Cargo.toml 2>&1 | tee "$build_log"
+          cargo ndk -t arm64-v8a -t x86_64 build --release 2>&1 | tee "$build_log"
           build_status=${PIPESTATUS[0]}
           set -e
           if (( build_status != 0 )); then
