@@ -58,7 +58,7 @@ rusqlite = { version = "0.32", features = ["bundled"] }
 fontdue = "0.9"
 
 # File compression for .epp format
-zip = "2.2"
+zip = { version = "2.2", default-features = false, features = ["deflate"] }
 
 # CRC32 checksum for .epp format integrity verification
 crc32fast = "1.4"

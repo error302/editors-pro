@@ -5,6 +5,7 @@
 
 pub mod hardware;
 pub mod software;
+pub mod still_image;
 pub mod worker;
 
 #[cfg(test)]

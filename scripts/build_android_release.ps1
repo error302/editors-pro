@@ -12,6 +12,35 @@ $abiMap = @{
     "x86_64" = @{ Lib = "amd64"; Triple = "x86_64" }
 }
 
+$missingFfmpegBuildInputs = @()
+foreach ($abi in $abiMap.Keys) {
+    $libDir = Join-Path $ffmpegRoot "lib\$($abiMap[$abi].Lib)"
+    foreach ($lib in $ffmpegLibs) {
+        if (-not (Test-Path (Join-Path $libDir "lib$lib.so"))) {
+            $missingFfmpegBuildInputs += "${abi}: lib$lib.so"
+        }
+    }
+}
+$sharedFfmpegInputs = @(
+    (Join-Path $ffmpegRoot "include\libavcodec\avcodec.h"),
+    (Join-Path $ffmpegRoot "BUILDINFO.txt"),
+    (Join-Path $ffmpegRoot "COPYING.LGPLv2.1")
+)
+foreach ($input in $sharedFfmpegInputs) {
+    if (-not (Test-Path $input)) {
+        $missingFfmpegBuildInputs += $input
+    }
+}
+
+if ($missingFfmpegBuildInputs.Count -gt 0) {
+    Write-Host "Building missing LGPL FFmpeg Android libraries before packaging."
+    $ffmpegBuildScript = Join-Path $PSScriptRoot "build_ffmpeg_android.ps1"
+    & $ffmpegBuildScript
+    if ($LASTEXITCODE -ne 0) {
+        throw "The pinned LGPL FFmpeg Android build failed. See engine\ffmpeg-android-lgpl\.build\ffmpeg-build.log."
+    }
+}
+
 foreach ($abi in $abiMap.Keys) {
     $libDir = Join-Path $ffmpegRoot "lib\$($abiMap[$abi].Lib)"
     foreach ($lib in $ffmpegLibs) {
@@ -51,12 +80,27 @@ foreach ($abi in $abiMap.Keys) {
 }
 
 Push-Location $projectRoot
+$debugSigningOverride = "ORG_GRADLE_PROJECT_EDITORS_PRO_ALLOW_DEBUG_SIGNED_RELEASE"
+$previousDebugSigningOverride = [Environment]::GetEnvironmentVariable(
+    $debugSigningOverride,
+    [EnvironmentVariableTarget]::Process
+)
 try {
+    [Environment]::SetEnvironmentVariable(
+        $debugSigningOverride,
+        "true",
+        [EnvironmentVariableTarget]::Process
+    )
     & $FlutterCommand pub get
     if ($LASTEXITCODE -ne 0) { throw "Flutter dependency resolution failed." }
     & $FlutterCommand build apk --release --dart-define=FFMPEG_LICENSE_PROFILE=lgpl-2.1
     if ($LASTEXITCODE -ne 0) { throw "Flutter APK build failed." }
 } finally {
+    [Environment]::SetEnvironmentVariable(
+        $debugSigningOverride,
+        $previousDebugSigningOverride,
+        [EnvironmentVariableTarget]::Process
+    )
     Pop-Location
 }
 

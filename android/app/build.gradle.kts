@@ -157,3 +157,41 @@ dependencies {
 flutter {
     source = "../.."
 }
+
+val rustEngineRoot = rootProject.projectDir.resolve("../engine").canonicalFile
+val rustEngineLibraries = listOf("arm64-v8a", "x86_64").map { abi ->
+    file("src/main/jniLibs/$abi/libeditors_pro_engine.so")
+}
+val verifyRustEngineFreshness = tasks.register("verifyRustEngineFreshness") {
+    doLast {
+        val rustSources = fileTree(rustEngineRoot) {
+            include("Cargo.toml", "Cargo.lock", "build.rs", "src/**/*.rs")
+        }.files
+        if (rustSources.isEmpty()) {
+            throw GradleException("Rust engine sources were not found at $rustEngineRoot.")
+        }
+
+        val newestSourceTime = rustSources.maxOf { it.lastModified() }
+        val missingLibraries = rustEngineLibraries.filterNot { it.isFile }
+        if (missingLibraries.isNotEmpty()) {
+            throw GradleException(
+                "Android Rust engine libraries are missing for: " +
+                    missingLibraries.joinToString { it.parentFile.name } +
+                    ". Run .\\scripts\\build_android_release.ps1 to build the native engine and APK."
+            )
+        }
+
+        val staleLibraries = rustEngineLibraries.filter { it.lastModified() < newestSourceTime }
+        if (staleLibraries.isNotEmpty()) {
+            throw GradleException(
+                "The Android Rust engine is older than its source for: " +
+                    staleLibraries.joinToString { it.parentFile.name } +
+                    ". Run .\\scripts\\build_android_release.ps1 before building in Android Studio."
+            )
+        }
+    }
+}
+
+tasks.named("preBuild") {
+    dependsOn(verifyRustEngineFreshness)
+}

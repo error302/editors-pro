@@ -2,13 +2,21 @@
 
 EDITORS-PRO builds FFmpeg from the official 7.1.5 source release for Android. The build script verifies the upstream signature, builds shared libraries for `arm64-v8a` and `x86_64`, enables JNI-backed Android MediaCodec, and explicitly disables GPL, nonfree, and LGPLv3-only components. Do not replace this build with an unreviewed FFmpeg Kit or full-GPL archive.
 
-On Windows with Docker Desktop, run:
+For a complete APK build after changing engine code, run:
+
+```powershell
+./scripts/build_android_release.ps1
+```
+
+This builds the pinned FFmpeg libraries when missing, compiles the Rust engine for both supported ABIs, copies fresh native outputs into Android `jniLibs`, and packages the APK. Android Gradle builds reject missing or stale Rust engine libraries so they cannot silently package an older editor engine.
+
+To build only FFmpeg, use the standalone script below. Docker Desktop's Linux engine must be available.
 
 ```powershell
 .\scripts\build_ffmpeg_android.ps1
 ```
 
-The script keeps generated libraries under the ignored `engine/ffmpeg-android-lgpl` directory. The Rust engine build must set `FFMPEG_DIR` to that directory. The APK build copies the corresponding ABI libraries into Android `jniLibs` after preserving any existing libraries in the local legacy backup directory.
+The standalone FFmpeg script keeps generated libraries under the ignored `engine/ffmpeg-android-lgpl` directory. The release script sets `FFMPEG_DIR` to that directory and preserves existing native libraries in the local legacy backup directory when it replaces them.
 
 ## Licensing and distribution
 

@@ -350,7 +350,7 @@ fn smoke_test_engine_error_from_string() {
         Err("legacy failure".to_string())
     }
     fn modern() -> Result<i32, EngineError> {
-        legacy()?
+        Ok(legacy()?)
     }
     let err = modern().unwrap_err();
     match err {

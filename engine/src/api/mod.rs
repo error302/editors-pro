@@ -14,7 +14,6 @@ pub mod managers;
 mod bridge_api_tests;
 #[cfg(test)]
 mod commands_tests;
-
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
@@ -234,8 +233,11 @@ impl EditorsProEngine {
         let media_type = Self::detect_media_type(file_path);
         let mut asset = MediaAsset::new(file_path, media_type);
 
-        // If it's a video, extract metadata
-        if media_type == MediaType::Video {
+        if media_type == MediaType::Image {
+            let (width, height) = crate::decoder::still_image::dimensions(file_path)?;
+            asset.width = Some(width);
+            asset.height = Some(height);
+        } else if media_type == MediaType::Video {
             let mut decoder = HardwareDecoder::new();
             if let Ok(()) = decoder.open(file_path) {
                 if let Some(info) = decoder.get_video_info() {
@@ -460,77 +462,18 @@ impl EditorsProEngine {
                 .flat_map(|t| t.clips.iter())
                 .find(|c| c.contains_time(time_ms));
 
-            active_clip.map(|clip| {
-                let asset = project.find_media_asset(&clip.asset_id);
-                (clip.clone(), asset.map(|a| a.file_path.clone()))
+            active_clip.and_then(|clip| {
+                project.find_media_asset(&clip.asset_id).map(|asset| {
+                    (clip.clone(), asset.file_path.clone(), asset.media_type)
+                })
             })
         };
 
-        // Now decode the frame (mutable borrow of self.decoder)
-        let video_frame = if let Some((clip, Some(file_path))) = frame_request {
-            let relative_time = time_ms - clip.start_ms;
-            let source_time = clip.trim_start_ms + (relative_time as f32 * clip.speed_at(relative_time)) as u64;
-
-            // Phase B.12: check the decoded-frame cache before re-decoding.
-            // The cache is keyed by asset_id + source_time so that scrubbing
-            // back to a previously-shown frame is O(1) and doesn't hit FFmpeg.
-            // Cache entries are invalidated by `invalidate_frame_cache()`,
-            // which the bridge layer calls whenever the timeline is mutated.
-            let cache_key = format!("{}:{}", clip.asset_id, source_time);
-            if let Some(cached) = self.frame_cache.get(&cache_key) {
-                // Cache hit — skip decode entirely.
-                log::trace!(
-                    "frame_cache HIT for asset {} @ {}ms",
-                    clip.asset_id,
-                    source_time
-                );
-                Some(cached)
-            } else {
-                // Cache miss — decode from FFmpeg and store the result.
-
-                // Check whether the decoder already has the correct file open.
-                // If the file path differs from the currently-open file, close
-                // the decoder and re-open the new file. This fixes the bug where
-                // scrubbing between different clips would not re-open the decoder.
-                let needs_reopen = match &self.current_file_path {
-                    Some(current) => current != &file_path,
-                    None => true,
-                };
-
-                if needs_reopen {
-                    // Close the previous decoder to release FFmpeg resources.
-                    self.decoder.close();
-                    self.current_file_path = None;
-
-                    // Open the new file.
-                    self.decoder
-                        .open(&file_path)
-                        .map_err(|e| EngineError::DecoderError(e))?;
-                    self.current_file_path = Some(file_path);
-                }
-                let decoded = self
-                    .decoder
-                    .decode_frame_at(source_time)
-                    .map_err(|e| EngineError::DecoderError(e))?;
-
-                // Store in cache. Frame size = width * height * 4 bytes (RGBA).
-                let frame_size_bytes = (decoded.width * decoded.height * 4) as u64;
-                self.frame_cache.put(&cache_key, decoded.clone(), frame_size_bytes);
-                let usage_pct = if self.frame_cache.max_bytes() > 0 {
-                    (self.frame_cache.used_bytes() * 100 / self.frame_cache.max_bytes()) as u32
-                } else {
-                    0
-                };
-                log::trace!(
-                    "frame_cache MISS for asset {} @ {}ms ({} bytes, cache now {}% full)",
-                    clip.asset_id,
-                    source_time,
-                    frame_size_bytes,
-                    usage_pct
-                );
-
-                Some(decoded)
-            }
+        let video_frame = if let Some((clip, file_path, media_type)) = frame_request {
+            Some(
+                self.decode_asset_frame(&clip, &file_path, media_type, time_ms)
+                    .map_err(EngineError::DecoderError)?,
+            )
         } else {
             None
         };
@@ -555,6 +498,58 @@ impl EditorsProEngine {
         }
 
         Ok(composed)
+    }
+
+    fn decode_asset_frame(
+        &mut self,
+        clip: &Clip,
+        file_path: &str,
+        media_type: MediaType,
+        time_ms: u64,
+    ) -> Result<crate::decoder::FrameData, String> {
+        let relative_time = time_ms.saturating_sub(clip.start_ms);
+        let source_time = if media_type == MediaType::Image {
+            0
+        } else {
+            clip.trim_start_ms
+                + (relative_time as f32 * clip.speed_at(relative_time)) as u64
+        };
+        let cache_key = format!("{}:{}", clip.asset_id, source_time);
+
+        if let Some(cached) = self.frame_cache.get(&cache_key) {
+            log::trace!(
+                "frame_cache HIT for asset {} @ {}ms",
+                clip.asset_id,
+                source_time
+            );
+            return Ok(cached);
+        }
+
+        let decoded = if media_type == MediaType::Image {
+            if self.current_file_path.take().is_some() {
+                self.decoder.close();
+            }
+            crate::decoder::still_image::decode(file_path)?
+        } else {
+            if self.current_file_path.as_deref() != Some(file_path) {
+                self.decoder.close();
+                self.current_file_path = None;
+                self.decoder.open(file_path)?;
+                self.current_file_path = Some(file_path.to_string());
+            }
+            self.decoder.decode_frame_at(source_time)?
+        };
+
+        let frame_size_bytes = u64::from(decoded.width) * u64::from(decoded.height) * 4;
+        self.frame_cache
+            .put(&cache_key, decoded.clone(), frame_size_bytes);
+        log::trace!(
+            "frame_cache MISS for asset {} @ {}ms ({} bytes)",
+            clip.asset_id,
+            source_time,
+            frame_size_bytes
+        );
+        Ok(decoded)
     }
 
     /// Export the project as a video file with real FFmpeg encoding.
@@ -704,33 +699,15 @@ impl EditorsProEngine {
                 .flat_map(|t| t.clips.iter())
                 .find(|c| c.contains_time(time_ms));
 
-            active_clip.map(|clip| {
-                let asset = project.find_media_asset(&clip.asset_id);
-                (clip.clone(), asset.map(|a| a.file_path.clone()))
+            active_clip.and_then(|clip| {
+                project.find_media_asset(&clip.asset_id).map(|asset| {
+                    (clip.clone(), asset.file_path.clone(), asset.media_type)
+                })
             })
         };
 
-        // Decode the video frame
-        let video_frame = if let Some((clip, Some(file_path))) = frame_request {
-            let relative_time = time_ms - clip.start_ms;
-            let source_time = clip.trim_start_ms + (relative_time as f32 * clip.speed_at(relative_time)) as u64;
-
-            let needs_reopen = match &self.current_file_path {
-                Some(current) => current != &file_path,
-                None => true,
-            };
-
-            if needs_reopen {
-                self.decoder.close();
-                self.current_file_path = None;
-                self.decoder.open(&file_path).map_err(|e| e.to_string())?;
-                self.current_file_path = Some(file_path);
-            }
-            Some(
-                self.decoder
-                    .decode_frame_at(source_time)
-                    .map_err(|e| e.to_string())?,
-            )
+        let video_frame = if let Some((clip, file_path, media_type)) = frame_request {
+            Some(self.decode_asset_frame(&clip, &file_path, media_type, time_ms)?)
         } else {
             None
         };
