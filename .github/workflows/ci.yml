@@ -255,9 +255,10 @@ jobs:
             rust-android-${{ runner.os }}-
 
       - name: Install cargo-ndk
-        # Phase E.2: use taiki-e/install-action instead of `cargo install`
-        # for ~10x faster CI (pre-built binary vs compiling from source).
-        uses: taiki-e/install-action@cargo-ndk
+        # Use the installer action's supported tool input for a prebuilt binary.
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-ndk
 
       - name: Install Flutter stable
         uses: subosito/flutter-action@v2
