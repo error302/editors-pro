@@ -60,7 +60,10 @@ class _FilmGrainPickerState extends State<FilmGrainPicker> {
           isExpanded: true,
           items: const [
             DropdownMenuItem(value: 'none', child: Text('None')),
-            DropdownMenuDivider(),
+            DropdownMenuItem<String>(
+              enabled: false,
+              child: Divider(height: 1),
+            ),
             DropdownMenuItem(value: 'kodak_5219_500T', child: Text('Kodak Vision3 500T (warm)')),
             DropdownMenuItem(value: 'kodak_5213_200T', child: Text('Kodak Vision3 200T')),
             DropdownMenuItem(value: 'kodak_5207_250D', child: Text('Kodak Vision3 250D (daylight)')),
@@ -68,7 +71,10 @@ class _FilmGrainPickerState extends State<FilmGrainPicker> {
             DropdownMenuItem(value: 'fuji_8543_500T', child: Text('Fuji Eterna Vivid 500T')),
             DropdownMenuItem(value: 'ilford_hp5', child: Text('Ilford HP5 (B&W)')),
             DropdownMenuItem(value: 'ilford_delta_3200', child: Text('Ilford Delta 3200 (B&W push)')),
-            DropdownMenuDivider(),
+            DropdownMenuItem<String>(
+              enabled: false,
+              child: Divider(height: 1),
+            ),
             DropdownMenuItem(value: 'vhs', child: Text('VHS (tape noise)')),
             DropdownMenuItem(value: 'halation', child: Text('Halation (red glow on highlights)')),
           ],

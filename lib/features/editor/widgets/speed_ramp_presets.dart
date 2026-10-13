@@ -95,7 +95,7 @@ class _SpeedRampPresetsState extends ConsumerState<SpeedRampPresets> {
     _RampPreset(
       name: 'Bounce',
       description: '1.0x → 0.25x → 2.0x → 1.0x',
-      icon: Icons.bounce_escalator_outlined,
+      icon: Icons.speed,
       segments: [
         (1.0, 0.25, 'ease_out'),
         (0.25, 2.0, 'ease_in'),
