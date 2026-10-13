@@ -156,7 +156,7 @@ void main() {
       expect(notifier.state.accountName, isNull);
     });
 
-    test('signOut resets to default state', () {
+    test('signOut resets to default state', () async {
       final notifier = CloudSyncNotifier();
 
       notifier.state = const CloudSyncState(

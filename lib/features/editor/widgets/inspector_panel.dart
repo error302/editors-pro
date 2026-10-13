@@ -1580,23 +1580,27 @@ class _SpeedSectionState extends ConsumerState<_SpeedSection> {
                 color: _speed == 1.0 ? AppTheme.textPrimary : AppTheme.primary,
               ),
             ),
-            const Spacer(),
             // Speed presets
-            Wrap(
-              spacing: 4,
-              children: _speedPresets.map((s) {
-                final isSelected = (_speed - s).abs() < 0.01;
-                return ChoiceChip(
-                  label: Text('${s}x', style: const TextStyle(fontSize: 9)),
-                  selected: isSelected,
-                  onSelected: (_) {
-                    setState(() => _speed = s);
-                    widget.onSpeedChanged(s);
-                  },
-                  visualDensity: VisualDensity.compact,
-                  selectedColor: AppTheme.primary,
-                );
-              }).toList(),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Wrap(
+                alignment: WrapAlignment.end,
+                spacing: 4,
+                runSpacing: 2,
+                children: _speedPresets.map((s) {
+                  final isSelected = (_speed - s).abs() < 0.01;
+                  return ChoiceChip(
+                    label: Text('${s}x', style: const TextStyle(fontSize: 9)),
+                    selected: isSelected,
+                    onSelected: (_) {
+                      setState(() => _speed = s);
+                      widget.onSpeedChanged(s);
+                    },
+                    visualDensity: VisualDensity.compact,
+                    selectedColor: AppTheme.primary,
+                  );
+                }).toList(),
+              ),
             ),
           ],
         ),

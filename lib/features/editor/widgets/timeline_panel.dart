@@ -315,6 +315,7 @@ class _TimelinePanelState extends ConsumerState<TimelinePanel> {
           const SizedBox(width: 8),
           _TimelineIconButton(
             icon: AppIcons.zoomOut,
+            tooltip: 'Zoom out',
             size: 14,
             filled: true,
             onTap: () => ref.read(editorProvider.notifier).zoomOut(),
@@ -334,6 +335,7 @@ class _TimelinePanelState extends ConsumerState<TimelinePanel> {
           const SizedBox(width: 4),
           _TimelineIconButton(
             icon: AppIcons.zoomIn,
+            tooltip: 'Zoom in',
             size: 14,
             filled: true,
             onTap: () => ref.read(editorProvider.notifier).zoomIn(),
@@ -700,29 +702,11 @@ class _DraggableClipWidgetState extends State<_DraggableClipWidget> {
           decoration: BoxDecoration(
             color: baseColor.withValues(alpha: 0.3),
             borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
-            border: Border(
-              left: BorderSide(
-                color: widget.isSelected ? AppTheme.primary : baseColor,
-                width: 2,
-              ),
-              top: BorderSide(
-                color: widget.isSelected
-                    ? AppTheme.primary
-                    : baseColor.withValues(alpha: 0.4),
-                width: widget.isSelected ? 2 : 1,
-              ),
-              right: BorderSide(
-                color: widget.isSelected
-                    ? AppTheme.primary
-                    : baseColor.withValues(alpha: 0.4),
-                width: widget.isSelected ? 2 : 1,
-              ),
-              bottom: BorderSide(
-                color: widget.isSelected
-                    ? AppTheme.primary
-                    : baseColor.withValues(alpha: 0.4),
-                width: widget.isSelected ? 2 : 1,
-              ),
+            border: Border.all(
+              color: widget.isSelected
+                  ? AppTheme.primary
+                  : baseColor.withValues(alpha: 0.4),
+              width: widget.isSelected ? 2 : 1,
             ),
           ),
           child: Stack(
@@ -1065,6 +1049,7 @@ class _TrackHeaderItem extends StatelessWidget {
 class _TimelineIconButton extends StatelessWidget {
   const _TimelineIconButton({
     required this.icon,
+    this.tooltip,
     this.onTap,
     this.color,
     this.size = 16,
@@ -1072,6 +1057,7 @@ class _TimelineIconButton extends StatelessWidget {
   });
 
   final String icon;
+  final String? tooltip;
   final VoidCallback? onTap;
   final Color? color;
   final double size;
@@ -1093,8 +1079,9 @@ class _TimelineIconButton extends StatelessWidget {
       ),
     );
 
+    final Widget button;
     if (filled) {
-      return Material(
+      button = Material(
         color: Colors.transparent,
         child: InkWell(
           onTap: onTap,
@@ -1112,19 +1099,26 @@ class _TimelineIconButton extends StatelessWidget {
           ),
         ),
       );
+    } else {
+      button = Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(4),
+          child: SizedBox(
+            width: 24,
+            height: 24,
+            child: Center(child: iconWidget),
+          ),
+        ),
+      );
     }
 
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(4),
-        child: SizedBox(
-          width: 24,
-          height: 24,
-          child: Center(child: iconWidget),
-        ),
-      ),
+    final tooltipMessage = tooltip;
+    if (tooltipMessage == null) return button;
+    return Tooltip(
+      message: tooltipMessage,
+      child: button,
     );
   }
 }

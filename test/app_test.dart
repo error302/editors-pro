@@ -100,7 +100,10 @@ void main() {
 
     /// Pump the app with a fake repository so database calls don't crash.
     Future<void> pumpApp(WidgetTester tester) async {
-      SharedPreferences.setMockInitialValues({});
+      SharedPreferences.setMockInitialValues({
+        'onboarding_completed': true,
+        'settings_theme_mode': 'dark',
+      });
       final preferences = await SharedPreferences.getInstance();
       await tester.pumpWidget(
         ProviderScope(
@@ -134,15 +137,14 @@ void main() {
         find.byType(MaterialApp),
       );
 
-      final theme = materialApp.theme;
-      expect(theme, isNotNull);
-      expect(theme!.brightness, equals(Brightness.dark));
+      expect(materialApp.themeMode, ThemeMode.dark);
+      expect(materialApp.darkTheme?.brightness, Brightness.dark);
     });
 
     testWidgets('settings button navigates to settings route', (tester) async {
       await pumpApp(tester);
 
-      final settingsButton = find.byIcon(Icons.settings_outlined);
+      final settingsButton = find.byTooltip('Settings');
       expect(settingsButton, findsOneWidget);
 
       await tester.tap(settingsButton);
@@ -185,21 +187,25 @@ void main() {
       expect(materialApp.debugShowCheckedModeBanner, isFalse);
     });
 
-    testWidgets('home screen shows RECENT and TEMPLATES tabs', (tester) async {
+    testWidgets('home screen shows Recent and Templates tabs', (tester) async {
       await pumpApp(tester);
 
-      expect(find.text('RECENT'), findsOneWidget);
-      expect(find.text('TEMPLATES'), findsOneWidget);
+      expect(find.text('Recent'), findsOneWidget);
+      expect(find.text('Templates'), findsOneWidget);
     });
 
     testWidgets('home screen shows empty state when no projects',
         (tester) async {
       await pumpApp(tester);
 
-      expect(find.text('No Projects Yet'), findsOneWidget);
+      expect(find.text('Start Creating'), findsOneWidget);
+      expect(
+        find.text('Import a video to get started — no setup required'),
+        findsOneWidget,
+      );
     });
 
-    testWidgets('home screen has New Project FAB', (tester) async {
+    testWidgets('home screen has a New Project action', (tester) async {
       await pumpApp(tester);
 
       expect(find.text('New Project'), findsOneWidget);

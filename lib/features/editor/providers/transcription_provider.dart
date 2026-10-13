@@ -196,7 +196,8 @@ class TranscriptionState {
     final minutes = (ms % 3600000) ~/ 60000;
     final seconds = (ms % 60000) ~/ 1000;
     final millis = ms % 1000;
-    return '${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')},$millis';
+    final milliseconds = millis.toString().padLeft(3, '0');
+    return '${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')},$milliseconds';
   }
 
   /// Format milliseconds as VTT timestamp (HH:MM:SS.mmm)
@@ -205,7 +206,8 @@ class TranscriptionState {
     final minutes = (ms % 3600000) ~/ 60000;
     final seconds = (ms % 60000) ~/ 1000;
     final millis = ms % 1000;
-    return '${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}.$millis';
+    final milliseconds = millis.toString().padLeft(3, '0');
+    return '${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}.$milliseconds';
   }
 
   TranscriptionState copyWith({

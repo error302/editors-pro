@@ -115,6 +115,7 @@ class _ProjectHomeScreenState extends ConsumerState<ProjectHomeScreen>
           // Search
           _buildHeaderIconButton(
             icon: AppIcons.search,
+            tooltip: 'Search projects',
             onTap: () {
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
@@ -132,6 +133,7 @@ class _ProjectHomeScreenState extends ConsumerState<ProjectHomeScreen>
           // Settings
           _buildHeaderIconButton(
             icon: AppIcons.settings,
+            tooltip: 'Settings',
             onTap: () => context.go('/settings'),
           ),
         ],
@@ -141,19 +143,23 @@ class _ProjectHomeScreenState extends ConsumerState<ProjectHomeScreen>
 
   Widget _buildHeaderIconButton({
     required String icon,
+    required String tooltip,
     required VoidCallback onTap,
   }) {
-    return Material(
-      color: AppTheme.surfaceVariant,
-      shape: const CircleBorder(),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onTap,
-        child: Container(
-          width: 40,
-          height: 40,
-          alignment: Alignment.center,
-          child: AppIcon(icon, size: 18, color: AppTheme.textSecondary),
+    return Tooltip(
+      message: tooltip,
+      child: Material(
+        color: AppTheme.surfaceVariant,
+        shape: const CircleBorder(),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: Container(
+            width: 40,
+            height: 40,
+            alignment: Alignment.center,
+            child: AppIcon(icon, size: 18, color: AppTheme.textSecondary),
+          ),
         ),
       ),
     );

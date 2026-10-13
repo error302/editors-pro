@@ -62,10 +62,8 @@ void main() {
     testWidgets('shows zoom controls', (tester) async {
       await pumpTimeline(tester);
 
-      // Zoom out button (minus icon)
-      expect(find.byIcon(Icons.remove), findsOneWidget);
-      // Zoom in button (add icon)
-      expect(find.byIcon(Icons.add), findsOneWidget);
+      expect(find.byTooltip('Zoom out'), findsOneWidget);
+      expect(find.byTooltip('Zoom in'), findsOneWidget);
     });
 
     testWidgets('shows zoom percentage', (tester) async {
@@ -251,7 +249,7 @@ void main() {
         editorState: const EditorState(zoomLevel: 1.0),
       );
 
-      await tester.tap(find.byIcon(Icons.add));
+      await tester.tap(find.byTooltip('Zoom in'));
       await tester.pump();
 
       // The zoom level should have increased (120%)
@@ -264,7 +262,7 @@ void main() {
         editorState: const EditorState(zoomLevel: 1.0),
       );
 
-      await tester.tap(find.byIcon(Icons.remove));
+      await tester.tap(find.byTooltip('Zoom out'));
       await tester.pump();
 
       // The zoom level should have decreased (83% → 0.833 * 100 = 83)
