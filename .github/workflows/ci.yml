@@ -42,6 +42,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y \
             libavcodec-dev \
+            libavfilter-dev \
             libavformat-dev \
             libavutil-dev \
             libswscale-dev \
@@ -191,23 +192,26 @@ jobs:
           analysis_status=${PIPESTATUS[0]}
           set -e
           if (( analysis_status != 0 )); then
-            diagnostics="$(tail -n 32 "$analysis_log" | tr '\r\n' ' ' | sed -e 's/%/%25/g' -e 's/:/%3A/g' -e 's/,/%2C/g')"
+            diagnostics="$(grep -E '^[[:space:]]*(error|warning) •' "$analysis_log" | tail -n 16 | tr '\r\n' ' ' | sed -e 's/%/%25/g' -e 's/:/%3A/g' -e 's/,/%2C/g')"
             printf '::error title=Flutter analyze diagnostics::%s\n' "$diagnostics"
             {
               echo '### Flutter analyze diagnostics'
               echo '```text'
-              tail -n 40 "$analysis_log"
+              grep -E '^[[:space:]]*(error|warning) •' "$analysis_log" | tail -n 24
+              tail -n 4 "$analysis_log"
               echo '```'
             } >> "$GITHUB_STEP_SUMMARY"
             exit "$analysis_status"
           fi
 
       - name: Flutter test with coverage
+        if: ${{ success() || failure() }}
         run: flutter test --coverage
 
       # Keep formatting strict without allowing legacy formatting debt to
       # suppress analysis and test diagnostics above.
       - name: Dart format check
+        if: ${{ success() || failure() }}
         run: dart format --set-exit-if-changed .
 
       - name: Upload Flutter coverage to Codecov
