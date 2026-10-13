@@ -273,6 +273,11 @@ jobs:
       - name: Install NDK r28c
         run: sdkmanager --install "ndk;28.2.13676358"
 
+      - name: Install FFmpeg build prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends nasm
+
       - name: Configure Android NDK for FFmpeg
         run: |
           echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/28.2.13676358" >> "$GITHUB_ENV"

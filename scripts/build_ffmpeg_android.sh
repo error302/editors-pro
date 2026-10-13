@@ -14,7 +14,7 @@ if [[ -z "$NDK_ROOT" || ! -x "$NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bi
   exit 2
 fi
 
-for tool in curl gpg make sha1sum tar xz; do
+for tool in curl gpg make nasm sha1sum tar xz; do
   command -v "$tool" >/dev/null || { echo "Required build tool missing: $tool" >&2; exit 2; }
 done
 
