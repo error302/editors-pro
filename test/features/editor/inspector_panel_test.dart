@@ -324,7 +324,7 @@ void main() {
       );
 
       await tester.scrollUntilVisible(
-        find.widgetWithText(Card, 'Brightness'),
+        find.byKey(const ValueKey('effect-fx1')),
         180,
         scrollable: find.byType(Scrollable).first,
       );

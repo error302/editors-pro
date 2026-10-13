@@ -107,9 +107,6 @@ void main() {
     });
 
     testWidgets('shows track type icons', (tester) async {
-      final semantics = tester.ensureSemantics();
-      addTearDown(semantics.dispose);
-
       final project = ProjectModel(
         id: 'p1',
         name: 'Test',
@@ -128,10 +125,20 @@ void main() {
 
       await pumpTimeline(tester, project: project);
 
-      expect(find.bySemanticsLabel('Video track'), findsOneWidget);
-      expect(find.bySemanticsLabel('Audio track'), findsOneWidget);
-      expect(find.bySemanticsLabel('Text track'), findsOneWidget);
-      expect(find.bySemanticsLabel('Effect track'), findsOneWidget);
+      for (final label in [
+        'Video track',
+        'Audio track',
+        'Text track',
+        'Effect track',
+      ]) {
+        expect(
+          find.byWidgetPredicate(
+            (widget) =>
+                widget is Semantics && widget.properties.label == label,
+          ),
+          findsOneWidget,
+        );
+      }
     });
 
     testWidgets('shows clips on tracks', (tester) async {

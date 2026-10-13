@@ -989,6 +989,7 @@ class _AppliedEffectCard extends StatelessWidget {
     final isChromaKey = effectType == 'chroma_key' || effectType == 'ChromaKey' || name == 'Chroma Key';
 
     return Card(
+      key: ValueKey('effect-$effectId'),
       color: AppTheme.surfaceVariant,
       margin: const EdgeInsets.only(bottom: 8),
       child: Padding(
