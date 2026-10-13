@@ -117,6 +117,17 @@ jobs:
         if: ${{ success() || failure() }}
         run: cargo fmt --manifest-path engine/Cargo.toml --all -- --check
 
+      - name: Upload Rust CI diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rust-ci-diagnostics
+          path: |
+            ${{ runner.temp }}/cargo-clippy.log
+            ${{ runner.temp }}/cargo-test.log
+          if-no-files-found: ignore
+          retention-days: 3
+
       - name: Install cargo-llvm-cov
         uses: taiki-e/install-action@cargo-llvm-cov
 

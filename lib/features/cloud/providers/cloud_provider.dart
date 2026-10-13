@@ -60,11 +60,12 @@ class CloudSyncState {
     int? pendingConflicts,
     String? lastError,
     bool clearError = false,
+    bool clearAccount = false,
     List<CloudProjectEntry>? cloudProjects,
   }) {
     return CloudSyncState(
       isAuthenticated: isAuthenticated ?? this.isAuthenticated,
-      accountName: accountName ?? this.accountName,
+      accountName: clearAccount ? null : (accountName ?? this.accountName),
       providerName: providerName ?? this.providerName,
       isSyncing: isSyncing ?? this.isSyncing,
       pendingConflicts: pendingConflicts ?? this.pendingConflicts,
@@ -219,7 +220,7 @@ class CloudSyncNotifier extends StateNotifier<CloudSyncState> {
     state = state.copyWith(
       providerName: providerName,
       isAuthenticated: false,
-      accountName: null,
+      clearAccount: true,
     );
   }
 

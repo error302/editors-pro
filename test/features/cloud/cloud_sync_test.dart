@@ -166,7 +166,7 @@ void main() {
         pendingConflicts: 2,
       );
 
-      notifier.signOut();
+      await notifier.signOut();
       expect(notifier.state.isAuthenticated, false);
       expect(notifier.state.accountName, isNull);
       expect(notifier.state.providerName, 'None');

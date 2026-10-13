@@ -101,15 +101,12 @@ void main() {
         final json = {
           'id': 'proj-1',
           'name': 'My Project',
-          'created_at': 1704067200,
-          'updated_at': 1704067200,
           'width': 1920,
           'height': 1080,
           'fps': 30.0,
-          'duration_ms': '60000',
+          'duration_ms': 60000,
           'track_count': 3,
-          'clip_count': 5,
-          'asset_count': 2,
+          'media_count': 2,
         };
 
         final info = ProjectInfo.fromJson(json);
@@ -117,9 +114,9 @@ void main() {
         expect(info.name, equals('My Project'));
         expect(info.width, equals(1920));
         expect(info.height, equals(1080));
-        expect(info.durationMs, equals(BigInt.from(60000)));
+        expect(info.durationMs, equals(60000));
         expect(info.trackCount, equals(3));
-        expect(info.clipCount, equals(5));
+        expect(info.mediaCount, equals(2));
       });
     });
 
@@ -127,24 +124,21 @@ void main() {
       test('creates from JSON with BigInt fields', () {
         final json = {
           'id': 'clip-1',
+          'track_id': 'track-1',
           'asset_id': 'asset-1',
-          'start_ms': '5000',
-          'duration_ms': '10000',
-          'trim_start_ms': '0',
-          'trim_end_ms': '0',
-          'speed': 1.0,
-          'opacity': 1.0,
-          'effects_count': 2,
-          'has_transition_in': false,
-          'has_transition_out': true,
+          'start_ms': 5000,
+          'duration_ms': 10000,
+          'trim_start_ms': 250,
+          'trim_end_ms': 500,
         };
 
         final clip = ClipInfo.fromJson(json);
         expect(clip.id, equals('clip-1'));
-        expect(clip.startMs, equals(BigInt.from(5000)));
-        expect(clip.durationMs, equals(BigInt.from(10000)));
-        expect(clip.speed, equals(1.0));
-        expect(clip.hasTransitionOut, isTrue);
+        expect(clip.trackId, equals('track-1'));
+        expect(clip.startMs, equals(5000));
+        expect(clip.durationMs, equals(10000));
+        expect(clip.trimStartMs, equals(250));
+        expect(clip.trimEndMs, equals(500));
       });
     });
 
@@ -190,10 +184,10 @@ void main() {
                 {
                   'id': 'clip-1',
                   'asset_id': 'asset-1',
-                  'start_ms': '0',
-                  'duration_ms': '5000',
-                  'trim_start_ms': '0',
-                  'trim_end_ms': '0',
+                  'start_ms': 0,
+                  'duration_ms': 5000,
+                  'trim_start_ms': 0,
+                  'trim_end_ms': 0,
                   'speed': 1.0,
                   'opacity': 1.0,
                   'effects': [],
@@ -206,7 +200,7 @@ void main() {
               'volume': 1.0,
             },
           ],
-          'duration_ms': '5000',
+          'duration_ms': 5000,
         };
 
         final state = TimelineState.fromJson(json);
@@ -214,17 +208,15 @@ void main() {
         expect(state.tracks[0].id, equals('track-1'));
         expect(state.tracks[0].clips, hasLength(1));
         expect(state.tracks[0].clips[0].id, equals('clip-1'));
-        expect(state.durationMs, equals(BigInt.from(5000)));
+        expect(state.durationMs, equals(5000));
       });
     });
 
     group('BridgeDuckingConfig', () {
       test('has correct default values', () {
-        expect(BridgeDuckingConfig.empty.enabled, isFalse);
-        expect(BridgeDuckingConfig.empty.duckLevel, equals(0.3));
-        expect(BridgeDuckingConfig.empty.attackMs, equals(BigInt.from(50)));
-        expect(BridgeDuckingConfig.empty.releaseMs, equals(BigInt.from(300)));
-        expect(BridgeDuckingConfig.empty.threshold, equals(0.05));
+        const config = BridgeDuckingConfig(enabled: false, duckLevel: 0.3);
+        expect(config.enabled, isFalse);
+        expect(config.duckLevel, equals(0.3));
       });
     });
 
@@ -233,17 +225,15 @@ void main() {
         final json = {
           'id': 'trans-1',
           'transition_type': 'Fade',
-          'duration_ms': '500',
-          'from_clip_id': 'clip-1',
-          'to_clip_id': 'clip-2',
+          'duration_ms': 500,
+          'direction': 'left_to_right',
         };
 
         final info = TransitionInfo.fromJson(json);
         expect(info.id, equals('trans-1'));
         expect(info.transitionType, equals('Fade'));
-        expect(info.durationMs, equals(BigInt.from(500)));
-        expect(info.fromClipId, equals('clip-1'));
-        expect(info.toClipId, equals('clip-2'));
+        expect(info.durationMs, equals(500));
+        expect(info.direction, equals('left_to_right'));
       });
     });
   });

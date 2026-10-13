@@ -113,7 +113,13 @@ void main() {
       );
 
       expect(find.byType(AudioWaveformWidget), findsOneWidget);
-      expect(find.byType(CustomPaint), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byType(AudioWaveformWidget),
+          matching: find.byType(CustomPaint),
+        ),
+        findsOneWidget,
+      );
     });
 
     testWidgets('renders with rmsValues', (tester) async {

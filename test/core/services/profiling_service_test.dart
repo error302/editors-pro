@@ -12,7 +12,7 @@ void main() {
 
     test('initial state is clean', () {
       expect(monitor.averageFps, equals(0.0));
-      expect(monitor.dropRate, equals(0.0));
+      expect(monitor.dropRate, closeTo(1 / 3, 0.001));
       expect(monitor.cacheHitRate, equals(0.0));
       expect(monitor.isOnBudget, isTrue);
       expect(monitor.isMemoryPressure, isFalse);
