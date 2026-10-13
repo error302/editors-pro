@@ -331,7 +331,24 @@ jobs:
       # Phase E.3: build for both arm64-v8a (physical devices) and x86_64
       # (emulators) so the same APK works in both environments.
       - name: Build Rust engine (arm64-v8a + x86_64)
-        run: cargo ndk -t arm64-v8a -t x86_64 build --release --manifest-path engine/Cargo.toml
+        shell: bash
+        run: |
+          build_log="$RUNNER_TEMP/rust-android-build.log"
+          set +e
+          cargo ndk -t arm64-v8a -t x86_64 build --release --manifest-path engine/Cargo.toml 2>&1 | tee "$build_log"
+          build_status=${PIPESTATUS[0]}
+          set -e
+          if (( build_status != 0 )); then
+            diagnostics="$(tail -n 18 "$build_log" | tr '\r\n' ' ' | sed -e 's/%/%25/g' -e 's/:/%3A/g' -e 's/,/%2C/g')"
+            printf '::error title=Rust Android build diagnostics::%s\n' "$diagnostics"
+            {
+              echo '### Rust Android build diagnostics'
+              echo '```text'
+              tail -n 80 "$build_log"
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit "$build_status"
+          fi
         env:
           FFMPEG_DIR: ${{ github.workspace }}/engine/ffmpeg-android-lgpl
 
