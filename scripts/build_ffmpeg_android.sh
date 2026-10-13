@@ -110,6 +110,7 @@ for ABI in "$@"; do
       --disable-version3 \
       --enable-pic \
       --enable-pthreads \
+      --enable-jni \
       --enable-mediacodec \
       --extra-cflags="-fPIC -D__ANDROID_API__=24" \
       --extra-ldflags="-Wl,-z,max-page-size=16384"

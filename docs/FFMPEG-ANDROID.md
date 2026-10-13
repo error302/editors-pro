@@ -1,6 +1,6 @@
 # Android FFmpeg Build and Release Notes
 
-EDITORS-PRO builds FFmpeg from the official 7.1.5 source release for Android. The build script verifies the upstream signature, builds shared libraries for `arm64-v8a` and `x86_64`, enables Android MediaCodec, and explicitly disables GPL, nonfree, and LGPLv3-only components. Do not replace this build with an unreviewed FFmpeg Kit or full-GPL archive.
+EDITORS-PRO builds FFmpeg from the official 7.1.5 source release for Android. The build script verifies the upstream signature, builds shared libraries for `arm64-v8a` and `x86_64`, enables JNI-backed Android MediaCodec, and explicitly disables GPL, nonfree, and LGPLv3-only components. Do not replace this build with an unreviewed FFmpeg Kit or full-GPL archive.
 
 On Windows with Docker Desktop, run:
 
