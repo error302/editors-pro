@@ -43,6 +43,7 @@ jobs:
           sudo apt-get install -y \
             libavcodec-dev \
             libavfilter-dev \
+            libavdevice-dev \
             libavformat-dev \
             libavutil-dev \
             libswscale-dev \
@@ -206,7 +207,24 @@ jobs:
 
       - name: Flutter test with coverage
         if: ${{ success() || failure() }}
-        run: flutter test --coverage
+        shell: bash
+        run: |
+          test_log="$RUNNER_TEMP/flutter-test.log"
+          set +e
+          flutter test --coverage 2>&1 | tee "$test_log"
+          test_status=${PIPESTATUS[0]}
+          set -e
+          if (( test_status != 0 )); then
+            diagnostics="$(tail -n 28 "$test_log" | tr '\r\n' ' ' | sed -e 's/%/%25/g' -e 's/:/%3A/g' -e 's/,/%2C/g')"
+            printf '::error title=Flutter test diagnostics::%s\n' "$diagnostics"
+            {
+              echo '### Flutter test diagnostics'
+              echo '```text'
+              tail -n 80 "$test_log"
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit "$test_status"
+          fi
 
       # Keep formatting strict without allowing legacy formatting debt to
       # suppress analysis and test diagnostics above.
@@ -461,13 +479,47 @@ jobs:
 
       # ── Build Flutter APK ───────────────────────────────────────────
       - name: Build Flutter APK
-        run: flutter build apk --release --dart-define=FFMPEG_LICENSE_PROFILE=lgpl-2.1
+        shell: bash
+        run: |
+          build_log="$RUNNER_TEMP/flutter-apk-build.log"
+          set +e
+          flutter build apk --release --dart-define=FFMPEG_LICENSE_PROFILE=lgpl-2.1 2>&1 | tee "$build_log"
+          build_status=${PIPESTATUS[0]}
+          set -e
+          if (( build_status != 0 )); then
+            diagnostics="$(tail -n 32 "$build_log" | tr '\r\n' ' ' | sed -e 's/%/%25/g' -e 's/:/%3A/g' -e 's/,/%2C/g')"
+            printf '::error title=Flutter APK build diagnostics::%s\n' "$diagnostics"
+            {
+              echo '### Flutter APK build diagnostics'
+              echo '```text'
+              tail -n 48 "$build_log"
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit "$build_status"
+          fi
 
       # Phase E.3: also build an App Bundle (AAB) for Play Store distribution.
       # The AAB is the required format for new Play Store submissions since
       # August 2021; the APK is still useful for sideloading and testing.
       - name: Build Flutter AAB
-        run: flutter build appbundle --release --dart-define=FFMPEG_LICENSE_PROFILE=lgpl-2.1
+        shell: bash
+        run: |
+          build_log="$RUNNER_TEMP/flutter-aab-build.log"
+          set +e
+          flutter build appbundle --release --dart-define=FFMPEG_LICENSE_PROFILE=lgpl-2.1 2>&1 | tee "$build_log"
+          build_status=${PIPESTATUS[0]}
+          set -e
+          if (( build_status != 0 )); then
+            diagnostics="$(tail -n 32 "$build_log" | tr '\r\n' ' ' | sed -e 's/%/%25/g' -e 's/:/%3A/g' -e 's/,/%2C/g')"
+            printf '::error title=Flutter AAB build diagnostics::%s\n' "$diagnostics"
+            {
+              echo '### Flutter AAB build diagnostics'
+              echo '```text'
+              tail -n 48 "$build_log"
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit "$build_status"
+          fi
 
       - name: Verify APK packages Android FFmpeg and excludes FFmpegKit
         run: |

@@ -7,6 +7,7 @@ import 'package:editors_pro/core/services/project_repository.dart';
 import 'package:editors_pro/data/models/project_model.dart';
 import 'package:editors_pro/features/editor/providers/editor_provider.dart';
 import 'package:editors_pro/features/editor/widgets/timeline_panel.dart';
+import 'package:editors_pro/features/projects/providers/project_provider.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -32,7 +33,7 @@ void main() {
             projectRepositoryProvider
                 .overrideWith((ref) => _FakeProjectRepository()),
             editorProvider.overrideWith((ref) {
-              return _TestEditorNotifier(editorState);
+              return _TestEditorNotifier(ref, editorState);
             }),
             // Override currentProjectProvider if a project is given
             if (project != null)
@@ -275,8 +276,10 @@ void main() {
 
 /// A [EditorNotifier] that starts with a given state and does not access
 /// the Rust engine.
-class _TestEditorNotifier extends StateNotifier<EditorState> {
-  _TestEditorNotifier(EditorState initialState) : super(initialState);
+class _TestEditorNotifier extends EditorNotifier {
+  _TestEditorNotifier(Ref ref, EditorState initialState) : super(ref) {
+    state = initialState;
+  }
 
   @override
   Future<void> initialize() async {}
@@ -348,7 +351,13 @@ class _FakeProjectRepository implements ProjectRepository {
   Future<void> loadProjectFromEngine(String eppFilePath) async {}
 
   @override
+  Future<List<int>?> readProjectEppBytes(String projectId) async => null;
+
+  @override
   Future<void> addMediaAsset(String projectId, MediaAssetModel asset) async {}
+
+  @override
+  Future<void> restoreMediaAssetInEngine(MediaAssetModel asset) async {}
 
   @override
   Future<void> deleteProject(String projectId) async {}

@@ -9,7 +9,12 @@ void main() {
         syncTickCount: 100,
         driftExceededCount: 5,
         totalDriftCorrectionMs: 150,
+        smoothedDriftMs: 0,
         audioInitialized: true,
+        detectedLatencyMs: 0,
+        adaptiveBufferAheadMs: 400,
+        adaptiveChunkMs: 200,
+        frameRate: 30,
       );
 
       expect(diagnostics.driftExceededRatio, closeTo(0.05, 0.001));
@@ -20,7 +25,12 @@ void main() {
         syncTickCount: 0,
         driftExceededCount: 0,
         totalDriftCorrectionMs: 0,
+        smoothedDriftMs: 0,
         audioInitialized: false,
+        detectedLatencyMs: 0,
+        adaptiveBufferAheadMs: 400,
+        adaptiveChunkMs: 200,
+        frameRate: 30,
       );
 
       expect(diagnostics.driftExceededRatio, equals(0.0));
@@ -31,7 +41,12 @@ void main() {
         syncTickCount: 50,
         driftExceededCount: 10,
         totalDriftCorrectionMs: 500,
+        smoothedDriftMs: 0,
         audioInitialized: true,
+        detectedLatencyMs: 0,
+        adaptiveBufferAheadMs: 400,
+        adaptiveChunkMs: 200,
+        frameRate: 30,
       );
 
       expect(diagnostics.avgCorrectionMs, equals(10.0));
@@ -42,7 +57,12 @@ void main() {
         syncTickCount: 0,
         driftExceededCount: 0,
         totalDriftCorrectionMs: 0,
+        smoothedDriftMs: 0,
         audioInitialized: false,
+        detectedLatencyMs: 0,
+        adaptiveBufferAheadMs: 400,
+        adaptiveChunkMs: 200,
+        frameRate: 30,
       );
 
       expect(diagnostics.avgCorrectionMs, equals(0.0));
@@ -53,7 +73,12 @@ void main() {
         syncTickCount: 100,
         driftExceededCount: 5,
         totalDriftCorrectionMs: 150,
+        smoothedDriftMs: 0,
         audioInitialized: true,
+        detectedLatencyMs: 0,
+        adaptiveBufferAheadMs: 400,
+        adaptiveChunkMs: 200,
+        frameRate: 30,
       );
 
       final str = diagnostics.toString();
