@@ -102,9 +102,14 @@ fn get_video_dimensions(source_path: &str) -> Result<(u32, u32), String> {
         .best(ffmpeg::media::Type::Video)
         .ok_or("No video stream found in source file")?;
 
-    let codec_params = video_stream.codec_parameters();
-    let width = codec_params.width();
-    let height = codec_params.height();
+    let codec_context = ffmpeg::codec::context::Context::from_parameters(video_stream.parameters())
+        .map_err(|e| format!("Failed to read video parameters: {}", e))?;
+    let decoder = codec_context
+        .decoder()
+        .video()
+        .map_err(|e| format!("Failed to open video decoder: {}", e))?;
+    let width = decoder.width();
+    let height = decoder.height();
 
     if width == 0 || height == 0 {
         return Err("Invalid video dimensions (0x0)".to_string());
@@ -185,42 +190,54 @@ fn transcode_with_ffmpeg(
     let mut input =
         ffmpeg::format::input(source_path).map_err(|e| format!("Failed to open input: {}", e))?;
 
-    let input_video_stream = input
-        .streams()
-        .best(ffmpeg::media::Type::Video)
-        .ok_or("No video stream found")?;
-    let video_stream_index = input_video_stream.index();
+    let (video_stream_index, frame_rate, mut decoder) = {
+        let input_video_stream = input
+            .streams()
+            .best(ffmpeg::media::Type::Video)
+            .ok_or("No video stream found")?;
+        let frame_rate = input_video_stream.avg_frame_rate();
+        let video_stream_index = input_video_stream.index();
+        let codec_context =
+            ffmpeg::codec::context::Context::from_parameters(input_video_stream.parameters())
+                .map_err(|e| format!("Failed to read input video parameters: {}", e))?;
+        let decoder = codec_context
+            .decoder()
+            .video()
+            .map_err(|e| format!("Failed to create decoder: {}", e))?;
+        (video_stream_index, frame_rate, decoder)
+    };
 
     // Create output context
     let mut output = ffmpeg::format::output(output_path)
         .map_err(|e| format!("Failed to create output: {}", e))?;
 
     // Find the H.264 encoder
-    let encoder =
+    let codec =
         ffmpeg::encoder::find(ffmpeg_next::codec::Id::H264).ok_or("H.264 encoder not found")?;
 
     // Create output video stream
     let mut output_video_stream = output
-        .add_stream(encoder)
+        .add_stream(codec)
         .map_err(|e| format!("Failed to add output stream: {}", e))?;
 
     // Configure the encoder
-    let mut codec_ctx = output_video_stream.codec_parameters().clone();
-    let mut codec_ctx = ffmpeg::codec::context::Context::new();
-    // Use the ultrafast preset for maximum speed during proxy generation
-    codec_ctx.set_codec_id(ffmpeg_next::codec::Id::H264);
-
-    let mut encoder_ctx = codec_ctx
+    let mut encoder_ctx = ffmpeg::codec::context::Context::new_with_codec(codec)
         .encoder()
         .video()
         .map_err(|e| format!("Failed to create video encoder: {}", e))?;
 
     encoder_ctx.set_width(width);
     encoder_ctx.set_height(height);
-    encoder_ctx.set_bit_rate(bitrate_kbps * 1000);
-    encoder_ctx.set_frame_rate(input_video_stream.avg_frame_rate());
-    encoder_ctx.set_time_base(input_video_stream.time_base());
-    encoder_ctx.set_format(ffmpeg_next::format::Pixel::Yuv420p);
+    encoder_ctx.set_bit_rate((bitrate_kbps * 1000) as usize);
+    let frame_rate = if frame_rate.numerator() > 0 && frame_rate.denominator() > 0 {
+        frame_rate
+    } else {
+        ffmpeg::Rational::new(30, 1)
+    };
+    let encoder_time_base = ffmpeg::Rational::new(frame_rate.denominator(), frame_rate.numerator());
+    encoder_ctx.set_frame_rate(Some(frame_rate));
+    encoder_ctx.set_time_base(encoder_time_base);
+    encoder_ctx.set_format(ffmpeg_next::format::Pixel::YUV420P);
 
     // Apply preset via codec options
     let mut codec_opts = ffmpeg::Dictionary::new();
@@ -232,7 +249,8 @@ fn transcode_with_ffmpeg(
         .open_with(codec_opts)
         .map_err(|e| format!("Failed to open encoder: {}", e))?;
 
-    output_video_stream.set_codec_parameters(encoder.codec_parameters());
+    output_video_stream.set_time_base(encoder_time_base);
+    output_video_stream.set_parameters(&encoder);
 
     // Write output header
     output
@@ -240,12 +258,6 @@ fn transcode_with_ffmpeg(
         .map_err(|e| format!("Failed to write header: {}", e))?;
 
     // Create decoder for input
-    let mut decoder = input_video_stream
-        .codec()
-        .decoder()
-        .video()
-        .map_err(|e| format!("Failed to create decoder: {}", e))?;
-
     // Create scaler to resize frames
     let mut scaler = ffmpeg::software::scaling::context::Context::get(
         decoder.format(),
@@ -263,7 +275,7 @@ fn transcode_with_ffmpeg(
     let mut receive_and_send = |decoder: &mut ffmpeg::decoder::Video,
                                 scaler: &mut ffmpeg::software::scaling::Context::Context,
                                 encoder: &mut ffmpeg::encoder::Video,
-                                output: &mut ffmpeg::format::output::Output|
+                                output: &mut ffmpeg::format::context::Output|
      -> Result<(), String> {
         let mut decoded = ffmpeg::util::frame::Video::empty();
         while decoder.receive_frame(&mut decoded).is_ok() {

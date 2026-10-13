@@ -373,8 +373,24 @@ jobs:
             if [[ -z "$error_list" ]]; then
               error_list="$(tail -n 40 "$build_log")"
             fi
-            diagnostics="$(printf '%s' "$error_list" | tr '\r\n' ' ' | sed -e 's/%/%25/g' -e 's/:/%3A/g' -e 's/,/%2C/g')"
-            printf '::error title=Rust Android build diagnostics::%s\n' "$diagnostics"
+            batch_number=1
+            batch=''
+            batch_size=0
+            while IFS= read -r error_line; do
+              escaped="$(printf '%s' "$error_line" | sed -e 's/%/%25/g' -e 's/:/%3A/g' -e 's/,/%2C/g')"
+              if [[ -n "$batch" ]]; then batch+='%0A'; fi
+              batch+="$escaped"
+              batch_size=$((batch_size + 1))
+              if (( batch_size == 4 )); then
+                printf '::error title=Rust Android errors %s::%s\n' "$batch_number" "$batch"
+                batch_number=$((batch_number + 1))
+                batch=''
+                batch_size=0
+              fi
+            done <<< "$error_list"
+            if (( batch_size > 0 )); then
+              printf '::error title=Rust Android errors %s::%s\n' "$batch_number" "$batch"
+            fi
             {
               echo '### Rust Android build diagnostics'
               echo '```text'

@@ -154,7 +154,7 @@ impl AudioDecoder {
             .audio()
             .map_err(|e| format!("Failed to get audio decoder: {}", e))?;
 
-        self.source_sample_rate = codec.sample_rate() as u32;
+        self.source_sample_rate = codec.rate();
         self.source_channels = codec.channels() as u32;
         self.codec_name = codec
             .codec()
@@ -172,9 +172,7 @@ impl AudioDecoder {
             // would overflow on `as u64` + `* 1000`.
             const AV_NOPTS_VALUE: i64 = i64::MIN;
             let container_duration = input.duration();
-            self.duration_ms = if container_duration > 0
-                && container_duration != AV_NOPTS_VALUE
-            {
+            self.duration_ms = if container_duration > 0 && container_duration != AV_NOPTS_VALUE {
                 (container_duration as u64)
                     .saturating_mul(1000)
                     .checked_div(ff::sys::AV_TIME_BASE as u64)
@@ -255,26 +253,26 @@ impl AudioDecoder {
             .map_err(|e| format!("Failed to get audio decoder: {}", e))?;
 
         // Set up resampler if needed
-        let needs_resample = decoder.sample_rate() as u32 != target_sample_rate
+        let needs_resample = decoder.rate() != target_sample_rate
             || decoder.channels() as u32 != target_channels
             || decoder.format() != ff::format::Sample::F32(ff::format::sample::Type::Packed);
 
         let mut resampler = if needs_resample {
-            let in_rate = decoder.sample_rate();
-            let out_rate = target_sample_rate as i32;
-            let in_channels = decoder.channels();
-            let out_channels = target_channels as i32;
+            let in_rate = decoder.rate();
+            let out_rate = target_sample_rate;
+            let source_layout = decoder.channel_layout();
+            let in_layout = if source_layout.is_empty() {
+                ff::channel_layout::ChannelLayout::default(decoder.channels() as i32)
+            } else {
+                source_layout
+            };
+            let out_layout = ff::channel_layout::ChannelLayout::default(target_channels as i32);
             let in_format = decoder.format();
             let out_format = ff::format::Sample::F32(ff::format::sample::Type::Packed);
 
             Some(
                 ff::software::resampling::context::Context::get(
-                    in_format,
-                    in_channels,
-                    in_rate,
-                    out_format,
-                    out_channels,
-                    out_rate,
+                    in_format, in_layout, in_rate, out_format, out_layout, out_rate,
                 )
                 .map_err(|e| format!("Failed to create resampler: {}", e))?,
             )
@@ -333,7 +331,7 @@ impl AudioDecoder {
                             // Need more input
                             break;
                         }
-                        Err(ff::Error::EOF) => {
+                        Err(ff::Error::Eof) => {
                             // Flush resampler
                             if let Some(r) = resampler {
                                 let mut resampled = ff::util::frame::Audio::empty();

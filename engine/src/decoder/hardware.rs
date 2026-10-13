@@ -58,12 +58,15 @@ impl HardwareDecoder {
             .map_err(|e| format!("Failed to open file '{}': {}", file_path, e))?;
 
         // Find the best video stream
-        let video_stream = format_context.streams().best(ffmpeg::media::Type::Video)
+        let video_stream = format_context
+            .streams()
+            .best(ffmpeg::media::Type::Video)
             .ok_or_else(|| "No video stream found".to_string())?;
         let video_stream_index = video_stream.index();
 
         // Find audio stream if present
-        let audio_stream_index = format_context.streams()
+        let audio_stream_index = format_context
+            .streams()
             .find(|s| s.parameters().medium() == ffmpeg::media::Type::Audio)
             .map(|s| s.index());
 
@@ -80,11 +83,16 @@ impl HardwareDecoder {
         #[cfg(target_os = "android")]
         let context = self.try_swap_to_mediacodec(context, &video_stream.parameters());
 
-        let decoder = context.decoder().video()
+        let decoder = context
+            .decoder()
+            .video()
             .map_err(|e| format!("Failed to create video decoder: {}", e))?;
 
         // Extract video information
-        let codec_name = decoder.codec().map(|c| c.name().to_string()).unwrap_or_default();
+        let codec_name = decoder
+            .codec()
+            .map(|c| c.name().to_string())
+            .unwrap_or_default();
         let frame_rate = video_stream.avg_frame_rate();
         let fps = (frame_rate.numerator() as f32) / (frame_rate.denominator().max(1) as f32);
 
@@ -93,9 +101,7 @@ impl HardwareDecoder {
         // per-stream duration below if the container duration is unknown.
         const AV_NOPTS_VALUE: i64 = i64::MIN;
         let container_duration = format_context.duration();
-        let duration_ms: u64 = if container_duration > 0
-            && container_duration != AV_NOPTS_VALUE
-        {
+        let duration_ms: u64 = if container_duration > 0 && container_duration != AV_NOPTS_VALUE {
             (container_duration as u64)
                 .saturating_mul(1000)
                 .checked_div(ffmpeg::sys::AV_TIME_BASE as u64)
@@ -108,9 +114,12 @@ impl HardwareDecoder {
             width: decoder.width(),
             height: decoder.height(),
             fps,
-            duration_ms: if duration_ms > 0 { duration_ms } else {
+            duration_ms: if duration_ms > 0 {
+                duration_ms
+            } else {
                 // Estimate from stream duration
-                let stream_dur = video_stream.duration() as f64 * video_stream.time_base().numerator() as f64
+                let stream_dur = video_stream.duration() as f64
+                    * video_stream.time_base().numerator() as f64
                     / video_stream.time_base().denominator() as f64;
                 (stream_dur * 1000.0) as u64
             },
@@ -122,9 +131,14 @@ impl HardwareDecoder {
             audio_channels: None,
         };
 
-        log::info!("Video info: {}x{} @ {}fps, duration: {}ms, codec: {}",
-            video_info.width, video_info.height, video_info.fps,
-            video_info.duration_ms, video_info.codec_name);
+        log::info!(
+            "Video info: {}x{} @ {}fps, duration: {}ms, codec: {}",
+            video_info.width,
+            video_info.height,
+            video_info.fps,
+            video_info.duration_ms,
+            video_info.codec_name
+        );
 
         self.format_context = Some(format_context);
         self.video_stream_index = Some(video_stream_index);
@@ -186,14 +200,14 @@ impl HardwareDecoder {
             // C string and returns a pointer to a static `AVCodec` (or NULL).
             // The pointer is owned by FFmpeg and valid for the program's
             // lifetime. We only check for null, so no UB.
-            let codec_ptr = std::ffi::CString::new(name)
+            let codec_available = std::ffi::CString::new(name)
                 .ok()
-                .and_then(|c_name| {
-                    unsafe { ffmpeg::sys::avcodec_find_decoder_by_name(c_name.as_ptr()) }
-                        .as_mut()
-                });
+                .map(|c_name| unsafe {
+                    !ffmpeg::sys::avcodec_find_decoder_by_name(c_name.as_ptr()).is_null()
+                })
+                .unwrap_or(false);
 
-            if codec_ptr.is_some() {
+            if codec_available {
                 log::info!(
                     "Phase C.18: MediaCodec HW decoder '{}' is available \
                      for codec_id={:?}",
@@ -263,7 +277,8 @@ impl HardwareDecoder {
                 src_width,
                 src_height,
                 ffmpeg::software::scaling::Flags::BILINEAR,
-            ).map_err(|e| format!("Failed to create scaler: {}", e))?;
+            )
+            .map_err(|e| format!("Failed to create scaler: {}", e))?;
             self.scaler = Some(new_scaler);
             self.scaler_src_format = Some(src_format);
             self.scaler_src_width = src_width;
@@ -307,20 +322,19 @@ impl HardwareDecoder {
 
     /// Inner decode implementation (called after concurrency guard)
     fn decode_frame_at_inner(&mut self, time_ms: u64) -> Result<FrameData, String> {
-
-        let format_context = self.format_context.as_mut()
-            .ok_or("No format context")?;
-        let video_idx = self.video_stream_index
-            .ok_or("No video stream index")?;
+        let format_context = self.format_context.as_mut().ok_or("No format context")?;
+        let video_idx = self.video_stream_index.ok_or("No video stream index")?;
 
         // Seek to the target timestamp
-        let stream = format_context.streams().get(video_idx)
+        let stream = format_context
+            .stream(video_idx)
             .ok_or("Video stream not found")?;
         let time_base = stream.time_base();
         let seek_target = (time_ms as i64 * time_base.denominator() as i64)
             / (1000 * time_base.numerator() as i64);
 
-        format_context.seek(seek_target, ..seek_target + 1000)
+        format_context
+            .seek(seek_target, ..seek_target + 1000)
             .map_err(|e| format!("Seek failed: {}", e))?;
 
         // Phase B: use cached scaler instead of recreating per call.
@@ -335,20 +349,21 @@ impl HardwareDecoder {
                 continue;
             }
 
-            let decoder = self.decoder.as_mut()
-                .ok_or("No decoder")?;
-            decoder.send_packet(&packet)
+            let decoder = self.decoder.as_mut().ok_or("No decoder")?;
+            decoder
+                .send_packet(&packet)
                 .map_err(|e| format!("Send packet failed: {}", e))?;
 
             while decoder.receive_frame(&mut received).is_ok() {
-                let pts_ms = (received.pts().unwrap_or(0) as i64 * time_base.numerator() as i64 * 1000)
-                    / time_base.denominator().max(1) as i64;
+                let pts_ms =
+                    (received.pts().unwrap_or(0) as i64 * time_base.numerator() as i64 * 1000)
+                        / time_base.denominator().max(1) as i64;
 
                 if pts_ms >= time_ms as i64 - 50 {
                     // Borrow the cached scaler mutably for this run.
-                    let scaler = self.scaler.as_mut()
-                        .ok_or("Scaler not initialized")?;
-                    scaler.run(&received, &mut frame)
+                    let scaler = self.scaler.as_mut().ok_or("Scaler not initialized")?;
+                    scaler
+                        .run(&received, &mut frame)
                         .map_err(|e| format!("Scale failed: {}", e))?;
 
                     // Phase C.15: allocate from the global pool so the
@@ -363,7 +378,7 @@ impl HardwareDecoder {
                         dst[..src.len()].copy_from_slice(src);
                     }
                     out_frame.timestamp_ms = pts_ms as u64;
-                    out_frame.is_keyframe = received.is_key_frame();
+                    out_frame.is_keyframe = received.is_key();
                     return Ok(out_frame);
                 }
             }

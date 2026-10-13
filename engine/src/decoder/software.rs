@@ -52,14 +52,18 @@ impl SoftwareDecoder {
         let format_context = ffmpeg::format::input(&file_path)
             .map_err(|e| format!("Failed to open '{}': {}", file_path, e))?;
 
-        let video_stream = format_context.streams().best(ffmpeg::media::Type::Video)
+        let video_stream = format_context
+            .streams()
+            .best(ffmpeg::media::Type::Video)
             .ok_or("No video stream found")?;
         let video_idx = video_stream.index();
 
         let context = ffmpeg::codec::context::Context::from_parameters(video_stream.parameters())
             .map_err(|e| format!("Decoder context error: {}", e))?;
 
-        let decoder = context.decoder().video()
+        let decoder = context
+            .decoder()
+            .video()
             .map_err(|e| format!("Video decoder error: {}", e))?;
 
         let frame_rate = video_stream.avg_frame_rate();
@@ -72,9 +76,7 @@ impl SoftwareDecoder {
         // vs. a `u64` const across ffmpeg-sys-next versions.
         const AV_NOPTS_VALUE: i64 = i64::MIN;
         let container_duration = format_context.duration();
-        let duration_ms: u64 = if container_duration > 0
-            && container_duration != AV_NOPTS_VALUE
-        {
+        let duration_ms: u64 = if container_duration > 0 && container_duration != AV_NOPTS_VALUE {
             (container_duration as u64)
                 .saturating_mul(1000)
                 .checked_div(ffmpeg::sys::AV_TIME_BASE as u64)
@@ -83,20 +85,26 @@ impl SoftwareDecoder {
             0
         };
 
-        let audio_stream = format_context.streams()
+        let audio_stream = format_context
+            .streams()
             .find(|s| s.parameters().medium() == ffmpeg::media::Type::Audio);
 
         let video_info = VideoInfo {
             width: decoder.width(),
             height: decoder.height(),
             fps,
-            duration_ms: if duration_ms > 0 { duration_ms } else {
+            duration_ms: if duration_ms > 0 {
+                duration_ms
+            } else {
                 let dur = video_stream.duration() as f64
                     * video_stream.time_base().numerator() as f64
                     / video_stream.time_base().denominator().max(1) as f64;
                 (dur * 1000.0) as u64
             },
-            codec_name: decoder.codec().map(|c| c.name().to_string()).unwrap_or_default(),
+            codec_name: decoder
+                .codec()
+                .map(|c| c.name().to_string())
+                .unwrap_or_default(),
             bitrate: format_context.bit_rate() as u64,
             has_audio: audio_stream.is_some(),
             audio_codec: audio_stream.and_then(|s| {
@@ -113,9 +121,14 @@ impl SoftwareDecoder {
             }),
         };
 
-        log::info!("Software decoder: {}x{} @ {}fps, {}ms, codec: {}",
-            video_info.width, video_info.height, video_info.fps,
-            video_info.duration_ms, video_info.codec_name);
+        log::info!(
+            "Software decoder: {}x{} @ {}fps, {}ms, codec: {}",
+            video_info.width,
+            video_info.height,
+            video_info.fps,
+            video_info.duration_ms,
+            video_info.codec_name
+        );
 
         self.format_context = Some(format_context);
         self.video_stream_index = Some(video_idx);
@@ -156,7 +169,8 @@ impl SoftwareDecoder {
                 src_width,
                 src_height,
                 ffmpeg::software::scaling::Flags::BILINEAR,
-            ).map_err(|e| format!("Scaler error: {}", e))?;
+            )
+            .map_err(|e| format!("Scaler error: {}", e))?;
             self.scaler = Some(new_scaler);
             self.scaler_src_format = Some(src_format);
             self.scaler_src_width = src_width;
@@ -170,11 +184,13 @@ impl SoftwareDecoder {
     pub fn seek_to(&mut self, time_ms: u64) -> Result<(), String> {
         let format_context = self.format_context.as_mut().ok_or("Not open")?;
         let video_idx = self.video_stream_index.ok_or("No video stream")?;
-        let stream = format_context.streams().get(video_idx).ok_or("Stream not found")?;
+        let stream = format_context.stream(video_idx).ok_or("Stream not found")?;
         let tb = stream.time_base();
 
-        let target = (time_ms as i64 * tb.denominator() as i64) / (1000 * tb.numerator().max(1) as i64);
-        format_context.seek(target, ..target + 500)
+        let target =
+            (time_ms as i64 * tb.denominator() as i64) / (1000 * tb.numerator().max(1) as i64);
+        format_context
+            .seek(target, ..target + 500)
             .map_err(|e| format!("Seek failed: {}", e))?;
 
         self.current_position_ms = time_ms;
@@ -194,7 +210,7 @@ impl SoftwareDecoder {
 
         let format_context = self.format_context.as_mut().ok_or("Not open")?;
         let video_idx = self.video_stream_index.ok_or("No video stream")?;
-        let stream = format_context.streams().get(video_idx).ok_or("Stream not found")?;
+        let stream = format_context.stream(video_idx).ok_or("Stream not found")?;
         let tb = stream.time_base();
 
         let mut decoded = ffmpeg::util::frame::Video::empty();
@@ -206,7 +222,8 @@ impl SoftwareDecoder {
             }
 
             let decoder = self.decoder.as_mut().ok_or("No decoder")?;
-            decoder.send_packet(&packet)
+            decoder
+                .send_packet(&packet)
                 .map_err(|e| format!("Send packet error: {}", e))?;
 
             while decoder.receive_frame(&mut decoded).is_ok() {
@@ -215,7 +232,8 @@ impl SoftwareDecoder {
 
                 // Phase B: use cached scaler instead of recreating per frame.
                 let scaler = self.scaler_for_current_decoder()?;
-                scaler.run(&decoded, &mut scaled)
+                scaler
+                    .run(&decoded, &mut scaled)
                     .map_err(|e| format!("Scale error: {}", e))?;
 
                 self.current_position_ms = pts_ms as u64;
@@ -234,7 +252,7 @@ impl SoftwareDecoder {
                     dst_bytes[..src_bytes.len()].copy_from_slice(src_bytes);
                 }
                 frame.timestamp_ms = pts_ms as u64;
-                frame.is_keyframe = decoded.is_key_frame();
+                frame.is_keyframe = decoded.is_key();
 
                 return Ok(Some(frame));
             }
@@ -264,7 +282,10 @@ impl SoftwareDecoder {
             attempts += 1;
         }
 
-        Err(format!("No frame found at {}ms after {} attempts", time_ms, attempts))
+        Err(format!(
+            "No frame found at {}ms after {} attempts",
+            time_ms, attempts
+        ))
     }
 
     /// Get the current position in milliseconds
