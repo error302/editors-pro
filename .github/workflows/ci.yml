@@ -283,7 +283,23 @@ jobs:
           echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/28.2.13676358" >> "$GITHUB_ENV"
           echo "FFMPEG_JOBS=4" >> "$GITHUB_ENV"
 
+      - name: Restore verified Android FFmpeg outputs
+        id: ffmpeg_cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            engine/ffmpeg-android-lgpl/lib
+            engine/ffmpeg-android-lgpl/include
+            engine/ffmpeg-android-lgpl/BUILDINFO.txt
+            engine/ffmpeg-android-lgpl/COPYING.LGPLv2.1
+            engine/ffmpeg-android-lgpl/.build/ffmpeg-7.1.5.tar.xz
+            engine/ffmpeg-android-lgpl/.build/ffmpeg-7.1.5.tar.xz.asc
+            engine/ffmpeg-android-lgpl/.build/ffmpeg-devel.asc
+            engine/ffmpeg-android-lgpl/.build/signature-check.txt
+          key: android-ffmpeg-7.1.5-ndk28c-${{ runner.os }}-${{ hashFiles('scripts/build_ffmpeg_android.sh') }}
+
       - name: Build LGPL FFmpeg for Android
+        if: steps.ffmpeg_cache.outputs.cache-hit != 'true'
         shell: bash
         run: |
           build_log="$RUNNER_TEMP/ffmpeg-android-build.log"
@@ -341,9 +357,22 @@ jobs:
           set -e
           if (( build_status != 0 )); then
             error_list="$(awk '
-              /^error(\[[^]]+\])?:/ { message = $0; waiting = 1; next }
-              waiting && /^[[:space:]]*--> / { printf "%s | %s\n", message, $0; waiting = 0 }
+              /error(\[[^]]+\])?:/ {
+                message = $0
+                sub(/^.*error/, "error", message)
+                waiting = 1
+                next
+              }
+              waiting && /--> / {
+                location = $0
+                sub(/^.*--> /, "", location)
+                printf "%s | %s\n", message, location
+                waiting = 0
+              }
             ' "$build_log")"
+            if [[ -z "$error_list" ]]; then
+              error_list="$(tail -n 40 "$build_log")"
+            fi
             diagnostics="$(printf '%s' "$error_list" | tr '\r\n' ' ' | sed -e 's/%/%25/g' -e 's/:/%3A/g' -e 's/,/%2C/g')"
             printf '::error title=Rust Android build diagnostics::%s\n' "$diagnostics"
             {
@@ -357,6 +386,7 @@ jobs:
           fi
         env:
           FFMPEG_DIR: ${{ github.workspace }}/engine/ffmpeg-android-lgpl
+          CARGO_TERM_COLOR: never
 
       - name: Copy native libraries to jniLibs
         run: |
