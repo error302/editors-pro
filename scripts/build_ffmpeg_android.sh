@@ -113,7 +113,7 @@ for ABI in "$@"; do
       --enable-jni \
       --enable-mediacodec \
       --extra-cflags="-fPIC -D__ANDROID_API__=24" \
-      --extra-ldflags="-Wl,-z,max-page-size=16384"
+      --extra-ldsoflags="-Wl,-z,max-page-size=16384"
     make -j"${FFMPEG_JOBS:-$(nproc)}"
     make install
   )

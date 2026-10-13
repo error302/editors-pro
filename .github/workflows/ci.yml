@@ -315,7 +315,9 @@ jobs:
                 load_count=$((load_count + 1))
                 alignment_value=$((16#${alignment#0x}))
                 if (( alignment_value < 16384 )); then
-                  echo "Insufficient ELF page alignment in $library: $alignment" >&2
+                  message="Insufficient ELF page alignment in $library: $alignment"
+                  printf '::error title=FFmpeg ELF alignment::%s\n' "$message"
+                  echo "$message" >&2
                   exit 1
                 fi
               done < <("$readelf" -lW "$library")
