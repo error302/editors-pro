@@ -279,7 +279,22 @@ jobs:
           echo "FFMPEG_JOBS=4" >> "$GITHUB_ENV"
 
       - name: Build LGPL FFmpeg for Android
-        run: bash scripts/build_ffmpeg_android.sh arm64-v8a x86_64
+        shell: bash
+        run: |
+          build_log="$RUNNER_TEMP/ffmpeg-android-build.log"
+          set +e
+          bash scripts/build_ffmpeg_android.sh arm64-v8a x86_64 2>&1 | tee "$build_log"
+          build_status=${PIPESTATUS[0]}
+          set -e
+          if (( build_status != 0 )); then
+            {
+              echo '### FFmpeg Android build diagnostics'
+              echo '```text'
+              tail -n 80 "$build_log"
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit "$build_status"
+          fi
 
       - name: Verify FFmpeg shared libraries use 16 KB page alignment
         shell: bash
