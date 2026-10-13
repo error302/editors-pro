@@ -107,6 +107,9 @@ void main() {
     });
 
     testWidgets('shows track type icons', (tester) async {
+      final semantics = tester.ensureSemantics();
+      addTearDown(semantics.dispose);
+
       final project = ProjectModel(
         id: 'p1',
         name: 'Test',

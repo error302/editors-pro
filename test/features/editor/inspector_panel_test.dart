@@ -324,11 +324,11 @@ void main() {
       );
 
       await tester.scrollUntilVisible(
-        find.text('Brightness'),
+        find.text('Brightness').first,
         180,
         scrollable: find.byType(Scrollable).first,
       );
-      expect(find.text('Brightness'), findsOneWidget);
+      expect(find.text('Brightness'), findsNWidgets(2));
     });
 
     testWidgets('close button deselects clip', (tester) async {
