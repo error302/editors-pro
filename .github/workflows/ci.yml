@@ -348,7 +348,12 @@ jobs:
             test -s "$EDITORS_PRO_STORE_FILE"
             echo "configured=true" >> "$GITHUB_OUTPUT"
           else
+            if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+              echo "A version tag requires a configured Android upload keystore." >&2
+              exit 1
+            fi
             echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "ORG_GRADLE_PROJECT_EDITORS_PRO_ALLOW_DEBUG_SIGNED_RELEASE=true" >> "$GITHUB_ENV"
             echo "::notice::No upload keystore configured; Android artifacts are test builds signed with the debug key."
           fi
 

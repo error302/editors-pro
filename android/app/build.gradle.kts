@@ -1,7 +1,34 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("dev.flutter.flutter-gradle-plugin")
 }
+
+val signingProperties = Properties().apply {
+    val propertiesFile = rootProject.file("key.properties")
+    if (propertiesFile.isFile) {
+        propertiesFile.inputStream().use { load(it) }
+    }
+}
+
+fun signingValue(name: String): String? =
+    System.getenv(name)?.takeIf { it.isNotBlank() }
+        ?: signingProperties.getProperty(name)?.takeIf { it.isNotBlank() }
+        ?: (findProperty(name) as? String)?.takeIf { it.isNotBlank() }
+
+val releaseStoreFilePath = signingValue("EDITORS_PRO_STORE_FILE") ?: signingValue("storeFile")
+val releaseStorePassword = signingValue("EDITORS_PRO_STORE_PASSWORD") ?: signingValue("storePassword")
+val releaseKeyAlias = signingValue("EDITORS_PRO_KEY_ALIAS") ?: signingValue("keyAlias")
+val releaseKeyPassword = signingValue("EDITORS_PRO_KEY_PASSWORD") ?: signingValue("keyPassword")
+val hasReleaseSigningCredentials = listOf(
+    releaseStoreFilePath,
+    releaseStorePassword,
+    releaseKeyAlias,
+    releaseKeyPassword,
+).all { !it.isNullOrBlank() }
+val allowDebugSignedRelease =
+    providers.gradleProperty("EDITORS_PRO_ALLOW_DEBUG_SIGNED_RELEASE").orNull == "true"
 
 android {
     namespace = "com.editorspro.editors_pro"
@@ -14,7 +41,7 @@ android {
     }
 
     // Release signing configuration.
-    // For Play Store distribution, set these environment variables or add them to local.properties:
+    // For Play Store distribution, set these environment variables or add them to key.properties:
     //   EDITORS_PRO_STORE_FILE=/path/to/keystore.jks
     //   EDITORS_PRO_KEY_ALIAS=upload
     //   EDITORS_PRO_STORE_PASSWORD=***
@@ -22,24 +49,11 @@ android {
     // Never commit keystore files or passwords to version control.
     signingConfigs {
         create("release") {
-            val storeFilePath = System.getenv("EDITORS_PRO_STORE_FILE")
-                ?: findProperty("EDITORS_PRO_STORE_FILE") as? String
-            val storePassword = System.getenv("EDITORS_PRO_STORE_PASSWORD")
-                ?: findProperty("EDITORS_PRO_STORE_PASSWORD") as? String
-            val keyAlias = System.getenv("EDITORS_PRO_KEY_ALIAS")
-                ?: findProperty("EDITORS_PRO_KEY_ALIAS") as? String
-            val keyPassword = System.getenv("EDITORS_PRO_KEY_PASSWORD")
-                ?: findProperty("EDITORS_PRO_KEY_PASSWORD") as? String
-
-            if (!storeFilePath.isNullOrBlank() &&
-                !storePassword.isNullOrBlank() &&
-                !keyAlias.isNullOrBlank() &&
-                !keyPassword.isNullOrBlank()
-            ) {
-                storeFile = file(storeFilePath)
-                this.storePassword = storePassword
-                this.keyAlias = keyAlias
-                this.keyPassword = keyPassword
+            if (hasReleaseSigningCredentials) {
+                storeFile = rootProject.file(releaseStoreFilePath!!)
+                storePassword = releaseStorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
             }
         }
     }
@@ -83,13 +97,26 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            // Use the release signing config if keystore is configured,
-            // otherwise fall back to debug signing for development builds.
+            // Gradle requires a signing config at configuration time. Release tasks
+            // are guarded below so this fallback is only used by explicit test builds.
             signingConfig = if (signingConfigs.findByName("release")?.storeFile != null) {
                 signingConfigs.getByName("release")
             } else {
                 signingConfigs.getByName("debug")
             }
+        }
+    }
+
+    gradle.taskGraph.whenReady {
+        val releaseBuildRequested = allTasks.any { task ->
+            task.project == project && task.name.contains("release", ignoreCase = true)
+        }
+        if (releaseBuildRequested && !hasReleaseSigningCredentials && !allowDebugSignedRelease) {
+            throw GradleException(
+                "Release builds require a complete upload key in android/key.properties or " +
+                    "EDITORS_PRO_* environment variables. Debug signing is only allowed for " +
+                    "test artifacts with -PEDITORS_PRO_ALLOW_DEBUG_SIGNED_RELEASE=true."
+            )
         }
     }
 

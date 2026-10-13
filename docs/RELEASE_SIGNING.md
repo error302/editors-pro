@@ -37,7 +37,13 @@ keyPassword=your-key-password
 ```
 
 The `android/app/build.gradle.kts` signing config reads this file
-automatically when present. To verify, run:
+automatically when present. Environment variables take precedence over
+the file. A release build without a complete upload key now fails instead
+of silently producing a debug-signed artifact. For an explicitly
+debug-signed test artifact only, set
+`ORG_GRADLE_PROJECT_EDITORS_PRO_ALLOW_DEBUG_SIGNED_RELEASE=true` in the
+build environment. Never use that option for distribution. To verify a
+properly signed release, run:
 
 ```bash
 flutter build appbundle --release
@@ -74,7 +80,8 @@ base64 -w 0 editors-pro-upload.jks > keystore.b64
 The CI workflow reads the signing values and decodes the keystore before
 building. Configure all five secrets together; partial configuration fails
 the build. Without them, CI can still produce test APK/AAB artifacts using
-the debug key, but a `v*` tag will not create a GitHub release.
+the debug key from branches. A `v*` tag fails unless all signing secrets
+are configured.
 
 ## 4. Play Store upload
 
