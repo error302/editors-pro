@@ -111,7 +111,10 @@ impl HardwareEncoderCapabilities {
         if settings.width > self.max_width || settings.height > self.max_height {
             log::warn!(
                 "Hardware encoder: resolution {}x{} exceeds max {}x{}, falling back to software",
-                settings.width, settings.height, self.max_width, self.max_height
+                settings.width,
+                settings.height,
+                self.max_width,
+                self.max_height
             );
             return false;
         }
@@ -120,7 +123,8 @@ impl HardwareEncoderCapabilities {
         if settings.bitrate_kbps > self.max_bitrate_kbps {
             log::warn!(
                 "Hardware encoder: bitrate {}kbps exceeds max {}kbps, falling back to software",
-                settings.bitrate_kbps, self.max_bitrate_kbps
+                settings.bitrate_kbps,
+                self.max_bitrate_kbps
             );
             return false;
         }
@@ -215,7 +219,10 @@ impl HardwareEncoderCapabilities {
 
         log::info!(
             "Hardware encoder capabilities: {:?}, max {}x{}, max {}kbps",
-            supported_codecs, max_width, max_height, max_bitrate_kbps
+            supported_codecs,
+            max_width,
+            max_height,
+            max_bitrate_kbps
         );
 
         Self {
@@ -299,7 +306,9 @@ impl HardwareEncoderCapabilities {
         // the caller, so we just log and leave them.
         log::debug!(
             "Using default encoder limits: {}x{}, {}kbps",
-            max_width, max_height, max_bitrate_kbps
+            max_width,
+            max_height,
+            max_bitrate_kbps
         );
     }
 }
@@ -416,7 +425,10 @@ impl AndroidMediaCodec {
 
         log::info!(
             "Configuring AndroidMediaCodec: {}x{} @ {}bps, {}fps (stub)",
-            width, height, bitrate_bps, frame_rate
+            width,
+            height,
+            bitrate_bps,
+            frame_rate
         );
 
         Ok(())
@@ -525,7 +537,11 @@ impl AndroidMediaCodec {
 
         log::debug!(
             "queueInputBuffer: index={}, offset={}, size={}, pts={}us, flags={} (stub)",
-            index, offset, size, presentation_time_us, flags
+            index,
+            offset,
+            size,
+            presentation_time_us,
+            flags
         );
         Ok(())
     }
@@ -540,7 +556,10 @@ impl AndroidMediaCodec {
     /// // If index == AMEDIACODEC_INFO_OUTPUT_FORMAT_CHANGED, read new format
     /// // If index == AMEDIACODEC_INFO_TRY_AGAIN_LATER, no output yet
     /// ```
-    fn dequeue_output_buffer(&self, timeout_us: i64) -> Result<Option<MediaCodecOutputBuffer>, String> {
+    fn dequeue_output_buffer(
+        &self,
+        timeout_us: i64,
+    ) -> Result<Option<MediaCodecOutputBuffer>, String> {
         // Placeholder: In production, this would:
         // 1. Call AMediaCodec_dequeueOutputBuffer()
         // 2. If output available, call AMediaCodec_getOutputBuffer() to get the data
@@ -847,7 +866,8 @@ impl HardwareEncoder {
                 Err(e) => {
                     log::warn!(
                         "HardwareEncoder: HW encode failed at frame {} ({}), switching to software",
-                        self.frame_count, e
+                        self.frame_count,
+                        e
                     );
                     self.fallback_to_software()?;
 
@@ -1014,7 +1034,9 @@ impl HardwareEncoder {
     fn encode_hardware_frame(&mut self, _rgba_data: &[u8], _pts: i64) -> Result<(), String> {
         #[cfg(all(target_os = "android", feature = "ffmpeg"))]
         {
-            let codec = self.media_codec.as_mut()
+            let codec = self
+                .media_codec
+                .as_mut()
                 .ok_or("MediaCodec not initialized")?;
 
             // Calculate presentation time in microseconds
@@ -1041,11 +1063,7 @@ impl HardwareEncoder {
             // This is a major advantage over software encoding which
             // requires RGBA → YUV420P conversion.
             unsafe {
-                std::ptr::copy_nonoverlapping(
-                    _rgba_data.as_ptr(),
-                    buf_ptr,
-                    required_size,
-                );
+                std::ptr::copy_nonoverlapping(_rgba_data.as_ptr(), buf_ptr, required_size);
             }
 
             // Step 3: Queue the input buffer
@@ -1077,9 +1095,13 @@ impl HardwareEncoder {
     fn drain_hardware_output(&mut self) -> Result<(), String> {
         #[cfg(all(target_os = "android", feature = "ffmpeg"))]
         {
-            let codec = self.media_codec.as_mut()
+            let codec = self
+                .media_codec
+                .as_mut()
                 .ok_or("MediaCodec not initialized")?;
-            let octx = self.mux_context.as_mut()
+            let octx = self
+                .mux_context
+                .as_mut()
                 .ok_or("Mux context not initialized")?;
 
             // Drain all available output buffers
@@ -1149,20 +1171,24 @@ impl HardwareEncoder {
         #[cfg(all(target_os = "android", feature = "ffmpeg"))]
         {
             // Signal end of input stream
-            if let Some(codec) = self.media_codec.as_mut() {
-                let _ = codec.signal_end_of_stream();
+            if self.media_codec.is_some() {
+                if let Some(codec) = self.media_codec.as_mut() {
+                    let _ = codec.signal_end_of_stream();
+                }
 
-                // Drain remaining output buffers (the encoder may have
-                // several frames buffered internally)
+                // Drain remaining output buffers (the encoder may have several
+                // frames buffered internally).
                 self.drain_hardware_output()?;
 
-                // Stop and release the MediaCodec encoder
-                codec.stop_and_release();
+                if let Some(codec) = self.media_codec.as_mut() {
+                    // Stop and release the MediaCodec encoder
+                    codec.stop_and_release();
+                }
             }
             self.media_codec = None;
 
             // Write the MP4 trailer
-            if let Some(octx) = self.mux_context.take() {
+            if let Some(mut octx) = self.mux_context.take() {
                 octx.write_trailer()
                     .map_err(|e| format!("Failed to write trailer: {}", e))?;
 
@@ -1336,7 +1362,10 @@ mod tests {
 
     #[test]
     fn test_hardware_encoder_type_equality() {
-        assert_eq!(HardwareEncoderType::MediaCodec, HardwareEncoderType::MediaCodec);
+        assert_eq!(
+            HardwareEncoderType::MediaCodec,
+            HardwareEncoderType::MediaCodec
+        );
         assert_eq!(HardwareEncoderType::None, HardwareEncoderType::None);
         assert_ne!(HardwareEncoderType::MediaCodec, HardwareEncoderType::None);
     }

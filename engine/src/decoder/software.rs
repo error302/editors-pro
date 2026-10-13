@@ -107,15 +107,15 @@ impl SoftwareDecoder {
                 .unwrap_or_default(),
             bitrate: format_context.bit_rate() as u64,
             has_audio: audio_stream.is_some(),
-            audio_codec: audio_stream.and_then(|s| {
+            audio_codec: audio_stream.as_ref().and_then(|s| {
                 let ctx = ffmpeg::codec::context::Context::from_parameters(s.parameters()).ok()?;
                 Some(ctx.decoder().audio().ok()?.codec()?.name().to_string())
             }),
-            audio_sample_rate: audio_stream.and_then(|s| {
+            audio_sample_rate: audio_stream.as_ref().and_then(|s| {
                 let ctx = ffmpeg::codec::context::Context::from_parameters(s.parameters()).ok()?;
                 Some(ctx.decoder().audio().ok()?.rate())
             }),
-            audio_channels: audio_stream.and_then(|s| {
+            audio_channels: audio_stream.as_ref().and_then(|s| {
                 let ctx = ffmpeg::codec::context::Context::from_parameters(s.parameters()).ok()?;
                 Some(ctx.decoder().audio().ok()?.channels() as u32)
             }),

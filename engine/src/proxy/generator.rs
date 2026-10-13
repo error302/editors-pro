@@ -263,7 +263,7 @@ fn transcode_with_ffmpeg(
         decoder.format(),
         decoder.width(),
         decoder.height(),
-        ffmpeg_next::format::Pixel::Yuv420p,
+        ffmpeg_next::format::Pixel::YUV420P,
         width,
         height,
         ffmpeg::software::scaling::Flags::BILINEAR,
@@ -273,7 +273,7 @@ fn transcode_with_ffmpeg(
     // Process frames
     let mut frame_index: i64 = 0;
     let mut receive_and_send = |decoder: &mut ffmpeg::decoder::Video,
-                                scaler: &mut ffmpeg::software::scaling::Context::Context,
+                                scaler: &mut ffmpeg::software::scaling::context::Context,
                                 encoder: &mut ffmpeg::encoder::Video,
                                 output: &mut ffmpeg::format::context::Output|
      -> Result<(), String> {

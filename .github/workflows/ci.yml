@@ -48,11 +48,6 @@ jobs:
             libswresample-dev \
             pkg-config
 
-      # Phase E.1: enforce `cargo fmt` formatting. Fails the build if any
-      # file is not formatted according to `rustfmt.toml` defaults.
-      - name: Cargo fmt --check
-        run: cargo fmt --manifest-path engine/Cargo.toml --all -- --check
-
       - name: Cargo check
         run: cargo check --manifest-path engine/Cargo.toml
 
@@ -61,6 +56,11 @@ jobs:
 
       - name: Run tests
         run: cargo test --manifest-path engine/Cargo.toml
+
+      # Keep formatting strict without allowing legacy formatting debt to
+      # suppress the compiler, lint, and test diagnostics above.
+      - name: Cargo fmt --check
+        run: cargo fmt --manifest-path engine/Cargo.toml --all -- --check
 
       - name: Install cargo-llvm-cov
         uses: taiki-e/install-action@cargo-llvm-cov
@@ -165,16 +165,16 @@ jobs:
       - name: Flutter pub get
         run: flutter pub get
 
-      # Phase E.1: enforce Dart formatting. Fails the build if any file
-      # is not formatted according to `dart format` defaults.
-      - name: Dart format check
-        run: dart format --set-exit-if-changed .
-
       - name: Flutter analyze
         run: flutter analyze
 
       - name: Flutter test with coverage
         run: flutter test --coverage
+
+      # Keep formatting strict without allowing legacy formatting debt to
+      # suppress analysis and test diagnostics above.
+      - name: Dart format check
+        run: dart format --set-exit-if-changed .
 
       - name: Upload Flutter coverage to Codecov
         uses: codecov/codecov-action@v4

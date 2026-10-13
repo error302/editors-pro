@@ -1654,9 +1654,12 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
   /// Finds the first track matching the asset's type, calculates the
   /// start position (append after the last clip), and calls the Rust
   /// engine to create the clip via the Command pattern.
-  Future<void> _addAssetToTimeline(MediaAssetModel asset) async {
+  Future<bool> _addAssetToTimeline(
+    MediaAssetModel asset, {
+    bool showFeedback = true,
+  }) async {
     final project = ref.read(currentProjectProvider);
-    if (project == null) return;
+    if (project == null) return false;
 
     // Determine which track type this asset goes on
     final TrackType targetTrackType;
@@ -1675,12 +1678,12 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
         project.tracks.where((t) => t.trackType == targetTrackType).firstOrNull;
 
     if (targetTrack == null) {
-      if (mounted) {
+      if (showFeedback && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('No ${targetTrackType.name} track found')),
         );
       }
-      return;
+      return false;
     }
 
     // Calculate the start position: append after the last clip on the track
@@ -1690,17 +1693,18 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
             .map((c) => c.startMs + c.durationMs)
             .reduce((a, b) => a > b ? a : b);
 
-    final clipDurationMs =
-        asset.durationMs ?? (asset.mediaType == MediaType.image ? 5000 : null);
+    final clipDurationMs = asset.mediaType == MediaType.image
+        ? ((asset.durationMs ?? 0) > 0 ? asset.durationMs! : 5000)
+        : asset.durationMs;
     if (clipDurationMs == null || clipDurationMs <= 0) {
-      if (mounted) {
+      if (showFeedback && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Could not read the duration for ${asset.fileName}.'),
           ),
         );
       }
-      return;
+      return false;
     }
 
     // Call into the Rust engine to add the clip
@@ -1721,7 +1725,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
       );
       ref.read(projectProvider.notifier).addClipToTrack(targetTrack.id, clip);
 
-      if (mounted) {
+      if (showFeedback && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Added ${asset.fileName} to ${targetTrack.name}'),
@@ -1729,12 +1733,14 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
           ),
         );
       }
+      return true;
     } else {
-      if (mounted) {
+      if (showFeedback && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Failed to add clip')),
         );
       }
+      return false;
     }
   }
 
@@ -1869,7 +1875,9 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
       }
 
       var importedCount = 0;
+      var timelineAddedCount = 0;
       final failedFiles = <String>[];
+      final timelineFailures = <String>[];
       for (final pickedFile in pickedFiles) {
         try {
           final sourcePath = pickedFile.path;
@@ -1901,6 +1909,22 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
                 bitrate: assetInfo.bitrate?.toInt(),
               );
           importedCount++;
+
+          final importedAsset = ref
+              .read(currentProjectProvider)
+              ?.mediaAssets
+              .where((asset) => asset.id == assetInfo.id)
+              .firstOrNull;
+          if (importedAsset == null) {
+            timelineFailures.add(pickedFile.name);
+            continue;
+          }
+
+          if (await _addAssetToTimeline(importedAsset, showFeedback: false)) {
+            timelineAddedCount++;
+          } else {
+            timelineFailures.add(pickedFile.name);
+          }
         } catch (error, stackTrace) {
           failedFiles.add(pickedFile.name);
           developer.log(
@@ -1915,27 +1939,29 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
       if (!mounted) return;
       final projectSaved = importedCount == 0 ||
           await ref.read(projectProvider.notifier).saveCurrentProject();
-      final importMessage = importedCount == pickedFiles.length
-          ? 'Imported $importedCount item${importedCount == 1 ? '' : 's'}.'
-          : importedCount == 0
-              ? 'No items were imported. Could not add: ${failedFiles.take(2).join(', ')}.'
-              : 'Imported $importedCount of ${pickedFiles.length}; could not add: ${failedFiles.take(2).join(', ')}.';
-      final message = projectSaved
-          ? importMessage
-          : '$importMessage Project save failed; save again before closing.';
-      final isMobile = MediaQuery.of(context).size.width < 600;
-      if (isMobile && importedCount > 0) {
-        await _showMobileMediaLibrary();
-        if (mounted && (!projectSaved || importedCount < pickedFiles.length)) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(message)),
-          );
-        }
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(message)),
+      final messages = <String>[];
+      if (timelineAddedCount > 0) {
+        messages.add(
+          'Added $timelineAddedCount item${timelineAddedCount == 1 ? '' : 's'} to the timeline.',
         );
       }
+      if (failedFiles.isNotEmpty) {
+        messages.add('Could not import: ${failedFiles.take(2).join(', ')}.');
+      }
+      if (timelineFailures.isNotEmpty) {
+        messages.add(
+          'Imported, but could not add to the timeline: ${timelineFailures.take(2).join(', ')}.',
+        );
+      }
+      if (messages.isEmpty) {
+        messages.add('No items were imported.');
+      }
+      if (!projectSaved) {
+        messages.add('Project save failed; save again before closing.');
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(messages.join(' '))),
+      );
     } catch (error, stackTrace) {
       developer.log(
         'Could not open media picker',

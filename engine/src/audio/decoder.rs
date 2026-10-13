@@ -234,7 +234,7 @@ impl AudioDecoder {
     ) -> Result<DecodedAudio, String> {
         let file_path = self.file_path.as_ref().ok_or("No file is open")?;
 
-        let input =
+        let mut input =
             ff::format::input(file_path).map_err(|e| format!("Failed to open file: {}", e))?;
 
         let audio_stream = input

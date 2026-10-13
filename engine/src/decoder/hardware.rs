@@ -322,8 +322,12 @@ impl HardwareDecoder {
 
     /// Inner decode implementation (called after concurrency guard)
     fn decode_frame_at_inner(&mut self, time_ms: u64) -> Result<FrameData, String> {
-        let format_context = self.format_context.as_mut().ok_or("No format context")?;
         let video_idx = self.video_stream_index.ok_or("No video stream index")?;
+
+        // Prepare the cached scaler before borrowing the input context for
+        // packet iteration.
+        let _ = self.scaler_for_current_decoder()?;
+        let format_context = self.format_context.as_mut().ok_or("No format context")?;
 
         // Seek to the target timestamp
         let stream = format_context
@@ -336,10 +340,6 @@ impl HardwareDecoder {
         format_context
             .seek(seek_target, ..seek_target + 1000)
             .map_err(|e| format!("Seek failed: {}", e))?;
-
-        // Phase B: use cached scaler instead of recreating per call.
-        // We build it once (or when source format changes) before the decode loop.
-        let _ = self.scaler_for_current_decoder()?;
 
         let mut received = ffmpeg::util::frame::Video::empty();
         let mut frame = ffmpeg::util::frame::Video::empty();

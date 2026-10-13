@@ -195,7 +195,7 @@ pub struct VideoEncoder {
     settings: ExportSettings,
     output_context: Option<ffmpeg::format::context::Output>,
     output_path: Option<String>,
-    encoder: Option<ffmpeg::encoder::Video>,
+    encoder: Option<ffmpeg::encoder::video::Encoder>,
     stream_index: Option<usize>,
     frame_count: u64,
     start_time: std::time::Instant,
@@ -283,12 +283,14 @@ impl VideoEncoder {
         stream.set_time_base(time_base);
 
         // Codec-specific options
-        match self.settings.codec {
+        let encoder = match self.settings.codec {
             VideoCodec::H264 => {
                 #[cfg(target_os = "android")]
-                encoder
-                    .open()
-                    .map_err(|e| format!("Failed to open Android H.264 encoder: {}", e))?;
+                {
+                    encoder
+                        .open()
+                        .map_err(|e| format!("Failed to open Android H.264 encoder: {}", e))
+                }
 
                 #[cfg(not(target_os = "android"))]
                 {
@@ -297,14 +299,16 @@ impl VideoEncoder {
                     let _ = opts.set("crf", "23");
                     encoder
                         .open_with(opts)
-                        .map_err(|e| format!("Failed to open H.264 encoder: {}", e))?;
+                        .map_err(|e| format!("Failed to open H.264 encoder: {}", e))
                 }
             }
             VideoCodec::H265 => {
                 #[cfg(target_os = "android")]
-                encoder
-                    .open()
-                    .map_err(|e| format!("Failed to open Android H.265 encoder: {}", e))?;
+                {
+                    encoder
+                        .open()
+                        .map_err(|e| format!("Failed to open Android H.265 encoder: {}", e))
+                }
 
                 #[cfg(not(target_os = "android"))]
                 {
@@ -313,15 +317,13 @@ impl VideoEncoder {
                     let _ = opts.set("crf", "28");
                     encoder
                         .open_with(opts)
-                        .map_err(|e| format!("Failed to open H.265 encoder: {}", e))?;
+                        .map_err(|e| format!("Failed to open H.265 encoder: {}", e))
                 }
             }
-            _ => {
-                encoder
-                    .open()
-                    .map_err(|e| format!("Failed to open encoder: {}", e))?;
-            }
-        }
+            _ => encoder
+                .open()
+                .map_err(|e| format!("Failed to open encoder: {}", e)),
+        }?;
 
         // 5. Set stream parameters from encoder
         stream.set_parameters(&encoder);
@@ -476,14 +478,14 @@ impl VideoEncoder {
     fn receive_and_write_packets(
         stream_index: usize,
         octx: &mut ffmpeg::format::context::Output,
-        encoder: &mut ffmpeg::encoder::Video,
+        encoder: &mut ffmpeg::encoder::video::Encoder,
     ) -> Result<(), String> {
         let output_time_base = octx
             .stream(stream_index)
             .ok_or("Output video stream not found")?
             .time_base();
         let encoder_time_base = encoder.time_base();
-        let mut packet = ffmpeg::Packet::new();
+        let mut packet = ffmpeg::Packet::empty();
         while encoder.receive_packet(&mut packet).is_ok() {
             packet.set_stream(stream_index);
             packet.rescale_ts(encoder_time_base, output_time_base);
@@ -838,7 +840,7 @@ pub fn convert_f32_to_s16(samples: &[f32]) -> Vec<i16> {
 /// starting at sample index `N` (per channel), the PTS is simply `N`.
 #[cfg(feature = "ffmpeg")]
 pub struct AudioEncoder {
-    encoder: Option<ffmpeg::encoder::Audio>,
+    encoder: Option<ffmpeg::encoder::audio::Encoder>,
     stream_index: Option<usize>,
     sample_rate: u32,
     channels: u32,
@@ -934,7 +936,7 @@ impl AudioEncoder {
         ));
 
         // Open the encoder
-        encoder
+        let encoder = encoder
             .open()
             .map_err(|e| format!("Failed to open AAC encoder: {}", e))?;
 
@@ -973,11 +975,6 @@ impl AudioEncoder {
         samples: &[f32],
     ) -> Result<(), String> {
         let stream_index = self.stream_index.ok_or("Audio stream not configured")?;
-        let encoder = self
-            .encoder
-            .as_mut()
-            .ok_or("Audio encoder not configured")?;
-
         // Append new samples to buffer
         self.sample_buffer.extend_from_slice(samples);
 
@@ -988,11 +985,16 @@ impl AudioEncoder {
             let frame_data: Vec<f32> = self.sample_buffer.drain(..samples_per_frame).collect();
             let frame = self.build_audio_frame(&frame_data)?;
 
-            encoder
-                .send_frame(&frame)
-                .map_err(|e| format!("Audio send frame error: {}", e))?;
-
-            Self::receive_and_write_packets(stream_index, octx, encoder)?;
+            {
+                let encoder = self
+                    .encoder
+                    .as_mut()
+                    .ok_or("Audio encoder not configured")?;
+                encoder
+                    .send_frame(&frame)
+                    .map_err(|e| format!("Audio send frame error: {}", e))?;
+                Self::receive_and_write_packets(stream_index, octx, encoder)?;
+            }
 
             self.next_pts += self.frame_size as i64;
         }
@@ -1006,11 +1008,6 @@ impl AudioEncoder {
     /// frame with silence if needed.
     pub fn flush(&mut self, octx: &mut ffmpeg::format::context::Output) -> Result<(), String> {
         let stream_index = self.stream_index.ok_or("Audio stream not configured")?;
-        let encoder = self
-            .encoder
-            .as_mut()
-            .ok_or("Audio encoder not configured")?;
-
         // Encode any remaining partial frame (padded with silence)
         let samples_per_frame = self.frame_size * self.channels as usize;
         if !self.sample_buffer.is_empty() {
@@ -1019,14 +1016,23 @@ impl AudioEncoder {
             self.sample_buffer.clear();
 
             let frame = self.build_audio_frame(&padded)?;
-            encoder
-                .send_frame(&frame)
-                .map_err(|e| format!("Audio send frame error during flush: {}", e))?;
-
-            Self::receive_and_write_packets(stream_index, octx, encoder)?;
+            {
+                let encoder = self
+                    .encoder
+                    .as_mut()
+                    .ok_or("Audio encoder not configured")?;
+                encoder
+                    .send_frame(&frame)
+                    .map_err(|e| format!("Audio send frame error during flush: {}", e))?;
+                Self::receive_and_write_packets(stream_index, octx, encoder)?;
+            }
         }
 
         // Send EOF to flush the encoder
+        let encoder = self
+            .encoder
+            .as_mut()
+            .ok_or("Audio encoder not configured")?;
         let _ = encoder.send_eof();
         Self::receive_and_write_packets(stream_index, octx, encoder)?;
 
@@ -1110,14 +1116,14 @@ impl AudioEncoder {
     fn receive_and_write_packets(
         stream_index: usize,
         octx: &mut ffmpeg::format::context::Output,
-        encoder: &mut ffmpeg::encoder::Audio,
+        encoder: &mut ffmpeg::encoder::audio::Encoder,
     ) -> Result<(), String> {
         let output_time_base = octx
             .stream(stream_index)
             .ok_or("Output audio stream not found")?
             .time_base();
         let encoder_time_base = encoder.time_base();
-        let mut packet = ffmpeg::Packet::new();
+        let mut packet = ffmpeg::Packet::empty();
         while encoder.receive_packet(&mut packet).is_ok() {
             packet.set_stream(stream_index);
             packet.rescale_ts(encoder_time_base, output_time_base);
@@ -1166,7 +1172,7 @@ pub struct MuxedEncoder {
     settings: ExportSettings,
     output_context: Option<ffmpeg::format::context::Output>,
     output_path: Option<String>,
-    video_encoder: Option<ffmpeg::encoder::Video>,
+    video_encoder: Option<ffmpeg::encoder::video::Encoder>,
     video_stream_index: Option<usize>,
     audio_encoder: AudioEncoder,
     frame_count: u64,
@@ -1271,12 +1277,14 @@ impl MuxedEncoder {
         video_stream.set_time_base(video_time_base);
 
         // Codec-specific options for video
-        match self.settings.codec {
+        let video_encoder = match self.settings.codec {
             VideoCodec::H264 => {
                 #[cfg(target_os = "android")]
-                video_encoder
-                    .open()
-                    .map_err(|e| format!("Failed to open Android H.264 encoder: {}", e))?;
+                {
+                    video_encoder
+                        .open()
+                        .map_err(|e| format!("Failed to open Android H.264 encoder: {}", e))
+                }
 
                 #[cfg(not(target_os = "android"))]
                 {
@@ -1285,14 +1293,16 @@ impl MuxedEncoder {
                     let _ = opts.set("crf", "23");
                     video_encoder
                         .open_with(opts)
-                        .map_err(|e| format!("Failed to open H.264 encoder: {}", e))?;
+                        .map_err(|e| format!("Failed to open H.264 encoder: {}", e))
                 }
             }
             VideoCodec::H265 => {
                 #[cfg(target_os = "android")]
-                video_encoder
-                    .open()
-                    .map_err(|e| format!("Failed to open Android H.265 encoder: {}", e))?;
+                {
+                    video_encoder
+                        .open()
+                        .map_err(|e| format!("Failed to open Android H.265 encoder: {}", e))
+                }
 
                 #[cfg(not(target_os = "android"))]
                 {
@@ -1301,15 +1311,13 @@ impl MuxedEncoder {
                     let _ = opts.set("crf", "28");
                     video_encoder
                         .open_with(opts)
-                        .map_err(|e| format!("Failed to open H.265 encoder: {}", e))?;
+                        .map_err(|e| format!("Failed to open H.265 encoder: {}", e))
                 }
             }
-            _ => {
-                video_encoder
-                    .open()
-                    .map_err(|e| format!("Failed to open video encoder: {}", e))?;
-            }
-        }
+            _ => video_encoder
+                .open()
+                .map_err(|e| format!("Failed to open video encoder: {}", e)),
+        }?;
 
         video_stream.set_parameters(&video_encoder);
 
@@ -1343,6 +1351,12 @@ impl MuxedEncoder {
         let stream_index = self
             .video_stream_index
             .ok_or("Video stream not configured")?;
+
+        let width = self.settings.width;
+        let height = self.settings.height;
+        let yuv_data = convert_rgba_to_yuv420p(rgba_data, width, height)?;
+        let frame = build_yuv420p_frame(&yuv_data, width, height, pts)?;
+
         let octx = self
             .output_context
             .as_mut()
@@ -1351,13 +1365,6 @@ impl MuxedEncoder {
             .video_encoder
             .as_mut()
             .ok_or("Video encoder not configured")?;
-
-        // Convert RGBA → YUV420P
-        let yuv_data =
-            convert_rgba_to_yuv420p(rgba_data, self.settings.width, self.settings.height)?;
-
-        // Build ffmpeg frame
-        let frame = build_yuv420p_frame(&yuv_data, self.settings.width, self.settings.height, pts)?;
 
         // Send frame to encoder
         video_encoder
@@ -1370,7 +1377,7 @@ impl MuxedEncoder {
             .ok_or("Output video stream not found")?
             .time_base();
         let encoder_time_base = video_encoder.time_base();
-        let mut packet = ffmpeg::Packet::new();
+        let mut packet = ffmpeg::Packet::empty();
         while video_encoder.receive_packet(&mut packet).is_ok() {
             packet.set_stream(stream_index);
             packet.rescale_ts(encoder_time_base, output_time_base);
@@ -1388,6 +1395,11 @@ impl MuxedEncoder {
         let stream_index = self
             .video_stream_index
             .ok_or("Video stream not configured")?;
+
+        let width = self.settings.width;
+        let height = self.settings.height;
+        let frame = build_yuv420p_frame(yuv_data, width, height, pts)?;
+
         let octx = self
             .output_context
             .as_mut()
@@ -1396,8 +1408,6 @@ impl MuxedEncoder {
             .video_encoder
             .as_mut()
             .ok_or("Video encoder not configured")?;
-
-        let frame = build_yuv420p_frame(yuv_data, self.settings.width, self.settings.height, pts)?;
 
         video_encoder
             .send_frame(&frame)
@@ -1408,7 +1418,7 @@ impl MuxedEncoder {
             .ok_or("Output video stream not found")?
             .time_base();
         let encoder_time_base = video_encoder.time_base();
-        let mut packet = ffmpeg::Packet::new();
+        let mut packet = ffmpeg::Packet::empty();
         while video_encoder.receive_packet(&mut packet).is_ok() {
             packet.set_stream(stream_index);
             packet.rescale_ts(encoder_time_base, output_time_base);
@@ -1463,7 +1473,7 @@ impl MuxedEncoder {
                 .ok_or("Output video stream not found")?
                 .time_base();
             let encoder_time_base = video_encoder.time_base();
-            let mut packet = ffmpeg::Packet::new();
+            let mut packet = ffmpeg::Packet::empty();
             while video_encoder.receive_packet(&mut packet).is_ok() {
                 packet.set_stream(video_stream_index);
                 packet.rescale_ts(encoder_time_base, output_time_base);

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../../core/constants/app_icons.dart';
 import '../../../core/extensions/context_extensions.dart';
@@ -498,14 +499,14 @@ class _ProjectHomeScreenState extends ConsumerState<ProjectHomeScreen>
               },
             ),
             ListTile(
-              leading: const Icon(Icons.save_alt, color: AppTheme.secondary),
-              title: const Text('Export Project'),
-              subtitle: const Text('Save as .epp file'),
+              leading: const Icon(Icons.ios_share, color: AppTheme.secondary),
+              title: const Text('Share Project Backup'),
+              subtitle: const Text(
+                'Timeline data only; source media stays on this device',
+              ),
               onTap: () {
                 Navigator.pop(ctx);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Export coming soon!'), behavior: SnackBarBehavior.floating),
-                );
+                unawaited(_shareProjectBackup(context, project));
               },
             ),
             ListTile(
@@ -605,6 +606,17 @@ class _ProjectHomeScreenState extends ConsumerState<ProjectHomeScreen>
             ),
             const Divider(),
             ListTile(
+              leading: const Icon(Icons.ios_share),
+              title: const Text('Share Project Backup'),
+              subtitle: const Text(
+                'Timeline data only; source media stays on this device',
+              ),
+              onTap: () {
+                Navigator.pop(ctx);
+                unawaited(_shareProjectBackup(context, project));
+              },
+            ),
+            ListTile(
               leading: const Icon(Icons.play_arrow),
               title: const Text('Open project'),
               subtitle: const Text('Continue editing in the timeline'),
@@ -665,6 +677,31 @@ class _ProjectHomeScreenState extends ConsumerState<ProjectHomeScreen>
         ),
       ),
     );
+  }
+
+  Future<void> _shareProjectBackup(
+    BuildContext context,
+    ProjectModel project,
+  ) async {
+    try {
+      final path = await ref
+          .read(projectProvider.notifier)
+          .prepareProjectExport(project);
+      if (path == null || path.isEmpty) {
+        throw StateError('Could not save the project backup.');
+      }
+
+      await Share.shareXFiles(
+        [XFile(path, name: '${project.name}.epp')],
+        text: 'EDITORS-PRO timeline backup. Source media is not included.',
+        subject: '${project.name} project backup',
+      );
+    } catch (error) {
+      if (!mounted || !context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not share project backup: $error')),
+      );
+    }
   }
 }
 

@@ -369,6 +369,39 @@ class ProjectNotifier extends StateNotifier<ProjectState> {
     }
   }
 
+  /// Save a project and return its `.epp` timeline-backup path for sharing.
+  Future<String?> prepareProjectExport(ProjectModel project) async {
+    final currentProject = state.currentProject;
+    try {
+      if (currentProject?.id == project.id) {
+        if (!await saveCurrentProject()) return null;
+      } else {
+        if (currentProject != null && !await saveCurrentProject()) return null;
+
+        final exportProject = await _repo.getProject(project.id) ?? project;
+        try {
+          await _repo.activateProjectInEngine(exportProject);
+          await _repo.saveProjectToEngine(exportProject);
+        } finally {
+          if (currentProject != null) {
+            await _repo.activateProjectInEngine(currentProject);
+          }
+        }
+      }
+
+      final savedProject = await _repo.getProject(project.id);
+      return savedProject?.eppFilePath;
+    } catch (error, stackTrace) {
+      developer.log(
+        'prepareProjectExport failed',
+        name: 'ProjectNotifier',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      return null;
+    }
+  }
+
   /// Phase E.15: create a version-history snapshot of the current project.
   ///
   /// Reads the current `.epp` file from the engine and stores a copy
