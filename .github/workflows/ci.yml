@@ -71,14 +71,50 @@ jobs:
           fi
 
       - name: Clippy
-        run: cargo clippy --manifest-path engine/Cargo.toml -- -D warnings
+        shell: bash
+        run: |
+          build_log="$RUNNER_TEMP/cargo-clippy.log"
+          set +e
+          cargo clippy --manifest-path engine/Cargo.toml -- -D warnings 2>&1 | tee "$build_log"
+          build_status=${PIPESTATUS[0]}
+          set -e
+          if (( build_status != 0 )); then
+            diagnostics="$(tail -n 28 "$build_log" | tr '\r\n' ' ' | sed -e 's/%/%25/g' -e 's/:/%3A/g' -e 's/,/%2C/g')"
+            printf '::error title=Clippy diagnostics::%s\n' "$diagnostics"
+            {
+              echo '### Clippy diagnostics'
+              echo '```text'
+              tail -n 48 "$build_log"
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit "$build_status"
+          fi
 
       - name: Run tests
-        run: cargo test --manifest-path engine/Cargo.toml
+        if: ${{ success() || failure() }}
+        shell: bash
+        run: |
+          test_log="$RUNNER_TEMP/cargo-test.log"
+          set +e
+          cargo test --manifest-path engine/Cargo.toml 2>&1 | tee "$test_log"
+          test_status=${PIPESTATUS[0]}
+          set -e
+          if (( test_status != 0 )); then
+            diagnostics="$(tail -n 28 "$test_log" | tr '\r\n' ' ' | sed -e 's/%/%25/g' -e 's/:/%3A/g' -e 's/,/%2C/g')"
+            printf '::error title=Rust test diagnostics::%s\n' "$diagnostics"
+            {
+              echo '### Rust test diagnostics'
+              echo '```text'
+              tail -n 48 "$test_log"
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit "$test_status"
+          fi
 
       # Keep formatting strict without allowing legacy formatting debt to
       # suppress the compiler, lint, and test diagnostics above.
       - name: Cargo fmt --check
+        if: ${{ success() || failure() }}
         run: cargo fmt --manifest-path engine/Cargo.toml --all -- --check
 
       - name: Install cargo-llvm-cov
@@ -211,11 +247,11 @@ jobs:
         run: |
           test_log="$RUNNER_TEMP/flutter-test.log"
           set +e
-          flutter test --coverage 2>&1 | tee "$test_log"
+          flutter test --coverage --reporter expanded 2>&1 | tee "$test_log"
           test_status=${PIPESTATUS[0]}
           set -e
           if (( test_status != 0 )); then
-            diagnostics="$(tail -n 28 "$test_log" | tr '\r\n' ' ' | sed -e 's/%/%25/g' -e 's/:/%3A/g' -e 's/,/%2C/g')"
+            diagnostics="$(grep -E '(^[0-9]{2}:[0-9]{2}.* -[0-9]+:|^Expected:|^Actual:|^Which:|^Exception|^Error|^Some tests failed)' "$test_log" | tail -n 28 | tr '\r\n' ' ' | sed -e 's/%/%25/g' -e 's/:/%3A/g' -e 's/,/%2C/g')"
             printf '::error title=Flutter test diagnostics::%s\n' "$diagnostics"
             {
               echo '### Flutter test diagnostics'
@@ -231,6 +267,17 @@ jobs:
       - name: Dart format check
         if: ${{ success() || failure() }}
         run: dart format --set-exit-if-changed .
+
+      - name: Upload Flutter CI diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: flutter-ci-diagnostics
+          path: |
+            ${{ runner.temp }}/flutter-analyze.log
+            ${{ runner.temp }}/flutter-test.log
+          if-no-files-found: ignore
+          retention-days: 3
 
       - name: Upload Flutter coverage to Codecov
         uses: codecov/codecov-action@v4

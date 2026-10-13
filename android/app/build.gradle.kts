@@ -31,7 +31,11 @@ android {
             val keyPassword = System.getenv("EDITORS_PRO_KEY_PASSWORD")
                 ?: findProperty("EDITORS_PRO_KEY_PASSWORD") as? String
 
-            if (storeFilePath != null && storePassword != null && keyAlias != null && keyPassword != null) {
+            if (!storeFilePath.isNullOrBlank() &&
+                !storePassword.isNullOrBlank() &&
+                !keyAlias.isNullOrBlank() &&
+                !keyPassword.isNullOrBlank()
+            ) {
                 storeFile = file(storeFilePath)
                 this.storePassword = storePassword
                 this.keyAlias = keyAlias

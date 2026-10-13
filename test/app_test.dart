@@ -77,6 +77,9 @@ class _FakeProjectRepository implements ProjectRepository {
   Future<void> addMediaAsset(String projectId, MediaAssetModel asset) async {}
 
   @override
+  Future<void> restoreMediaAssetInEngine(MediaAssetModel asset) async {}
+
+  @override
   Future<void> deleteProject(String projectId) async {
     deletedProjectIds.add(projectId);
     projects.removeWhere((project) => project.id == projectId);

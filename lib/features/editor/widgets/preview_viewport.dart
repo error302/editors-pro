@@ -69,12 +69,6 @@ class _PreviewViewportState extends ConsumerState<PreviewViewport> {
   /// Whether a frame request is currently in-flight.
   bool _fetchingFrame = false;
 
-  /// The time position for which we are currently fetching a frame.
-  int? _fetchingTimeMs;
-
-  /// Subscription to the editor state for continuous playback decoding.
-  StreamSubscription? _playbackSubscription;
-
   /// Timer for continuous frame fetching during playback.
   Timer? _playbackDecodeTimer;
 
@@ -161,8 +155,6 @@ class _PreviewViewportState extends ConsumerState<PreviewViewport> {
     }
 
     _fetchingFrame = true;
-    _fetchingTimeMs = timeMs;
-
     try {
       final api = EngineService.instance.api;
       final pngBytes = await api.getFrame(timeMs: BigInt.from(timeMs));
@@ -185,7 +177,6 @@ class _PreviewViewportState extends ConsumerState<PreviewViewport> {
       // Leave the previous frame (or placeholder) in place.
     } finally {
       _fetchingFrame = false;
-      _fetchingTimeMs = null;
     }
   }
 
@@ -756,12 +747,12 @@ class _PreviewViewportState extends ConsumerState<PreviewViewport> {
         final normalizedDx = delta.dx / 320; // approximate preview width
         final normalizedDy = delta.dy / 180; // approximate preview height
         ref.read(editorProvider.notifier).updateClipTransform(
-              clipId: selectedClip!.id,
+              clipId: selectedClip.id,
               property: 'position_x',
               delta: normalizedDx,
             );
         ref.read(editorProvider.notifier).updateClipTransform(
-              clipId: selectedClip!.id,
+              clipId: selectedClip.id,
               property: 'position_y',
               delta: normalizedDy,
             );

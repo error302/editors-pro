@@ -1069,7 +1069,6 @@ class _TimelineIconButton extends StatelessWidget {
     this.color,
     this.size = 16,
     this.filled = false,
-    this.dimensions = 24,
   });
 
   final String icon;
@@ -1080,9 +1079,6 @@ class _TimelineIconButton extends StatelessWidget {
   /// When true, renders a small [AppTheme.surfaceVariant] rounded square
   /// behind the icon — used for the zoom controls in the toolbar.
   final bool filled;
-
-  /// Outer square dimensions (width = height) when [filled] is true.
-  final double dimensions;
 
   @override
   Widget build(BuildContext context) {
@@ -1104,8 +1100,8 @@ class _TimelineIconButton extends StatelessWidget {
           onTap: onTap,
           borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
           child: Container(
-            width: dimensions,
-            height: dimensions,
+            width: 24,
+            height: 24,
             alignment: Alignment.center,
             decoration: BoxDecoration(
               color: AppTheme.surfaceVariant,
@@ -1124,8 +1120,8 @@ class _TimelineIconButton extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(4),
         child: SizedBox(
-          width: dimensions,
-          height: dimensions,
+          width: 24,
+          height: 24,
           child: Center(child: iconWidget),
         ),
       ),

@@ -1,3 +1,5 @@
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -67,11 +69,9 @@ void main() {
       );
 
       // Should not throw
-      final canvas = PaintingContext(
-        ContainerLayer(),
-        Rect.zero,
-      ).canvas;
-      painter.paint(canvas, const Size(200, 50));
+      final recorder = ui.PictureRecorder();
+      painter.paint(ui.Canvas(recorder), const Size(200, 50));
+      recorder.endRecording().dispose();
     });
 
     test('paints without error with single peak', () {
@@ -80,11 +80,9 @@ void main() {
         color: Colors.green,
       );
 
-      final canvas = PaintingContext(
-        ContainerLayer(),
-        Rect.zero,
-      ).canvas;
-      painter.paint(canvas, const Size(100, 50));
+      final recorder = ui.PictureRecorder();
+      painter.paint(ui.Canvas(recorder), const Size(100, 50));
+      recorder.endRecording().dispose();
     });
 
     test('paints without error with many peaks', () {
@@ -94,11 +92,9 @@ void main() {
         color: Colors.purple,
       );
 
-      final canvas = PaintingContext(
-        ContainerLayer(),
-        Rect.zero,
-      ).canvas;
-      painter.paint(canvas, const Size(400, 50));
+      final recorder = ui.PictureRecorder();
+      painter.paint(ui.Canvas(recorder), const Size(400, 50));
+      recorder.endRecording().dispose();
     });
   });
 

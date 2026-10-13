@@ -253,8 +253,6 @@ class _TransformHandlesPainter extends CustomPainter {
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.5;
 
-    final rect = Rect.fromLTWH(0, 0, size.width, size.height);
-
     // Draw dashed line
     const dashWidth = 5.0;
     const dashSpace = 3.0;

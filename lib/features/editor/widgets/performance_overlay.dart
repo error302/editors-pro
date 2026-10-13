@@ -56,8 +56,6 @@ class _PerformanceOverlayWidgetState extends State<PerformanceOverlayWidget> {
   @override
   Widget build(BuildContext context) {
     final snapshot = _snapshot ?? _monitor.takeSnapshot();
-    final theme = Theme.of(context);
-
     return Positioned(
       top: 8,
       right: 8,

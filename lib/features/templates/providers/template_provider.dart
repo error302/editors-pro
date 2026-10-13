@@ -167,9 +167,7 @@ class TemplateCreationState {
 /// Template notifier — manages template selection, media assignment,
 /// and project creation from templates.
 class TemplateNotifier extends StateNotifier<TemplateCreationState> {
-  final Ref _ref;
-
-  TemplateNotifier(this._ref) : super(const TemplateCreationState());
+  TemplateNotifier() : super(const TemplateCreationState());
 
   /// Load available templates from the engine.
   Future<void> loadTemplates() async {
@@ -261,5 +259,5 @@ class TemplateNotifier extends StateNotifier<TemplateCreationState> {
 /// Provider for template state management
 final templateProvider =
     StateNotifierProvider<TemplateNotifier, TemplateCreationState>(
-  (ref) => TemplateNotifier(ref),
+  (ref) => TemplateNotifier(),
 );

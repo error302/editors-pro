@@ -1,7 +1,6 @@
 import 'dart:developer' as developer;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:uuid/uuid.dart';
 
 import '../../../core/services/engine_service.dart';
 import '../../../core/services/project_repository.dart';
@@ -44,8 +43,6 @@ class ProjectState {
 /// [ProjectRepository] for persistent storage.
 class ProjectNotifier extends StateNotifier<ProjectState> {
   final Ref _ref;
-  final _uuid = const Uuid();
-
   ProjectNotifier(this._ref) : super(const ProjectState());
 
   ProjectRepository get _repo => _ref.read(projectRepositoryProvider);
