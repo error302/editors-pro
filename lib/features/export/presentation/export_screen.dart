@@ -5,9 +5,11 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
+import 'package:path/path.dart' as p;
 
 import '../../../core/constants/app_icons.dart';
 import '../../../core/extensions/context_extensions.dart';
+import '../../../core/services/storage_service.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/app_icon.dart';
 import '../../../data/models/project_model.dart';
@@ -39,6 +41,8 @@ class _ExportScreenState extends ConsumerState<ExportScreen>
   String _selectedPreset = '1080p';
   String _selectedCodec = 'H.264';
   String _selectedFormat = 'MP4';
+  bool _isSavingToGallery = false;
+  bool _savedToGallery = false;
   late AnimationController _pulseController;
 
   @override
@@ -60,6 +64,7 @@ class _ExportScreenState extends ConsumerState<ExportScreen>
   Widget build(BuildContext context) {
     final project = ref.watch(currentProjectProvider);
     final exportState = ref.watch(exportProvider);
+    final isAndroid = ref.watch(isAndroidPlatformProvider);
     final presets = ref.watch(exportPresetsProvider);
 
     return PopScope(
@@ -136,7 +141,7 @@ class _ExportScreenState extends ConsumerState<ExportScreen>
             if (exportState.isExporting)
               _buildExportProgress(context, exportState)
             else if (exportState.isComplete)
-              _buildExportComplete(context, exportState)
+              _buildExportComplete(context, exportState, isAndroid)
             else if (exportState.hasError)
               _buildExportError(context, exportState)
             else
@@ -766,7 +771,11 @@ class _ExportScreenState extends ConsumerState<ExportScreen>
 
   // ── Export Complete ─────────────────────────────────────────────
 
-  Widget _buildExportComplete(BuildContext context, ExportState state) {
+  Widget _buildExportComplete(
+    BuildContext context,
+    ExportState state,
+    bool isAndroid,
+  ) {
     return Container(
       padding: const EdgeInsets.all(28),
       decoration: BoxDecoration(
@@ -818,6 +827,51 @@ class _ExportScreenState extends ConsumerState<ExportScreen>
             ),
           const SizedBox(height: 24),
 
+          if (isAndroid &&
+              state.outputPath != null &&
+              StorageService.videoMimeTypeForPath(state.outputPath!) !=
+                  null) ...[
+            SizedBox(
+              width: double.infinity,
+              height: 52,
+              child: FilledButton.icon(
+                onPressed: _isSavingToGallery || _savedToGallery
+                    ? null
+                    : () => _saveToGallery(state.outputPath!),
+                icon: _isSavingToGallery
+                    ? const SizedBox.square(
+                        dimension: 18,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : Icon(
+                        _savedToGallery
+                            ? Icons.check_circle_outline
+                            : Icons.photo_library_outlined,
+                        size: 20,
+                      ),
+                label: Text(
+                  _isSavingToGallery
+                      ? 'Saving to Gallery...'
+                      : _savedToGallery
+                          ? 'Saved to Gallery'
+                          : 'Save to Gallery',
+                ),
+                style: FilledButton.styleFrom(
+                  backgroundColor:
+                      _savedToGallery ? AppTheme.success : AppTheme.accent,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
+
           // Share Video button (accent gradient, full width)
           _buildGradientButton(
             onTap: () =>
@@ -832,7 +886,13 @@ class _ExportScreenState extends ConsumerState<ExportScreen>
             width: double.infinity,
             height: 52,
             child: OutlinedButton.icon(
-              onPressed: () => ref.read(exportProvider.notifier).reset(),
+              onPressed: () {
+                setState(() {
+                  _isSavingToGallery = false;
+                  _savedToGallery = false;
+                });
+                ref.read(exportProvider.notifier).reset();
+              },
               icon: const Icon(Icons.refresh, size: 20, color: AppTheme.textPrimary),
               label: const Text('Export Again'),
               style: OutlinedButton.styleFrom(
@@ -961,11 +1021,49 @@ class _ExportScreenState extends ConsumerState<ExportScreen>
   // ── Helpers ─────────────────────────────────────────────────────
 
   void _startExport() {
+    setState(() {
+      _isSavingToGallery = false;
+      _savedToGallery = false;
+    });
     ref.read(exportProvider.notifier).startExport(
           preset: _selectedPreset,
           codec: _selectedCodec,
           format: _selectedFormat,
         );
+  }
+
+  Future<void> _saveToGallery(String filePath) async {
+    final mimeType = StorageService.videoMimeTypeForPath(filePath);
+    if (mimeType == null || _isSavingToGallery || _savedToGallery) return;
+
+    setState(() => _isSavingToGallery = true);
+    String? savedUri;
+    try {
+      savedUri = await StorageService.saveToMediaStore(
+        filePath: filePath,
+        displayName: p.basename(filePath),
+        mimeType: mimeType,
+      );
+    } catch (_) {
+      // Show a stable, user-facing message without exposing platform details.
+    }
+
+    if (!mounted) return;
+    setState(() {
+      _isSavingToGallery = false;
+      _savedToGallery = savedUri != null;
+    });
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(
+            savedUri == null
+                ? 'Could not save the video. Check available storage and try again.'
+                : 'Video saved to Movies/EDITORS-PRO.',
+          ),
+        ),
+      );
   }
 
   Future<void> _showCancelDialog(BuildContext context) async {

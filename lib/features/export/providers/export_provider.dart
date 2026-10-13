@@ -321,6 +321,8 @@ final exportProvider =
   return ExportNotifier();
 });
 
+final isAndroidPlatformProvider = Provider<bool>((ref) => Platform.isAndroid);
+
 /// Provider for the list of available export presets
 final exportPresetsProvider = Provider<List<ExportPreset>>((ref) {
   return ExportPreset.all;

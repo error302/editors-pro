@@ -13,6 +13,7 @@ import androidx.documentfile.provider.DocumentFile
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
+import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
 
@@ -175,17 +176,24 @@ object StorageIntegration {
         val uri = context.contentResolver.insert(collection, values) ?: return null
 
         try {
-            context.contentResolver.openOutputStream(uri)?.use { output ->
+            val output = context.contentResolver.openOutputStream(uri)
+                ?: throw IOException("Could not open MediaStore output")
+            val copiedBytes = output.use { stream ->
                 FileInputStream(sourceFile).use { input ->
-                    input.copyTo(output, 8192)
+                    input.copyTo(stream, 8192)
                 }
+            }
+            if (copiedBytes != sourceFile.length()) {
+                throw IOException("MediaStore copy was incomplete")
             }
 
             // Clear IS_PENDING flag to make the file visible
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 values.clear()
                 values.put(MediaStore.Video.Media.IS_PENDING, 0)
-                context.contentResolver.update(uri, values, null, null)
+                if (context.contentResolver.update(uri, values, null, null) == 0) {
+                    throw IOException("Could not publish MediaStore item")
+                }
             }
 
             Log.i(TAG, "Saved video to MediaStore: $uri")
@@ -208,13 +216,23 @@ object StorageIntegration {
     ): Uri? {
         val moviesDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MOVIES)
         val exportDir = File(moviesDir, "EDITORS-PRO")
-        if (!exportDir.exists()) exportDir.mkdirs()
+        if (!exportDir.exists() && !exportDir.mkdirs()) {
+            throw IOException("Could not create Movies/EDITORS-PRO")
+        }
 
         val destFile = File(exportDir, displayName)
-        FileInputStream(sourceFile).use { input ->
-            FileOutputStream(destFile).use { output ->
-                input.copyTo(output, 8192)
+        try {
+            val copiedBytes = FileInputStream(sourceFile).use { input ->
+                FileOutputStream(destFile).use { output ->
+                    input.copyTo(output, 8192)
+                }
             }
+            if (copiedBytes != sourceFile.length()) {
+                throw IOException("MediaStore copy was incomplete")
+            }
+        } catch (e: Exception) {
+            destFile.delete()
+            throw e
         }
 
         // Scan the file so it appears in MediaStore

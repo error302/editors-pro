@@ -1,4 +1,5 @@
 import 'package:flutter/services.dart';
+import 'package:path/path.dart' as p;
 
 /// Storage integration service for Android SAF and MediaStore.
 ///
@@ -13,6 +14,22 @@ class StorageService {
   StorageService._();
 
   static const _channel = MethodChannel('com.editorspro/storage');
+
+  /// Returns the Android video MIME type supported by the Gallery save path.
+  static String? videoMimeTypeForPath(String filePath) {
+    switch (p.extension(filePath).toLowerCase()) {
+      case '.mp4':
+        return 'video/mp4';
+      case '.mov':
+        return 'video/quicktime';
+      case '.webm':
+        return 'video/webm';
+      case '.avi':
+        return 'video/x-msvideo';
+      default:
+        return null;
+    }
+  }
 
   /// Copy a content:// URI to a temporary file.
   ///
