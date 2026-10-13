@@ -1851,13 +1851,22 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
     final editorNotifier = ref.read(editorProvider.notifier);
     editorNotifier.setImporting(true);
     try {
-      if (!EngineService.instance.isInitialized) {
-        throw StateError(
-            'The editing engine is not ready. Reopen the project and try again.');
-      }
-
       final pickedFiles = await pickFiles();
       if (pickedFiles.isEmpty) return;
+
+      if (!EngineService.instance.isInitialized &&
+          !await EngineService.instance.initialize()) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'The gallery opened, but the editing engine could not start. Restart the app and try again.',
+              ),
+            ),
+          );
+        }
+        return;
+      }
 
       var importedCount = 0;
       final failedFiles = <String>[];

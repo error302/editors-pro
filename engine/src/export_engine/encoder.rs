@@ -282,28 +282,45 @@ impl VideoEncoder {
         // Codec-specific options
         match self.settings.codec {
             VideoCodec::H264 => {
-                // Use medium preset for good balance of speed/quality
-                // The "medium" preset is safe across all FFmpeg builds
-                if let Some(mut opts) = ffmpeg::dictionary::Dictionary::new() {
-                    // Try to set preset; ignore if not supported
-                    let _ = opts.set("preset", "medium");
-                    let _ = opts.set("crf", "23");
-                    encoder.open_with(opts)
-                        .map_err(|e| format!("Failed to open H.264 encoder: {}", e))?;
-                } else {
-                    encoder.open()
-                        .map_err(|e| format!("Failed to open H.264 encoder: {}", e))?;
+                #[cfg(target_os = "android")]
+                encoder
+                    .open()
+                    .map_err(|e| format!("Failed to open Android H.264 encoder: {}", e))?;
+
+                #[cfg(not(target_os = "android"))]
+                {
+                    if let Some(mut opts) = ffmpeg::dictionary::Dictionary::new() {
+                        let _ = opts.set("preset", "medium");
+                        let _ = opts.set("crf", "23");
+                        encoder
+                            .open_with(opts)
+                            .map_err(|e| format!("Failed to open H.264 encoder: {}", e))?;
+                    } else {
+                        encoder
+                            .open()
+                            .map_err(|e| format!("Failed to open H.264 encoder: {}", e))?;
+                    }
                 }
             }
             VideoCodec::H265 => {
-                if let Some(mut opts) = ffmpeg::dictionary::Dictionary::new() {
-                    let _ = opts.set("preset", "medium");
-                    let _ = opts.set("crf", "28");
-                    encoder.open_with(opts)
-                        .map_err(|e| format!("Failed to open H.265 encoder: {}", e))?;
-                } else {
-                    encoder.open()
-                        .map_err(|e| format!("Failed to open H.265 encoder: {}", e))?;
+                #[cfg(target_os = "android")]
+                encoder
+                    .open()
+                    .map_err(|e| format!("Failed to open Android H.265 encoder: {}", e))?;
+
+                #[cfg(not(target_os = "android"))]
+                {
+                    if let Some(mut opts) = ffmpeg::dictionary::Dictionary::new() {
+                        let _ = opts.set("preset", "medium");
+                        let _ = opts.set("crf", "28");
+                        encoder
+                            .open_with(opts)
+                            .map_err(|e| format!("Failed to open H.265 encoder: {}", e))?;
+                    } else {
+                        encoder
+                            .open()
+                            .map_err(|e| format!("Failed to open H.265 encoder: {}", e))?;
+                    }
                 }
             }
             _ => {
@@ -559,6 +576,25 @@ fn fs_available_space(path: &std::path::Path) -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn video_codecs_use_encoders_available_for_target() {
+        #[cfg(target_os = "android")]
+        let expected = [
+            "h264_mediacodec",
+            "hevc_mediacodec",
+            "vp9_mediacodec",
+            "av1_mediacodec",
+        ];
+
+        #[cfg(not(target_os = "android"))]
+        let expected = ["libx264", "libx265", "libvpx-vp9", "libaom-av1"];
+
+        let codecs = [VideoCodec::H264, VideoCodec::H265, VideoCodec::Vp9, VideoCodec::Av1];
+        for (codec, expected_name) in codecs.into_iter().zip(expected) {
+            assert_eq!(codec.ffmpeg_codec_name(), expected_name);
+        }
+    }
 
     /// Test RGBA → YUV420P conversion produces the expected buffer size
     #[test]
@@ -1215,29 +1251,45 @@ impl MuxedEncoder {
         // Codec-specific options for video
         match self.settings.codec {
             VideoCodec::H264 => {
-                if let Some(mut opts) = ffmpeg::dictionary::Dictionary::new() {
-                    let _ = opts.set("preset", "medium");
-                    let _ = opts.set("crf", "23");
-                    video_encoder
-                        .open_with(opts)
-                        .map_err(|e| format!("Failed to open H.264 encoder: {}", e))?;
-                } else {
-                    video_encoder
-                        .open()
-                        .map_err(|e| format!("Failed to open H.264 encoder: {}", e))?;
+                #[cfg(target_os = "android")]
+                video_encoder
+                    .open()
+                    .map_err(|e| format!("Failed to open Android H.264 encoder: {}", e))?;
+
+                #[cfg(not(target_os = "android"))]
+                {
+                    if let Some(mut opts) = ffmpeg::dictionary::Dictionary::new() {
+                        let _ = opts.set("preset", "medium");
+                        let _ = opts.set("crf", "23");
+                        video_encoder
+                            .open_with(opts)
+                            .map_err(|e| format!("Failed to open H.264 encoder: {}", e))?;
+                    } else {
+                        video_encoder
+                            .open()
+                            .map_err(|e| format!("Failed to open H.264 encoder: {}", e))?;
+                    }
                 }
             }
             VideoCodec::H265 => {
-                if let Some(mut opts) = ffmpeg::dictionary::Dictionary::new() {
-                    let _ = opts.set("preset", "medium");
-                    let _ = opts.set("crf", "28");
-                    video_encoder
-                        .open_with(opts)
-                        .map_err(|e| format!("Failed to open H.265 encoder: {}", e))?;
-                } else {
-                    video_encoder
-                        .open()
-                        .map_err(|e| format!("Failed to open H.265 encoder: {}", e))?;
+                #[cfg(target_os = "android")]
+                video_encoder
+                    .open()
+                    .map_err(|e| format!("Failed to open Android H.265 encoder: {}", e))?;
+
+                #[cfg(not(target_os = "android"))]
+                {
+                    if let Some(mut opts) = ffmpeg::dictionary::Dictionary::new() {
+                        let _ = opts.set("preset", "medium");
+                        let _ = opts.set("crf", "28");
+                        video_encoder
+                            .open_with(opts)
+                            .map_err(|e| format!("Failed to open H.265 encoder: {}", e))?;
+                    } else {
+                        video_encoder
+                            .open()
+                            .map_err(|e| format!("Failed to open H.265 encoder: {}", e))?;
+                    }
                 }
             }
             _ => {

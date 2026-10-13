@@ -6,8 +6,6 @@
 }
 
 # FFmpeg classes
--keep class com.arthenica.ffmpeg.** { *; }
--keep class com.arthenica.mobileffmpeg.** { *; }
 
 # ExoPlayer / Media3
 -keep class com.google.android.exoplayer2.** { *; }

@@ -12,6 +12,7 @@ build/
 
 # Rust engine
 engine/target/
+engine/ffmpeg-android-lgpl/
 
 # IDE
 .idea/

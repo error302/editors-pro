@@ -175,11 +175,24 @@ pub enum VideoCodec {
 
 impl VideoCodec {
     pub fn ffmpeg_codec_name(&self) -> &str {
-        match self {
-            VideoCodec::H264 => "libx264",
-            VideoCodec::H265 => "libx265",
-            VideoCodec::Vp9 => "libvpx-vp9",
-            VideoCodec::Av1 => "libaom-av1",
+        #[cfg(target_os = "android")]
+        {
+            match self {
+                VideoCodec::H264 => "h264_mediacodec",
+                VideoCodec::H265 => "hevc_mediacodec",
+                VideoCodec::Vp9 => "vp9_mediacodec",
+                VideoCodec::Av1 => "av1_mediacodec",
+            }
+        }
+
+        #[cfg(not(target_os = "android"))]
+        {
+            match self {
+                VideoCodec::H264 => "libx264",
+                VideoCodec::H265 => "libx265",
+                VideoCodec::Vp9 => "libvpx-vp9",
+                VideoCodec::Av1 => "libaom-av1",
+            }
         }
     }
 

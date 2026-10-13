@@ -4,6 +4,7 @@ import 'dart:developer' as developer;
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -16,6 +17,7 @@ import '../providers/editor_provider.dart';
 import 'safe_zones_overlay.dart';
 import 'text_overlay_handle.dart';
 import 'transform_handles.dart';
+import 'video_clip_preview.dart';
 
 enum SafeZoneType { actionSafe, titleSafe, centerCross, thirds, centerMarker }
 
@@ -80,10 +82,17 @@ class _PreviewViewportState extends ConsumerState<PreviewViewport> {
   void initState() {
     super.initState();
     // Listen to time changes and request frames.
-    ref.listenManual(editorProvider.select((s) => s.currentTimeMs), _onTimeChanged, fireImmediately: true);
+    ref.listenManual(
+      editorProvider.select((s) => s.currentTimeMs),
+      _onTimeChanged,
+      fireImmediately: true,
+    );
 
     // Listen to playback state changes to start/stop continuous decode
-    ref.listenManual(editorProvider.select((s) => s.isPlaying), _onPlaybackChanged);
+    ref.listenManual(
+      editorProvider.select((s) => s.isPlaying),
+      _onPlaybackChanged,
+    );
   }
 
   @override
@@ -117,7 +126,9 @@ class _PreviewViewportState extends ConsumerState<PreviewViewport> {
   /// at ~15fps (a balance between smoothness and CPU usage on mobile).
   void _startContinuousDecode() {
     _playbackDecodeTimer?.cancel();
-    _playbackDecodeTimer = Timer.periodic(const Duration(milliseconds: 66), (_) {
+    _playbackDecodeTimer = Timer.periodic(const Duration(milliseconds: 66), (
+      _,
+    ) {
       if (!mounted) return;
       final state = ref.read(editorProvider);
       if (!state.isPlaying) {
@@ -167,7 +178,10 @@ class _PreviewViewportState extends ConsumerState<PreviewViewport> {
         });
       }
     } catch (e) {
-      developer.log('getFrame failed at ${timeMs}ms: $e', name: 'PreviewViewport');
+      developer.log(
+        'getFrame failed at ${timeMs}ms: $e',
+        name: 'PreviewViewport',
+      );
       // Leave the previous frame (or placeholder) in place.
     } finally {
       _fetchingFrame = false;
@@ -200,9 +214,7 @@ class _PreviewViewportState extends ConsumerState<PreviewViewport> {
                   child: Stack(
                     children: [
                       // Video frame display
-                      Center(
-                        child: _buildPreviewContent(context, editorState),
-                      ),
+                      Center(child: _buildPreviewContent(context, editorState)),
 
                       // Safe zones overlay
                       if (_showSafeZones)
@@ -225,7 +237,9 @@ class _PreviewViewportState extends ConsumerState<PreviewViewport> {
                       if (!editorState.isPlaying)
                         Center(
                           child: GestureDetector(
-                            onTap: () => ref.read(editorProvider.notifier).togglePlayback(),
+                            onTap: () => ref
+                                .read(editorProvider.notifier)
+                                .togglePlayback(),
                             child: Container(
                               width: 64,
                               height: 64,
@@ -248,7 +262,10 @@ class _PreviewViewportState extends ConsumerState<PreviewViewport> {
                           top: 8,
                           right: 8,
                           child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 2,
+                            ),
                             decoration: BoxDecoration(
                               color: AppTheme.surfaceVariant,
                               borderRadius: BorderRadius.circular(4),
@@ -315,7 +332,8 @@ class _PreviewViewportState extends ConsumerState<PreviewViewport> {
             constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
             color: AppTheme.textSecondary,
             onPressed: () {
-              final newTime = (editorState.currentTimeMs - _frameDurationMs).clamp(0, editorState.durationMs);
+              final newTime = (editorState.currentTimeMs - _frameDurationMs)
+                  .clamp(0, editorState.durationMs);
               ref.read(editorProvider.notifier).seekTo(newTime);
             },
           ),
@@ -328,7 +346,8 @@ class _PreviewViewportState extends ConsumerState<PreviewViewport> {
             constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
             color: AppTheme.textSecondary,
             onPressed: () {
-              final newTime = (editorState.currentTimeMs + _frameDurationMs).clamp(0, editorState.durationMs);
+              final newTime = (editorState.currentTimeMs + _frameDurationMs)
+                  .clamp(0, editorState.durationMs);
               ref.read(editorProvider.notifier).seekTo(newTime);
             },
           ),
@@ -408,18 +427,26 @@ class _PreviewViewportState extends ConsumerState<PreviewViewport> {
                     value: isEnabled,
                     title: Text(
                       _safeZoneTypeName(type),
-                      style: const TextStyle(color: AppTheme.textPrimary, fontSize: 13),
+                      style: const TextStyle(
+                        color: AppTheme.textPrimary,
+                        fontSize: 13,
+                      ),
                     ),
                     subtitle: Text(
                       _safeZoneTypeDescription(type),
-                      style: const TextStyle(color: AppTheme.textDisabled, fontSize: 10),
+                      style: const TextStyle(
+                        color: AppTheme.textDisabled,
+                        fontSize: 10,
+                      ),
                     ),
                     activeColor: AppTheme.primary,
                     contentPadding: EdgeInsets.zero,
                     controlAffinity: ListTileControlAffinity.leading,
                     onChanged: (checked) {
                       setDialogState(() {
-                        final newZones = Set<SafeZoneType>.from(_enabledSafeZones);
+                        final newZones = Set<SafeZoneType>.from(
+                          _enabledSafeZones,
+                        );
                         if (checked == true) {
                           newZones.add(type);
                         } else {
@@ -447,47 +474,73 @@ class _PreviewViewportState extends ConsumerState<PreviewViewport> {
 
   String _safeZoneTypeName(SafeZoneType type) {
     switch (type) {
-      case SafeZoneType.actionSafe: return 'Action Safe';
-      case SafeZoneType.titleSafe: return 'Title Safe';
-      case SafeZoneType.centerCross: return 'Center Cross';
-      case SafeZoneType.thirds: return 'Rule of Thirds';
-      case SafeZoneType.centerMarker: return 'Center Marker';
+      case SafeZoneType.actionSafe:
+        return 'Action Safe';
+      case SafeZoneType.titleSafe:
+        return 'Title Safe';
+      case SafeZoneType.centerCross:
+        return 'Center Cross';
+      case SafeZoneType.thirds:
+        return 'Rule of Thirds';
+      case SafeZoneType.centerMarker:
+        return 'Center Marker';
     }
   }
 
   String _safeZoneTypeDescription(SafeZoneType type) {
     switch (type) {
-      case SafeZoneType.actionSafe: return '90% frame boundary';
-      case SafeZoneType.titleSafe: return '80% frame boundary';
-      case SafeZoneType.centerCross: return 'Thin crosshair at center';
-      case SafeZoneType.thirds: return 'Composition grid lines';
-      case SafeZoneType.centerMarker: return 'Circle + crosshair at center';
+      case SafeZoneType.actionSafe:
+        return '90% frame boundary';
+      case SafeZoneType.titleSafe:
+        return '80% frame boundary';
+      case SafeZoneType.centerCross:
+        return 'Thin crosshair at center';
+      case SafeZoneType.thirds:
+        return 'Composition grid lines';
+      case SafeZoneType.centerMarker:
+        return 'Circle + crosshair at center';
     }
   }
 
   Widget _buildPreviewContent(BuildContext context, EditorState state) {
-    final stillImage = _stillImageAtTime(
+    final activeMedia = _activeMediaAtTime(
       ref.watch(currentProjectProvider),
       state.currentTimeMs,
     );
-    if (stillImage != null) {
-      return LayoutBuilder(
-        builder: (context, constraints) {
-          final pixelRatio = MediaQuery.devicePixelRatioOf(context);
-          final cacheWidth = constraints.maxWidth.isFinite
-              ? (constraints.maxWidth * pixelRatio).round()
-              : null;
-          return Image.file(
-            File(stillImage.filePath),
-            fit: BoxFit.contain,
-            gaplessPlayback: true,
-            cacheWidth:
-                cacheWidth != null && cacheWidth > 0 ? cacheWidth : null,
-            errorBuilder: (context, error, stackTrace) =>
-                _buildImageUnavailable(context, stillImage.fileName),
-          );
-        },
-      );
+    if (activeMedia != null) {
+      final asset = activeMedia.asset;
+      if (asset.mediaType == MediaType.image) {
+        return LayoutBuilder(
+          builder: (context, constraints) {
+            final pixelRatio = MediaQuery.devicePixelRatioOf(context);
+            final cacheWidth = constraints.maxWidth.isFinite
+                ? (constraints.maxWidth * pixelRatio).round()
+                : null;
+            return Image.file(
+              File(asset.filePath),
+              fit: BoxFit.contain,
+              gaplessPlayback: true,
+              cacheWidth:
+                  cacheWidth != null && cacheWidth > 0 ? cacheWidth : null,
+              errorBuilder: (context, error, stackTrace) =>
+                  _buildImageUnavailable(context, asset.fileName),
+            );
+          },
+        );
+      }
+
+      if (asset.mediaType == MediaType.video &&
+          defaultTargetPlatform == TargetPlatform.android) {
+        return VideoClipPreview(
+          filePath: asset.filePath,
+          fileName: asset.fileName,
+          clipStartMs: activeMedia.clip.startMs,
+          trimStartMs: activeMedia.clip.trimStartMs,
+          speed: activeMedia.clip.speed * state.playbackSpeed,
+          currentTimeMs: state.currentTimeMs,
+          isPlaying: state.isPlaying,
+        );
+      }
     }
 
     // If we have decoded frame bytes, display them.
@@ -506,7 +559,7 @@ class _PreviewViewportState extends ConsumerState<PreviewViewport> {
     return _buildPlaceholder(context, state);
   }
 
-  MediaAssetModel? _stillImageAtTime(ProjectModel? project, int timeMs) {
+  _ActiveVideoClip? _activeMediaAtTime(ProjectModel? project, int timeMs) {
     if (project == null) return null;
 
     final activeClips = [
@@ -524,10 +577,8 @@ class _PreviewViewportState extends ConsumerState<PreviewViewport> {
 
     final clip = activeClips.single;
     for (final asset in project.mediaAssets) {
-      if (asset.id == clip.assetId &&
-          asset.mediaType == MediaType.image &&
-          asset.filePath.isNotEmpty) {
-        return asset;
+      if (asset.id == clip.assetId && asset.filePath.isNotEmpty) {
+        return _ActiveVideoClip(clip: clip, asset: asset);
       }
     }
     return null;
@@ -540,8 +591,11 @@ class _PreviewViewportState extends ConsumerState<PreviewViewport> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.broken_image_outlined,
-                size: 40, color: AppTheme.textDisabled),
+            const Icon(
+              Icons.broken_image_outlined,
+              size: 40,
+              color: AppTheme.textDisabled,
+            ),
             const SizedBox(height: 8),
             Text(
               'Image unavailable',
@@ -601,7 +655,10 @@ class _PreviewViewportState extends ConsumerState<PreviewViewport> {
   ///
   /// When a text clip is selected, this renders a draggable bounding box
   /// with resize handles on the preview viewport.
-  Widget _buildTextOverlayHandles(BuildContext context, EditorState editorState) {
+  Widget _buildTextOverlayHandles(
+    BuildContext context,
+    EditorState editorState,
+  ) {
     final project = ref.watch(currentProjectProvider);
     if (project == null || editorState.selectedClipId == null) {
       return const SizedBox.shrink();
@@ -628,7 +685,9 @@ class _PreviewViewportState extends ConsumerState<PreviewViewport> {
     // Create a TextOverlayData from the clip model
     final overlayData = TextOverlayData(
       clipId: selectedClip.id,
-      text: selectedClip.assetId.startsWith('text_') ? 'Text' : selectedClip.assetId,
+      text: selectedClip.assetId.startsWith('text_')
+          ? 'Text'
+          : selectedClip.assetId,
       positionX: 0.5,
       positionY: 0.5,
       width: 0.4,
@@ -676,7 +735,8 @@ class _PreviewViewportState extends ConsumerState<PreviewViewport> {
     }
 
     if (selectedClip == null) return const SizedBox.shrink();
-    if (selectedTrack?.trackType == TrackType.text) return const SizedBox.shrink();
+    if (selectedTrack?.trackType == TrackType.text)
+      return const SizedBox.shrink();
 
     // Calculate clip bounds relative to the preview area
     // Use a default centered rect for video/image clips
@@ -696,15 +756,15 @@ class _PreviewViewportState extends ConsumerState<PreviewViewport> {
         final normalizedDx = delta.dx / 320; // approximate preview width
         final normalizedDy = delta.dy / 180; // approximate preview height
         ref.read(editorProvider.notifier).updateClipTransform(
-          clipId: selectedClip!.id,
-          property: 'position_x',
-          delta: normalizedDx,
-        );
+              clipId: selectedClip!.id,
+              property: 'position_x',
+              delta: normalizedDx,
+            );
         ref.read(editorProvider.notifier).updateClipTransform(
-          clipId: selectedClip!.id,
-          property: 'position_y',
-          delta: normalizedDy,
-        );
+              clipId: selectedClip!.id,
+              property: 'position_y',
+              delta: normalizedDy,
+            );
       },
       onScaleStart: (handleType) {
         // Track initial scale for this handle type
@@ -713,18 +773,18 @@ class _PreviewViewportState extends ConsumerState<PreviewViewport> {
         // Convert pixel delta to normalized scale change
         final scaleDelta = 1.0 + (delta.dx + delta.dy) / 400;
         ref.read(editorProvider.notifier).updateClipTransform(
-          clipId: selectedClip!.id,
-          property: 'scale',
-          delta: scaleDelta - 1.0,
-        );
+              clipId: selectedClip!.id,
+              property: 'scale',
+              delta: scaleDelta - 1.0,
+            );
       },
       onRotate: (angleDelta) {
         // Add a rotation keyframe at the current time
         ref.read(editorProvider.notifier).updateClipTransform(
-          clipId: selectedClip!.id,
-          property: 'rotation',
-          delta: angleDelta,
-        );
+              clipId: selectedClip!.id,
+              property: 'rotation',
+              delta: angleDelta,
+            );
       },
     );
   }
@@ -789,6 +849,13 @@ class _PreviewViewportState extends ConsumerState<PreviewViewport> {
   }
 }
 
+class _ActiveVideoClip {
+  const _ActiveVideoClip({required this.clip, required this.asset});
+
+  final ClipModel clip;
+  final MediaAssetModel asset;
+}
+
 // ═══════════════════════════════════════════════════════════════════════
 // Overlay Toggle Button
 // ═══════════════════════════════════════════════════════════════════════
@@ -817,9 +884,7 @@ class _OverlayToggleButton extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
         decoration: BoxDecoration(
-          color: isActive
-              ? AppTheme.surfaceVariant
-              : Colors.transparent,
+          color: isActive ? AppTheme.surfaceVariant : Colors.transparent,
           borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
           border: Border.all(
             color: isActive ? AppTheme.primary : Colors.transparent,
@@ -838,7 +903,8 @@ class _OverlayToggleButton extends StatelessWidget {
             Text(
               label,
               style: TextStyle(
-                color: isActive ? AppTheme.primaryLight : AppTheme.textSecondary,
+                color:
+                    isActive ? AppTheme.primaryLight : AppTheme.textSecondary,
                 fontSize: 10,
                 fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
               ),
@@ -879,11 +945,7 @@ class _ZebraOverlayPainter extends CustomPainter {
       final endX = (offset - size.height).clamp(0.0, size.width);
       final endY = (offset - endX).clamp(0.0, size.height);
 
-      canvas.drawLine(
-        Offset(startX, startY),
-        Offset(endX, endY),
-        paint,
-      );
+      canvas.drawLine(Offset(startX, startY), Offset(endX, endY), paint);
     }
   }
 

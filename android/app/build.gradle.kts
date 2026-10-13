@@ -93,6 +93,15 @@ android {
         }
     }
 
+    packaging {
+        jniLibs {
+            excludes += setOf(
+                "**/libffmpegkit.so",
+                "**/libffmpegkit_abidetect.so",
+            )
+        }
+    }
+
     // Lint options for video editor
     lint {
         disable += "MissingTranslation"
