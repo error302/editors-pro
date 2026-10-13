@@ -728,6 +728,7 @@ class _PreviewViewportState extends ConsumerState<PreviewViewport> {
     if (selectedClip == null) return const SizedBox.shrink();
     if (selectedTrack?.trackType == TrackType.text)
       return const SizedBox.shrink();
+    final selectedClipId = selectedClip.id;
 
     // Calculate clip bounds relative to the preview area
     // Use a default centered rect for video/image clips
@@ -747,12 +748,12 @@ class _PreviewViewportState extends ConsumerState<PreviewViewport> {
         final normalizedDx = delta.dx / 320; // approximate preview width
         final normalizedDy = delta.dy / 180; // approximate preview height
         ref.read(editorProvider.notifier).updateClipTransform(
-              clipId: selectedClip.id,
+              clipId: selectedClipId,
               property: 'position_x',
               delta: normalizedDx,
             );
         ref.read(editorProvider.notifier).updateClipTransform(
-              clipId: selectedClip.id,
+              clipId: selectedClipId,
               property: 'position_y',
               delta: normalizedDy,
             );
@@ -764,7 +765,7 @@ class _PreviewViewportState extends ConsumerState<PreviewViewport> {
         // Convert pixel delta to normalized scale change
         final scaleDelta = 1.0 + (delta.dx + delta.dy) / 400;
         ref.read(editorProvider.notifier).updateClipTransform(
-              clipId: selectedClip!.id,
+              clipId: selectedClipId,
               property: 'scale',
               delta: scaleDelta - 1.0,
             );
