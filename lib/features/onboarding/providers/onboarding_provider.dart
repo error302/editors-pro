@@ -17,10 +17,9 @@ final onboardingCompletedProvider = StateProvider<bool>((ref) => false);
 /// Notifier that reads and persists the onboarding-completed flag
 /// to SharedPreferences.
 class OnboardingNotifier extends StateNotifier<bool> {
+  OnboardingNotifier(this._prefs) : super(_prefs.getBool(_key) ?? false);
   final SharedPreferences _prefs;
   static const _key = 'onboarding_completed';
-
-  OnboardingNotifier(this._prefs) : super(_prefs.getBool(_key) ?? false);
 
   /// Mark onboarding as completed and persist the flag.
   Future<void> completeOnboarding() async {

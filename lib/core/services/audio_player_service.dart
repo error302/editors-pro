@@ -11,12 +11,10 @@ import 'package:flutter/services.dart';
 /// The playback is synchronized with the video preview timer to keep
 /// audio and video within ±50ms.
 class AudioPlayerService {
+  AudioPlayerService._();
   static const _channel = MethodChannel('com.editorspro/audio');
 
-  static AudioPlayerService? _instance;
-  static AudioPlayerService get instance => _instance ??= AudioPlayerService._();
-
-  AudioPlayerService._();
+  static final AudioPlayerService instance = AudioPlayerService._();
 
   bool _isPlaying = false;
   bool _isInitialized = false;
@@ -197,7 +195,8 @@ class AudioPlayerService {
   /// audio buffer filled and synchronized with the video frame
   /// timer in the EditorNotifier.
   void startSynchronizedPlayback({
-    required Future<Float32List> Function(int startMs, int durationMs) sampleProvider,
+    required Future<Float32List> Function(int startMs, int durationMs)
+        sampleProvider,
     required void Function(int currentTimeMs) onTimeUpdate,
     int totalDurationMs = 0,
   }) {
@@ -209,7 +208,8 @@ class AudioPlayerService {
     const chunkDurationMs = 100; // Feed 100ms of audio at a time
     const tickMs = 33; // ~30fps timer tick
 
-    _playbackTimer = Timer.periodic(const Duration(milliseconds: tickMs), (timer) async {
+    _playbackTimer =
+        Timer.periodic(const Duration(milliseconds: tickMs), (timer) async {
       if (!_isPlaying) {
         timer.cancel();
         _playbackTimer = null;

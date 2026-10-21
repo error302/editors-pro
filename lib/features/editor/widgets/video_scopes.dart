@@ -1,7 +1,9 @@
-import 'dart:math';
 import 'dart:async';
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import '../../../core/theme/app_theme.dart';
 import '../providers/editor_provider.dart';
 
@@ -102,7 +104,8 @@ class _VideoScopesPanelState extends ConsumerState<VideoScopesPanel>
       height: 36,
       decoration: const BoxDecoration(
         color: Color(0xFF12121B),
-        borderRadius: BorderRadius.vertical(top: Radius.circular(AppTheme.radiusMedium)),
+        borderRadius:
+            BorderRadius.vertical(top: Radius.circular(AppTheme.radiusMedium)),
         border: Border(bottom: BorderSide(color: AppTheme.border, width: 1)),
       ),
       child: Row(
@@ -114,9 +117,8 @@ class _VideoScopesPanelState extends ConsumerState<VideoScopesPanel>
               child: Container(
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
-                  color: isActive
-                      ? const Color(0xFF1a1a2e)
-                      : Colors.transparent,
+                  color:
+                      isActive ? const Color(0xFF1a1a2e) : Colors.transparent,
                   border: isActive
                       ? const Border(
                           bottom: BorderSide(color: AppTheme.primary, width: 2),
@@ -167,7 +169,6 @@ class _VideoScopesPanelState extends ConsumerState<VideoScopesPanel>
   }
 
   CustomPainter _buildPainter(int effectiveSeed) {
-
     switch (_currentTab) {
       case ScopeTab.waveform:
         return WaveformPainter(seed: effectiveSeed, gain: _gain);
@@ -184,7 +185,9 @@ class _VideoScopesPanelState extends ConsumerState<VideoScopesPanel>
       padding: const EdgeInsets.symmetric(horizontal: 8),
       decoration: const BoxDecoration(
         color: Color(0xFF12121B),
-        borderRadius: BorderRadius.vertical(bottom: Radius.circular(AppTheme.radiusMedium)),
+        borderRadius: BorderRadius.vertical(
+          bottom: Radius.circular(AppTheme.radiusMedium),
+        ),
         border: Border(top: BorderSide(color: AppTheme.border, width: 1)),
       ),
       child: Row(
@@ -193,7 +196,7 @@ class _VideoScopesPanelState extends ConsumerState<VideoScopesPanel>
           _buildRefreshRateSelector(),
           const SizedBox(width: 12),
           // Gain label
-          Text(
+          const Text(
             'GAIN',
             style: TextStyle(
               fontSize: 9,
@@ -206,13 +209,13 @@ class _VideoScopesPanelState extends ConsumerState<VideoScopesPanel>
           // Gain slider
           Expanded(
             child: SliderTheme(
-              data: SliderThemeData(
+              data: const SliderThemeData(
                 activeTrackColor: AppTheme.primary,
                 thumbColor: AppTheme.primaryLight,
                 inactiveTrackColor: AppTheme.border,
                 trackHeight: 2,
-                thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
-                overlayShape: const RoundSliderOverlayShape(overlayRadius: 10),
+                thumbShape: RoundSliderThumbShape(enabledThumbRadius: 6),
+                overlayShape: RoundSliderOverlayShape(overlayRadius: 10),
               ),
               child: Slider(
                 value: _gain,
@@ -227,7 +230,7 @@ class _VideoScopesPanelState extends ConsumerState<VideoScopesPanel>
             width: 32,
             child: Text(
               '${_gain.toStringAsFixed(1)}x',
-              style: TextStyle(
+              style: const TextStyle(
                 fontSize: 9,
                 fontWeight: FontWeight.w500,
                 color: AppTheme.textSecondary,
@@ -257,30 +260,36 @@ class _VideoScopesPanelState extends ConsumerState<VideoScopesPanel>
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.speed, size: 12, color: AppTheme.textSecondary),
+            const Icon(Icons.speed, size: 12, color: AppTheme.textSecondary),
             const SizedBox(width: 4),
             Text(
               _refreshRateLabel(_refreshRate),
-              style: TextStyle(
+              style: const TextStyle(
                 fontSize: 9,
                 fontWeight: FontWeight.w500,
                 color: AppTheme.textPrimary,
                 fontFamily: 'Inter',
               ),
             ),
-            Icon(Icons.arrow_drop_down, size: 12, color: AppTheme.textSecondary),
+            const Icon(
+              Icons.arrow_drop_down,
+              size: 12,
+              color: AppTheme.textSecondary,
+            ),
           ],
         ),
       ),
       itemBuilder: (context) => ScopeRefreshRate.values
-          .map((rate) => PopupMenuItem(
-                value: rate,
-                height: 28,
-                child: Text(
-                  _refreshRateLabel(rate),
-                  style: const TextStyle(fontSize: 11, fontFamily: 'Inter'),
-                ),
-              ))
+          .map(
+            (rate) => PopupMenuItem(
+              value: rate,
+              height: 28,
+              child: Text(
+                _refreshRateLabel(rate),
+                style: const TextStyle(fontSize: 11, fontFamily: 'Inter'),
+              ),
+            ),
+          )
           .toList(),
     );
   }
@@ -305,10 +314,9 @@ class _VideoScopesPanelState extends ConsumerState<VideoScopesPanel>
 /// for each column of the frame. Classic green CRT trace on dark background
 /// with IRE scale markings and graticule lines.
 class WaveformPainter extends CustomPainter {
+  WaveformPainter({required this.seed, required this.gain});
   final int seed;
   final double gain;
-
-  WaveformPainter({required this.seed, required this.gain});
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -339,14 +347,13 @@ class WaveformPainter extends CustomPainter {
       canvas.drawLine(
         Offset(28, y),
         Offset(size.width, y),
-        gridPaint..color = isMajor
-            ? const Color(0xFF3a3a52)
-            : const Color(0xFF1e1e34),
+        gridPaint
+          ..color = isMajor ? const Color(0xFF3a3a52) : const Color(0xFF1e1e34),
       );
     }
 
     // Vertical column guides (every 60px)
-    for (double x = 28.0 + 60.0; x < size.width; x += 60.0) {
+    for (var x = 28.0 + 60.0; x < size.width; x += 60.0) {
       canvas.drawLine(
         Offset(x, 0),
         Offset(x, size.height),
@@ -358,10 +365,18 @@ class WaveformPainter extends CustomPainter {
     final legalPaint = Paint()
       ..color = const Color(0xFF5c3a3a)
       ..strokeWidth = 1.0;
-    _drawDashedLine(canvas, Offset(28, _ireToY(0, size.height)),
-        Offset(size.width, _ireToY(0, size.height)), legalPaint);
-    _drawDashedLine(canvas, Offset(28, _ireToY(100, size.height)),
-        Offset(size.width, _ireToY(100, size.height)), legalPaint);
+    _drawDashedLine(
+      canvas,
+      Offset(28, _ireToY(0, size.height)),
+      Offset(size.width, _ireToY(0, size.height)),
+      legalPaint,
+    );
+    _drawDashedLine(
+      canvas,
+      Offset(28, _ireToY(100, size.height)),
+      Offset(size.width, _ireToY(100, size.height)),
+      legalPaint,
+    );
   }
 
   void _drawIRELabels(Canvas canvas, Size size) {
@@ -386,7 +401,7 @@ class WaveformPainter extends CustomPainter {
   void _drawWaveformTrace(Canvas canvas, Size size) {
     final random = Random(seed);
     final traceWidth = size.width - 28; // leave room for IRE labels
-    final traceStartX = 28.0;
+    const traceStartX = 28.0;
     final colCount = traceWidth.toInt();
 
     // Generate luma data per column — simulates a real video signal
@@ -416,20 +431,20 @@ class WaveformPainter extends CustomPainter {
       final detail2 = cos(normalizedX * pi * 31 + seed * 0.002) * 3;
       final detail3 = sin(normalizedX * pi * 53 + seed * 0.003) * 2;
 
-      return (base + noise + detail1 + detail2 + detail3)
-          .clamp(0.0, 100.0);
+      return (base + noise + detail1 + detail2 + detail3).clamp(0.0, 100.0);
     });
 
     // Draw glow layer (wider, dimmer)
     final glowPaint = Paint()
-      ..color = const Color(0xFF00ff41).withOpacity((0.12 * gain.clamp(0.2, 2.0)).clamp(0.0, 1.0))
+      ..color = const Color(0xFF00ff41)
+          .withValues(alpha: (0.12 * gain.clamp(0.2, 2.0)).clamp(0.0, 1.0))
       ..strokeWidth = 4.0
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3);
 
     final glowPath = Path();
-    for (int i = 0; i < colCount; i++) {
+    for (var i = 0; i < colCount; i++) {
       final x = traceStartX + i.toDouble();
       final y = _ireToY(lumaData[i], size.height);
       if (i == 0) {
@@ -442,14 +457,15 @@ class WaveformPainter extends CustomPainter {
 
     // Draw main trace line (bright green, CRT style)
     final tracePaint = Paint()
-      ..color = const Color(0xFF00ff41).withOpacity((0.85 * gain.clamp(0.2, 2.0)).clamp(0.0, 1.0))
+      ..color = const Color(0xFF00ff41)
+          .withValues(alpha: (0.85 * gain.clamp(0.2, 2.0)).clamp(0.0, 1.0))
       ..strokeWidth = 1.2
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round
       ..strokeJoin = StrokeJoin.round;
 
     final tracePath = Path();
-    for (int i = 0; i < colCount; i++) {
+    for (var i = 0; i < colCount; i++) {
       final x = traceStartX + i.toDouble();
       final y = _ireToY(lumaData[i], size.height);
       if (i == 0) {
@@ -462,13 +478,14 @@ class WaveformPainter extends CustomPainter {
 
     // Draw brighter peak emphasis at high-IRE areas
     final peakPaint = Paint()
-      ..color = const Color(0xFF66ff88).withOpacity((0.5 * gain.clamp(0.2, 2.0)).clamp(0.0, 1.0))
+      ..color = const Color(0xFF66ff88)
+          .withValues(alpha: (0.5 * gain.clamp(0.2, 2.0)).clamp(0.0, 1.0))
       ..strokeWidth = 0.8
       ..style = PaintingStyle.stroke;
 
     final peakPath = Path();
-    bool peakStarted = false;
-    for (int i = 0; i < colCount; i++) {
+    var peakStarted = false;
+    for (var i = 0; i < colCount; i++) {
       if (lumaData[i] > 65 * gain.clamp(0.2, 2.0).clamp(0.0, 1.5)) {
         final x = traceStartX + i.toDouble();
         final y = _ireToY(lumaData[i], size.height);
@@ -526,10 +543,9 @@ class WaveformPainter extends CustomPainter {
 /// and Luma channels. Each channel is rendered as a filled area with
 /// semi-transparent color, overlapping to show channel interaction.
 class HistogramPainter extends CustomPainter {
+  HistogramPainter({required this.seed, required this.gain});
   final int seed;
   final double gain;
-
-  HistogramPainter({required this.seed, required this.gain});
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -595,20 +611,19 @@ class HistogramPainter extends CustomPainter {
     }
 
     // Evaluate Gaussian mixture
-    for (int i = 0; i < binCount; i++) {
+    for (var i = 0; i < binCount; i++) {
       double val = 0;
       for (final peak in peaks) {
         final center = peak[0];
         final sigma = peak[1];
         final amplitude = peak[2];
-        val += amplitude *
-            exp(-pow(i - center, 2) / (2 * sigma * sigma));
+        val += amplitude * exp(-pow(i - center, 2) / (2 * sigma * sigma));
       }
       bins[i] = val;
     }
 
     // Add noise for realism
-    for (int i = 0; i < binCount; i++) {
+    for (var i = 0; i < binCount; i++) {
       bins[i] += (random.nextDouble() - 0.5) * 0.03;
       bins[i] = bins[i].clamp(0.0, 1.0);
     }
@@ -616,7 +631,13 @@ class HistogramPainter extends CustomPainter {
     return bins;
   }
 
-  void _drawChannel(Canvas canvas, Size size, List<double> data, Color color, double alpha) {
+  void _drawChannel(
+    Canvas canvas,
+    Size size,
+    List<double> data,
+    Color color,
+    double alpha,
+  ) {
     const leftPad = 28.0;
     const topPad = 8.0;
     const bottomPad = 16.0;
@@ -634,7 +655,7 @@ class HistogramPainter extends CustomPainter {
     final path = Path();
     path.moveTo(leftPad, size.height - bottomPad);
 
-    for (int i = 0; i < data.length; i++) {
+    for (var i = 0; i < data.length; i++) {
       final x = leftPad + (i / (data.length - 1)) * drawWidth;
       final h = (data[i] * normFactor).clamp(0.0, 1.0) * drawHeight;
       final y = size.height - bottomPad - h;
@@ -646,13 +667,13 @@ class HistogramPainter extends CustomPainter {
 
     // Fill
     final fillPaint = Paint()
-      ..color = color.withOpacity(alpha)
+      ..color = color.withValues(alpha: alpha)
       ..style = PaintingStyle.fill;
     canvas.drawPath(path, fillPaint);
 
     // Stroke outline
     final strokePath = Path();
-    for (int i = 0; i < data.length; i++) {
+    for (var i = 0; i < data.length; i++) {
       final x = leftPad + (i / (data.length - 1)) * drawWidth;
       final h = (data[i] * normFactor).clamp(0.0, 1.0) * drawHeight;
       final y = size.height - bottomPad - h;
@@ -664,7 +685,7 @@ class HistogramPainter extends CustomPainter {
     }
 
     final strokePaint = Paint()
-      ..color = color.withOpacity(alpha + 0.2)
+      ..color = color.withValues(alpha: alpha + 0.2)
       ..strokeWidth = 1.0
       ..style = PaintingStyle.stroke;
     canvas.drawPath(strokePath, strokePaint);
@@ -682,15 +703,23 @@ class HistogramPainter extends CustomPainter {
       ..strokeWidth = 0.5;
 
     // Horizontal lines
-    for (int i = 0; i <= 4; i++) {
+    for (var i = 0; i <= 4; i++) {
       final y = topPad + (drawHeight / 4) * i;
-      canvas.drawLine(Offset(leftPad, y), Offset(leftPad + drawWidth, y), gridPaint);
+      canvas.drawLine(
+        Offset(leftPad, y),
+        Offset(leftPad + drawWidth, y),
+        gridPaint,
+      );
     }
 
     // Vertical lines at 0, 64, 128, 192, 255
     for (final v in [0.0, 0.25, 0.5, 0.75, 1.0]) {
       final x = leftPad + v * drawWidth;
-      canvas.drawLine(Offset(x, topPad), Offset(x, size.height - bottomPad), gridPaint);
+      canvas.drawLine(
+        Offset(x, topPad),
+        Offset(x, size.height - bottomPad),
+        gridPaint,
+      );
     }
   }
 
@@ -727,7 +756,7 @@ class HistogramPainter extends CustomPainter {
       text: const TextSpan(text: '%', style: yLabelStyle),
       textDirection: TextDirection.ltr,
     )..layout();
-    yTp.paint(canvas, Offset(2, 4));
+    yTp.paint(canvas, const Offset(2, 4));
   }
 
   void _drawLegend(Canvas canvas, Size size) {
@@ -738,7 +767,7 @@ class HistogramPainter extends CustomPainter {
       ('B', Color(0xFF4488ff)),
     ];
 
-    double x = size.width - 8;
+    var x = size.width - 8;
     const y = 10.0;
 
     for (final item in items.reversed) {
@@ -779,10 +808,9 @@ enum _ChannelType { luma, red, green, blue }
 /// U/V plot. Includes the reference color wheel, color target boxes for
 /// primary/secondary colors, and the skin tone line.
 class VectorscopePainter extends CustomPainter {
+  VectorscopePainter({required this.seed, required this.gain});
   final int seed;
   final double gain;
-
-  VectorscopePainter({required this.seed, required this.gain});
 
   // Standard ITU-R BT.709 vectorscope target angles (degrees from +U axis):
   // Red:      104.9°  (V positive)
@@ -820,8 +848,9 @@ class VectorscopePainter extends CustomPainter {
 
     final cx = size.width / 2;
     final cy = size.height / 2;
-    final radius =
-        (min(size.width, size.height) / 2 - 16).clamp(0.0, double.infinity).toDouble();
+    final radius = (min(size.width, size.height) / 2 - 16)
+        .clamp(0.0, double.infinity)
+        .toDouble();
 
     // ── Color wheel (reference ring) ────────────────────────────────
     _drawColorWheel(canvas, cx, cy, radius);
@@ -845,7 +874,7 @@ class VectorscopePainter extends CustomPainter {
   void _drawColorWheel(Canvas canvas, double cx, double cy, double radius) {
     // Draw a subtle color wheel ring showing hue around the perimeter
     const segments = 360;
-    for (int i = 0; i < segments; i++) {
+    for (var i = 0; i < segments; i++) {
       final angle1 = (i - 90) * pi / 180;
       final angle2 = (i + 1 - 90) * pi / 180;
 
@@ -853,10 +882,16 @@ class VectorscopePainter extends CustomPainter {
       final color = HSVColor.fromAHSV(0.15, hue / 360.0, 0.8, 1.0).toColor();
 
       final path = Path()
-        ..moveTo(cx + cos(angle1) * (radius - 6), cy + sin(angle1) * (radius - 6))
+        ..moveTo(
+          cx + cos(angle1) * (radius - 6),
+          cy + sin(angle1) * (radius - 6),
+        )
         ..lineTo(cx + cos(angle1) * radius, cy + sin(angle1) * radius)
         ..lineTo(cx + cos(angle2) * radius, cy + sin(angle2) * radius)
-        ..lineTo(cx + cos(angle2) * (radius - 6), cy + sin(angle2) * (radius - 6))
+        ..lineTo(
+          cx + cos(angle2) * (radius - 6),
+          cy + sin(angle2) * (radius - 6),
+        )
         ..close();
 
       canvas.drawPath(path, Paint()..color = color);
@@ -870,13 +905,21 @@ class VectorscopePainter extends CustomPainter {
       ..style = PaintingStyle.stroke;
 
     // Concentric circles at 20%, 40%, 60%, 80%, 100%
-    for (double r = 0.2; r <= 1.0; r += 0.2) {
+    for (var r = 0.2; r <= 1.0; r += 0.2) {
       canvas.drawCircle(Offset(cx, cy), radius * r, gridPaint);
     }
 
     // Cross hairs (U and V axes)
-    canvas.drawLine(Offset(cx - radius, cy), Offset(cx + radius, cy), gridPaint);
-    canvas.drawLine(Offset(cx, cy - radius), Offset(cx, cy + radius), gridPaint);
+    canvas.drawLine(
+      Offset(cx - radius, cy),
+      Offset(cx + radius, cy),
+      gridPaint,
+    );
+    canvas.drawLine(
+      Offset(cx, cy - radius),
+      Offset(cx, cy + radius),
+      gridPaint,
+    );
 
     // Diagonal lines (connecting complementary color targets)
     final diagPaint = Paint()
@@ -895,7 +938,14 @@ class VectorscopePainter extends CustomPainter {
     _drawLineAtAngle(canvas, cx, cy, radius, 167.1, diagPaint);
   }
 
-  void _drawLineAtAngle(Canvas canvas, double cx, double cy, double radius, double angleDeg, Paint paint) {
+  void _drawLineAtAngle(
+    Canvas canvas,
+    double cx,
+    double cy,
+    double radius,
+    double angleDeg,
+    Paint paint,
+  ) {
     final angle = (angleDeg - 90) * pi / 180;
     canvas.drawLine(
       Offset(cx, cy),
@@ -918,9 +968,13 @@ class VectorscopePainter extends CustomPainter {
 
       // Target box outline
       canvas.drawRect(
-        Rect.fromCenter(center: Offset(x, y), width: targetSize, height: targetSize),
+        Rect.fromCenter(
+          center: Offset(x, y),
+          width: targetSize,
+          height: targetSize,
+        ),
         Paint()
-          ..color = color.withOpacity(0.8)
+          ..color = color.withValues(alpha: 0.8)
           ..strokeWidth = 1.5
           ..style = PaintingStyle.stroke,
       );
@@ -933,7 +987,7 @@ class VectorscopePainter extends CustomPainter {
         text: TextSpan(
           text: entry.key,
           style: TextStyle(
-            color: color.withOpacity(0.7),
+            color: color.withValues(alpha: 0.7),
             fontSize: 7,
             fontFamily: 'Inter',
             fontWeight: FontWeight.w700,
@@ -949,7 +1003,7 @@ class VectorscopePainter extends CustomPainter {
   }
 
   void _drawSkinToneLine(Canvas canvas, double cx, double cy, double radius) {
-    final angle = (_skinToneAngle - 90) * pi / 180;
+    const angle = (_skinToneAngle - 90) * pi / 180;
     final startDist = radius * 0.15;
     final endDist = radius * 0.65;
 
@@ -988,7 +1042,12 @@ class VectorscopePainter extends CustomPainter {
     );
   }
 
-  void _drawChrominanceData(Canvas canvas, double cx, double cy, double radius) {
+  void _drawChrominanceData(
+    Canvas canvas,
+    double cx,
+    double cy,
+    double radius,
+  ) {
     final random = Random(seed);
 
     // Generate clusters of chrominance data points
@@ -996,46 +1055,43 @@ class VectorscopePainter extends CustomPainter {
     final clusters = <List<double>>[];
 
     // Skin tone cluster (most common in video)
-    for (int i = 0; i < 40; i++) {
-      final angle = (_skinToneAngle - 90) * pi / 180 +
-          (random.nextDouble() - 0.5) * 0.4;
+    for (var i = 0; i < 40; i++) {
+      final angle =
+          (_skinToneAngle - 90) * pi / 180 + (random.nextDouble() - 0.5) * 0.4;
       final dist = (0.25 + random.nextDouble() * 0.3) * radius;
       clusters.add([cx + cos(angle) * dist, cy + sin(angle) * dist]);
     }
 
     // Neutral/white cluster (center)
-    for (int i = 0; i < 20; i++) {
+    for (var i = 0; i < 20; i++) {
       final angle = random.nextDouble() * 2 * pi;
       final dist = random.nextDouble() * 0.12 * radius;
       clusters.add([cx + cos(angle) * dist, cy + sin(angle) * dist]);
     }
 
     // Red channel cluster
-    for (int i = 0; i < 15; i++) {
-      final angle = (104.9 - 90) * pi / 180 +
-          (random.nextDouble() - 0.5) * 0.5;
+    for (var i = 0; i < 15; i++) {
+      final angle = (104.9 - 90) * pi / 180 + (random.nextDouble() - 0.5) * 0.5;
       final dist = (0.3 + random.nextDouble() * 0.35) * radius;
       clusters.add([cx + cos(angle) * dist, cy + sin(angle) * dist]);
     }
 
     // Green channel cluster
-    for (int i = 0; i < 12; i++) {
-      final angle = (240.7 - 90) * pi / 180 +
-          (random.nextDouble() - 0.5) * 0.5;
+    for (var i = 0; i < 12; i++) {
+      final angle = (240.7 - 90) * pi / 180 + (random.nextDouble() - 0.5) * 0.5;
       final dist = (0.2 + random.nextDouble() * 0.3) * radius;
       clusters.add([cx + cos(angle) * dist, cy + sin(angle) * dist]);
     }
 
     // Blue channel cluster
-    for (int i = 0; i < 10; i++) {
-      final angle = (347.1 - 90) * pi / 180 +
-          (random.nextDouble() - 0.5) * 0.5;
+    for (var i = 0; i < 10; i++) {
+      final angle = (347.1 - 90) * pi / 180 + (random.nextDouble() - 0.5) * 0.5;
       final dist = (0.2 + random.nextDouble() * 0.25) * radius;
       clusters.add([cx + cos(angle) * dist, cy + sin(angle) * dist]);
     }
 
     // Scattered low-saturation points
-    for (int i = 0; i < 30; i++) {
+    for (var i = 0; i < 30; i++) {
       final angle = random.nextDouble() * 2 * pi;
       final dist = random.nextDouble() * 0.5 * radius;
       clusters.add([cx + cos(angle) * dist, cy + sin(angle) * dist]);
@@ -1043,7 +1099,8 @@ class VectorscopePainter extends CustomPainter {
 
     // Draw glow layer first
     final glowPaint = Paint()
-      ..color = const Color(0xFF00ff41).withOpacity((0.06 * gain.clamp(0.2, 2.0)).clamp(0.0, 1.0))
+      ..color = const Color(0xFF00ff41)
+          .withValues(alpha: (0.06 * gain.clamp(0.2, 2.0)).clamp(0.0, 1.0))
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
 
     for (final point in clusters) {
@@ -1052,7 +1109,8 @@ class VectorscopePainter extends CustomPainter {
 
     // Draw data points
     final dotPaint = Paint()
-      ..color = const Color(0xFF00ff41).withOpacity((0.35 * gain.clamp(0.2, 2.0)).clamp(0.0, 1.0));
+      ..color = const Color(0xFF00ff41)
+          .withValues(alpha: (0.35 * gain.clamp(0.2, 2.0)).clamp(0.0, 1.0));
 
     for (final point in clusters) {
       canvas.drawCircle(Offset(point[0], point[1]), 1.8, dotPaint);
@@ -1060,12 +1118,13 @@ class VectorscopePainter extends CustomPainter {
 
     // Brighter core for dense clusters
     final corePaint = Paint()
-      ..color = const Color(0xFF66ff88).withOpacity((0.5 * gain.clamp(0.2, 2.0)).clamp(0.0, 1.0));
+      ..color = const Color(0xFF66ff88)
+          .withValues(alpha: (0.5 * gain.clamp(0.2, 2.0)).clamp(0.0, 1.0));
 
     // Count nearby points to find density
-    for (int i = 0; i < clusters.length; i++) {
-      int neighbors = 0;
-      for (int j = 0; j < clusters.length; j++) {
+    for (var i = 0; i < clusters.length; i++) {
+      var neighbors = 0;
+      for (var j = 0; j < clusters.length; j++) {
         if (i == j) continue;
         final dx = clusters[i][0] - clusters[j][0];
         final dy = clusters[i][1] - clusters[j][1];
@@ -1081,7 +1140,13 @@ class VectorscopePainter extends CustomPainter {
     }
   }
 
-  void _drawLabels(Canvas canvas, double cx, double cy, double radius, Size size) {
+  void _drawLabels(
+    Canvas canvas,
+    double cx,
+    double cy,
+    double radius,
+    Size size,
+  ) {
     const labelStyle = TextStyle(
       color: Color(0xFF6a6a8a),
       fontSize: 7,
@@ -1114,7 +1179,10 @@ class VectorscopePainter extends CustomPainter {
       text: const TextSpan(text: '75%', style: labelStyle),
       textDirection: TextDirection.ltr,
     )..layout();
-    p75Label.paint(canvas, Offset(cx + radius * 0.75 - p75Label.width - 2, cy + 2));
+    p75Label.paint(
+      canvas,
+      Offset(cx + radius * 0.75 - p75Label.width - 2, cy + 2),
+    );
 
     // 100% circle label
     final p100Label = TextPainter(

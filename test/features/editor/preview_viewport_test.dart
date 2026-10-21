@@ -1,13 +1,12 @@
-import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_test/flutter_test.dart';
-
 import 'package:editors_pro/core/services/engine_service.dart';
 import 'package:editors_pro/core/services/project_repository.dart';
 import 'package:editors_pro/data/models/project_model.dart';
 import 'package:editors_pro/features/editor/providers/editor_provider.dart';
 import 'package:editors_pro/features/editor/widgets/preview_viewport.dart';
 import 'package:editors_pro/features/projects/providers/project_provider.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -72,7 +71,7 @@ void main() {
     testWidgets('shows the active still image from the project media library',
         (tester) async {
       const imagePath = '/media/project/photo.jpg';
-      final project = ProjectModel(
+      const project = ProjectModel(
         id: 'project-1',
         name: 'Image preview test',
         createdAt: 0,
@@ -80,7 +79,7 @@ void main() {
         width: 1920,
         height: 1080,
         fps: 30,
-        tracks: const [
+        tracks: [
           TrackModel(
             id: 'video-1',
             name: 'Video 1',
@@ -95,7 +94,7 @@ void main() {
             ],
           ),
         ],
-        mediaAssets: const [
+        mediaAssets: [
           MediaAssetModel(
             id: 'asset-1',
             filePath: imagePath,

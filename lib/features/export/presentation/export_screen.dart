@@ -122,17 +122,14 @@ class _ExportScreenState extends ConsumerState<ExportScreen>
               const SizedBox(height: 12),
               _buildPresetSelector(context, presets),
               const SizedBox(height: 24),
-
               _buildSectionHeading(context, 'Codec'),
               const SizedBox(height: 12),
               _buildCodecSelector(),
               const SizedBox(height: 24),
-
               _buildSectionHeading(context, 'Format'),
               const SizedBox(height: 12),
               _buildFormatSelector(),
               const SizedBox(height: 24),
-
               _buildExportSummary(context),
               const SizedBox(height: 28),
             ],
@@ -226,7 +223,7 @@ class _ExportScreenState extends ConsumerState<ExportScreen>
                       begin: Alignment.bottomCenter,
                       end: Alignment.topCenter,
                       colors: [
-                        Colors.black.withOpacity(0.3),
+                        Colors.black.withValues(alpha: 0.3),
                         Colors.transparent,
                       ],
                     ),
@@ -288,7 +285,7 @@ class _ExportScreenState extends ConsumerState<ExportScreen>
             ),
             decoration: BoxDecoration(
               color: isSelected
-                  ? AppTheme.accent.withOpacity(0.12)
+                  ? AppTheme.accent.withValues(alpha: 0.12)
                   : AppTheme.surfaceVariant,
               borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
               border: Border.all(
@@ -548,8 +545,7 @@ class _ExportScreenState extends ConsumerState<ExportScreen>
                   ? null
                   : state.progress,
               backgroundColor: AppTheme.border,
-              valueColor:
-                  const AlwaysStoppedAnimation<Color>(AppTheme.accent),
+              valueColor: const AlwaysStoppedAnimation<Color>(AppTheme.accent),
               minHeight: 12,
             ),
           ),
@@ -625,9 +621,10 @@ class _ExportScreenState extends ConsumerState<ExportScreen>
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: AppTheme.warning.withOpacity(0.1),
+              color: AppTheme.warning.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
-              border: Border.all(color: AppTheme.warning.withOpacity(0.3)),
+              border:
+                  Border.all(color: AppTheme.warning.withValues(alpha: 0.3)),
             ),
             child: Row(
               children: [
@@ -694,7 +691,9 @@ class _ExportScreenState extends ConsumerState<ExportScreen>
             height: size,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: status == 'pending' ? AppTheme.surfaceVariant : AppTheme.accent,
+              color: status == 'pending'
+                  ? AppTheme.surfaceVariant
+                  : AppTheme.accent,
               border: Border.all(
                 color: status == 'pending' ? AppTheme.border : AppTheme.accent,
                 width: 2,
@@ -708,12 +707,10 @@ class _ExportScreenState extends ConsumerState<ExportScreen>
             label,
             style: TextStyle(
               fontSize: 11,
-              color: status == 'pending'
-                  ? AppTheme.textDisabled
-                  : AppTheme.accent,
-              fontWeight: status == 'pending'
-                  ? FontWeight.w500
-                  : FontWeight.bold,
+              color:
+                  status == 'pending' ? AppTheme.textDisabled : AppTheme.accent,
+              fontWeight:
+                  status == 'pending' ? FontWeight.w500 : FontWeight.bold,
             ),
           ),
         ],
@@ -791,11 +788,11 @@ class _ExportScreenState extends ConsumerState<ExportScreen>
             height: 64,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: AppTheme.success.withOpacity(0.15),
+              color: AppTheme.success.withValues(alpha: 0.15),
               border: Border.all(color: AppTheme.success, width: 2),
               boxShadow: [
                 BoxShadow(
-                  color: AppTheme.success.withOpacity(0.4),
+                  color: AppTheme.success.withValues(alpha: 0.4),
                   blurRadius: 24,
                   spreadRadius: 4,
                 ),
@@ -874,8 +871,7 @@ class _ExportScreenState extends ConsumerState<ExportScreen>
 
           // Share Video button (accent gradient, full width)
           _buildGradientButton(
-            onTap: () =>
-                ref.read(exportProvider.notifier).shareExportedFile(),
+            onTap: () => ref.read(exportProvider.notifier).shareExportedFile(),
             icon: AppIcons.share,
             label: 'Share Video',
           ),
@@ -893,7 +889,11 @@ class _ExportScreenState extends ConsumerState<ExportScreen>
                 });
                 ref.read(exportProvider.notifier).reset();
               },
-              icon: const Icon(Icons.refresh, size: 20, color: AppTheme.textPrimary),
+              icon: const Icon(
+                Icons.refresh,
+                size: 20,
+                color: AppTheme.textPrimary,
+              ),
               label: const Text('Export Again'),
               style: OutlinedButton.styleFrom(
                 foregroundColor: AppTheme.textPrimary,
@@ -927,11 +927,11 @@ class _ExportScreenState extends ConsumerState<ExportScreen>
             height: 64,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: AppTheme.error.withOpacity(0.15),
+              color: AppTheme.error.withValues(alpha: 0.15),
               border: Border.all(color: AppTheme.error, width: 2),
               boxShadow: [
                 BoxShadow(
-                  color: AppTheme.error.withOpacity(0.3),
+                  color: AppTheme.error.withValues(alpha: 0.3),
                   blurRadius: 20,
                   spreadRadius: 2,
                 ),

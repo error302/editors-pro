@@ -12,14 +12,13 @@ import '../../../core/theme/app_theme.dart';
 /// to a 3D camera solve if motion is parallax-heavy. See
 /// persona/skills/video-stabilization/SKILL.md.
 class StabilizationPanel extends StatefulWidget {
-  final void Function(StabilizationValues values) onChanged;
-  final StabilizationValues initialValues;
-
   const StabilizationPanel({
-    super.key,
     required this.onChanged,
+    super.key,
     this.initialValues = StabilizationValues.defaults,
   });
+  final void Function(StabilizationValues values) onChanged;
+  final StabilizationValues initialValues;
 
   @override
   State<StabilizationPanel> createState() => _StabilizationPanelState();
@@ -44,8 +43,10 @@ class _StabilizationPanelState extends State<StabilizationPanel> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Stabilization',
-            style: Theme.of(context).textTheme.titleMedium),
+        Text(
+          'Stabilization',
+          style: Theme.of(context).textTheme.titleMedium,
+        ),
         const SizedBox(height: AppTheme.spacing4),
         Text(
           '2D deshake via block matching. Smooth 30–60%, crop 8–12% to hide '
@@ -66,7 +67,8 @@ class _StabilizationPanelState extends State<StabilizationPanel> {
           Text('Smoothing', style: Theme.of(context).textTheme.bodyMedium),
           Slider(
             value: _v.smoothing,
-            min: 0.0, max: 1.0,
+            min: 0.0,
+            max: 1.0,
             divisions: 100,
             label: '${(_v.smoothing * 100).round()}%',
             onChanged: (v) => _update(_v.copyWith(smoothing: v)),
@@ -82,7 +84,8 @@ class _StabilizationPanelState extends State<StabilizationPanel> {
           Text('Crop', style: Theme.of(context).textTheme.bodyMedium),
           Slider(
             value: _v.crop,
-            min: 0.0, max: 0.3,
+            min: 0.0,
+            max: 0.3,
             divisions: 60,
             label: '${(_v.crop * 100).round()}%',
             onChanged: (v) => _update(_v.copyWith(crop: v)),
@@ -106,11 +109,13 @@ class _StabilizationPanelState extends State<StabilizationPanel> {
               ButtonSegment(
                 value: StabilizationMotionMode.locked,
                 label: Text('Locked'),
-                tooltip: 'Lock the camera (no motion). Use for tripod emulation.',
+                tooltip:
+                    'Lock the camera (no motion). Use for tripod emulation.',
               ),
             ],
             selected: {_v.motionMode},
-            onSelectionChanged: (s) => _update(_v.copyWith(motionMode: s.first)),
+            onSelectionChanged: (s) =>
+                _update(_v.copyWith(motionMode: s.first)),
           ),
           const SizedBox(height: AppTheme.spacing16),
           // 3D upgrade notice
@@ -145,17 +150,16 @@ class _StabilizationPanelState extends State<StabilizationPanel> {
 enum StabilizationMotionMode { smooth, locked }
 
 class StabilizationValues {
-  final bool enabled;
-  final double smoothing;
-  final double crop;
-  final StabilizationMotionMode motionMode;
-
   const StabilizationValues({
     this.enabled = false,
     this.smoothing = 0.5,
     this.crop = 0.1,
     this.motionMode = StabilizationMotionMode.smooth,
   });
+  final bool enabled;
+  final double smoothing;
+  final double crop;
+  final StabilizationMotionMode motionMode;
 
   static const defaults = StabilizationValues();
 

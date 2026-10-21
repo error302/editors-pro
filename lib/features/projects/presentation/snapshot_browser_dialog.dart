@@ -42,7 +42,9 @@ class _SnapshotBrowserDialogState extends ConsumerState<SnapshotBrowserDialog> {
       _error = null;
     });
     try {
-      final snapshots = await ref.read(projectProvider.notifier).listSnapshots();
+      final snapshots =
+          await ref.read(projectProvider.notifier).listSnapshots();
+      if (!mounted) return;
       // Show most recent first.
       final sorted = snapshots.reversed.toList();
       setState(() {
@@ -50,6 +52,7 @@ class _SnapshotBrowserDialogState extends ConsumerState<SnapshotBrowserDialog> {
         _loading = false;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _error = '$e';
         _loading = false;
@@ -59,6 +62,7 @@ class _SnapshotBrowserDialogState extends ConsumerState<SnapshotBrowserDialog> {
 
   Future<void> _createSnapshot() async {
     final id = await ref.read(projectProvider.notifier).createSnapshot();
+    if (!mounted) return;
     if (id != null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Snapshot created')),
@@ -230,9 +234,9 @@ class _SnapshotBrowserDialogState extends ConsumerState<SnapshotBrowserDialog> {
                           ),
                         )
                       : _snapshots.isEmpty
-                          ? Center(
+                          ? const Center(
                               child: Padding(
-                                padding: const EdgeInsets.all(AppTheme.spacing24),
+                                padding: EdgeInsets.all(AppTheme.spacing24),
                                 child: Column(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
@@ -241,16 +245,16 @@ class _SnapshotBrowserDialogState extends ConsumerState<SnapshotBrowserDialog> {
                                       size: 48,
                                       color: AppTheme.textDisabled,
                                     ),
-                                    const SizedBox(height: AppTheme.spacing12),
-                                    const Text(
+                                    SizedBox(height: AppTheme.spacing12),
+                                    Text(
                                       'No snapshots yet',
                                       style: TextStyle(
                                         color: AppTheme.textSecondary,
                                         fontWeight: FontWeight.w500,
                                       ),
                                     ),
-                                    const SizedBox(height: AppTheme.spacing4),
-                                    const Text(
+                                    SizedBox(height: AppTheme.spacing4),
+                                    Text(
                                       'Create a snapshot to save the current\nstate for later rollback.',
                                       textAlign: TextAlign.center,
                                       style: TextStyle(

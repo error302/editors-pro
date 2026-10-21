@@ -3,8 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../core/theme/app_theme.dart';
 import '../../../core/extensions/context_extensions.dart';
+import '../../../core/theme/app_theme.dart';
 import '../providers/template_provider.dart';
 
 /// Template category filter options
@@ -17,9 +17,9 @@ enum TemplateCategoryFilter {
   business('Business', Icons.business),
   celebration('Celebration', Icons.celebration);
 
+  const TemplateCategoryFilter(this.label, this.icon);
   final String label;
   final IconData icon;
-  const TemplateCategoryFilter(this.label, this.icon);
 }
 
 /// Hardcoded built-in templates (mirrors Rust engine templates)
@@ -150,365 +150,422 @@ const _builtInTemplates = [
 const _templateSlots = <String, List<PlaceholderSlotData>>{
   'tmpl-social-intro': [
     PlaceholderSlotData(
-        id: 'slot-social-intro-video-1',
-        label: 'Opening hook clip',
-        mediaType: 'video',
-        startMs: 0,
-        expectedDurationMs: 5000),
+      id: 'slot-social-intro-video-1',
+      label: 'Opening hook clip',
+      mediaType: 'video',
+      startMs: 0,
+      expectedDurationMs: 5000,
+    ),
     PlaceholderSlotData(
-        id: 'slot-social-intro-video-2',
-        label: 'Main content clip',
-        mediaType: 'video',
-        startMs: 5000,
-        expectedDurationMs: 5000),
+      id: 'slot-social-intro-video-2',
+      label: 'Main content clip',
+      mediaType: 'video',
+      startMs: 5000,
+      expectedDurationMs: 5000,
+    ),
     PlaceholderSlotData(
-        id: 'slot-social-intro-video-3',
-        label: 'Closing clip',
-        mediaType: 'video',
-        startMs: 10000,
-        expectedDurationMs: 5000),
+      id: 'slot-social-intro-video-3',
+      label: 'Closing clip',
+      mediaType: 'video',
+      startMs: 10000,
+      expectedDurationMs: 5000,
+    ),
     PlaceholderSlotData(
-        id: 'slot-social-intro-text-1',
-        label: 'Title text overlay',
-        mediaType: 'image',
-        startMs: 0,
-        expectedDurationMs: 4000),
+      id: 'slot-social-intro-text-1',
+      label: 'Title text overlay',
+      mediaType: 'image',
+      startMs: 0,
+      expectedDurationMs: 4000,
+    ),
   ],
   'tmpl-cinematic-widescreen': [
     PlaceholderSlotData(
-        id: 'slot-cinematic-video-1',
-        label: 'Opening wide shot',
-        mediaType: 'video',
-        startMs: 0,
-        expectedDurationMs: 8000),
+      id: 'slot-cinematic-video-1',
+      label: 'Opening wide shot',
+      mediaType: 'video',
+      startMs: 0,
+      expectedDurationMs: 8000,
+    ),
     PlaceholderSlotData(
-        id: 'slot-cinematic-video-2',
-        label: 'Reveal shot',
-        mediaType: 'video',
-        startMs: 8000,
-        expectedDurationMs: 7000),
+      id: 'slot-cinematic-video-2',
+      label: 'Reveal shot',
+      mediaType: 'video',
+      startMs: 8000,
+      expectedDurationMs: 7000,
+    ),
     PlaceholderSlotData(
-        id: 'slot-cinematic-video-3',
-        label: 'Action sequence',
-        mediaType: 'video',
-        startMs: 15000,
-        expectedDurationMs: 8000),
+      id: 'slot-cinematic-video-3',
+      label: 'Action sequence',
+      mediaType: 'video',
+      startMs: 15000,
+      expectedDurationMs: 8000,
+    ),
     PlaceholderSlotData(
-        id: 'slot-cinematic-video-4',
-        label: 'Final establishing shot',
-        mediaType: 'video',
-        startMs: 23000,
-        expectedDurationMs: 7000),
+      id: 'slot-cinematic-video-4',
+      label: 'Final establishing shot',
+      mediaType: 'video',
+      startMs: 23000,
+      expectedDurationMs: 7000,
+    ),
     PlaceholderSlotData(
-        id: 'slot-cinematic-text-1',
-        label: 'Opening title card',
-        mediaType: 'image',
-        startMs: 0,
-        expectedDurationMs: 5000),
+      id: 'slot-cinematic-text-1',
+      label: 'Opening title card',
+      mediaType: 'image',
+      startMs: 0,
+      expectedDurationMs: 5000,
+    ),
     PlaceholderSlotData(
-        id: 'slot-cinematic-text-2',
-        label: 'Closing title card',
-        mediaType: 'image',
-        startMs: 25000,
-        expectedDurationMs: 5000),
+      id: 'slot-cinematic-text-2',
+      label: 'Closing title card',
+      mediaType: 'image',
+      startMs: 25000,
+      expectedDurationMs: 5000,
+    ),
   ],
   'tmpl-tutorial-steps': [
     PlaceholderSlotData(
-        id: 'slot-tutorial-video-1',
-        label: 'Step 1 recording',
-        mediaType: 'video',
-        startMs: 0,
-        expectedDurationMs: 12000),
+      id: 'slot-tutorial-video-1',
+      label: 'Step 1 recording',
+      mediaType: 'video',
+      startMs: 0,
+      expectedDurationMs: 12000,
+    ),
     PlaceholderSlotData(
-        id: 'slot-tutorial-text-1',
-        label: 'Step 1 title',
-        mediaType: 'image',
-        startMs: 0,
-        expectedDurationMs: 4000),
+      id: 'slot-tutorial-text-1',
+      label: 'Step 1 title',
+      mediaType: 'image',
+      startMs: 0,
+      expectedDurationMs: 4000,
+    ),
     PlaceholderSlotData(
-        id: 'slot-tutorial-video-2',
-        label: 'Step 2 recording',
-        mediaType: 'video',
-        startMs: 12000,
-        expectedDurationMs: 12000),
+      id: 'slot-tutorial-video-2',
+      label: 'Step 2 recording',
+      mediaType: 'video',
+      startMs: 12000,
+      expectedDurationMs: 12000,
+    ),
     PlaceholderSlotData(
-        id: 'slot-tutorial-text-2',
-        label: 'Step 2 title',
-        mediaType: 'image',
-        startMs: 12000,
-        expectedDurationMs: 4000),
+      id: 'slot-tutorial-text-2',
+      label: 'Step 2 title',
+      mediaType: 'image',
+      startMs: 12000,
+      expectedDurationMs: 4000,
+    ),
     PlaceholderSlotData(
-        id: 'slot-tutorial-video-3',
-        label: 'Step 3 recording',
-        mediaType: 'video',
-        startMs: 24000,
-        expectedDurationMs: 12000),
+      id: 'slot-tutorial-video-3',
+      label: 'Step 3 recording',
+      mediaType: 'video',
+      startMs: 24000,
+      expectedDurationMs: 12000,
+    ),
     PlaceholderSlotData(
-        id: 'slot-tutorial-text-3',
-        label: 'Step 3 title',
-        mediaType: 'image',
-        startMs: 24000,
-        expectedDurationMs: 4000),
+      id: 'slot-tutorial-text-3',
+      label: 'Step 3 title',
+      mediaType: 'image',
+      startMs: 24000,
+      expectedDurationMs: 4000,
+    ),
     PlaceholderSlotData(
-        id: 'slot-tutorial-video-4',
-        label: 'Step 4 recording',
-        mediaType: 'video',
-        startMs: 36000,
-        expectedDurationMs: 12000),
+      id: 'slot-tutorial-video-4',
+      label: 'Step 4 recording',
+      mediaType: 'video',
+      startMs: 36000,
+      expectedDurationMs: 12000,
+    ),
     PlaceholderSlotData(
-        id: 'slot-tutorial-text-4',
-        label: 'Step 4 title',
-        mediaType: 'image',
-        startMs: 36000,
-        expectedDurationMs: 4000),
+      id: 'slot-tutorial-text-4',
+      label: 'Step 4 title',
+      mediaType: 'image',
+      startMs: 36000,
+      expectedDurationMs: 4000,
+    ),
     PlaceholderSlotData(
-        id: 'slot-tutorial-video-5',
-        label: 'Step 5 recording',
-        mediaType: 'video',
-        startMs: 48000,
-        expectedDurationMs: 12000),
+      id: 'slot-tutorial-video-5',
+      label: 'Step 5 recording',
+      mediaType: 'video',
+      startMs: 48000,
+      expectedDurationMs: 12000,
+    ),
     PlaceholderSlotData(
-        id: 'slot-tutorial-text-5',
-        label: 'Step 5 title',
-        mediaType: 'image',
-        startMs: 48000,
-        expectedDurationMs: 4000),
+      id: 'slot-tutorial-text-5',
+      label: 'Step 5 title',
+      mediaType: 'image',
+      startMs: 48000,
+      expectedDurationMs: 4000,
+    ),
   ],
   'tmpl-vlog-highlight': [
     PlaceholderSlotData(
-        id: 'slot-vlog-video-1',
-        label: 'Highlight clip 1',
-        mediaType: 'video',
-        startMs: 0,
-        expectedDurationMs: 5000),
+      id: 'slot-vlog-video-1',
+      label: 'Highlight clip 1',
+      mediaType: 'video',
+      startMs: 0,
+      expectedDurationMs: 5000,
+    ),
     PlaceholderSlotData(
-        id: 'slot-vlog-video-2',
-        label: 'Highlight clip 2',
-        mediaType: 'video',
-        startMs: 5000,
-        expectedDurationMs: 5000),
+      id: 'slot-vlog-video-2',
+      label: 'Highlight clip 2',
+      mediaType: 'video',
+      startMs: 5000,
+      expectedDurationMs: 5000,
+    ),
     PlaceholderSlotData(
-        id: 'slot-vlog-video-3',
-        label: 'Highlight clip 3',
-        mediaType: 'video',
-        startMs: 10000,
-        expectedDurationMs: 5000),
+      id: 'slot-vlog-video-3',
+      label: 'Highlight clip 3',
+      mediaType: 'video',
+      startMs: 10000,
+      expectedDurationMs: 5000,
+    ),
     PlaceholderSlotData(
-        id: 'slot-vlog-video-4',
-        label: 'Highlight clip 4',
-        mediaType: 'video',
-        startMs: 15000,
-        expectedDurationMs: 5000),
+      id: 'slot-vlog-video-4',
+      label: 'Highlight clip 4',
+      mediaType: 'video',
+      startMs: 15000,
+      expectedDurationMs: 5000,
+    ),
   ],
   'tmpl-business-presentation': [
     PlaceholderSlotData(
-        id: 'slot-biz-video-1',
-        label: 'Introduction clip',
-        mediaType: 'video',
-        startMs: 0,
-        expectedDurationMs: 15000),
+      id: 'slot-biz-video-1',
+      label: 'Introduction clip',
+      mediaType: 'video',
+      startMs: 0,
+      expectedDurationMs: 15000,
+    ),
     PlaceholderSlotData(
-        id: 'slot-biz-video-2',
-        label: 'Main content clip',
-        mediaType: 'video',
-        startMs: 15000,
-        expectedDurationMs: 15000),
+      id: 'slot-biz-video-2',
+      label: 'Main content clip',
+      mediaType: 'video',
+      startMs: 15000,
+      expectedDurationMs: 15000,
+    ),
     PlaceholderSlotData(
-        id: 'slot-biz-video-3',
-        label: 'Conclusion clip',
-        mediaType: 'video',
-        startMs: 30000,
-        expectedDurationMs: 15000),
+      id: 'slot-biz-video-3',
+      label: 'Conclusion clip',
+      mediaType: 'video',
+      startMs: 30000,
+      expectedDurationMs: 15000,
+    ),
     PlaceholderSlotData(
-        id: 'slot-biz-text-1',
-        label: 'Speaker name title',
-        mediaType: 'image',
-        startMs: 0,
-        expectedDurationMs: 5000),
+      id: 'slot-biz-text-1',
+      label: 'Speaker name title',
+      mediaType: 'image',
+      startMs: 0,
+      expectedDurationMs: 5000,
+    ),
     PlaceholderSlotData(
-        id: 'slot-biz-text-2',
-        label: 'Key point 1 callout',
-        mediaType: 'image',
-        startMs: 15000,
-        expectedDurationMs: 5000),
+      id: 'slot-biz-text-2',
+      label: 'Key point 1 callout',
+      mediaType: 'image',
+      startMs: 15000,
+      expectedDurationMs: 5000,
+    ),
     PlaceholderSlotData(
-        id: 'slot-biz-text-3',
-        label: 'Key point 2 callout',
-        mediaType: 'image',
-        startMs: 22000,
-        expectedDurationMs: 5000),
+      id: 'slot-biz-text-3',
+      label: 'Key point 2 callout',
+      mediaType: 'image',
+      startMs: 22000,
+      expectedDurationMs: 5000,
+    ),
     PlaceholderSlotData(
-        id: 'slot-biz-text-4',
-        label: 'Closing title card',
-        mediaType: 'image',
-        startMs: 38000,
-        expectedDurationMs: 7000),
+      id: 'slot-biz-text-4',
+      label: 'Closing title card',
+      mediaType: 'image',
+      startMs: 38000,
+      expectedDurationMs: 7000,
+    ),
   ],
   'tmpl-celebration-card': [
     PlaceholderSlotData(
-        id: 'slot-celebration-video-1',
-        label: 'Celebration moment 1',
-        mediaType: 'video',
-        startMs: 0,
-        expectedDurationMs: 5000),
+      id: 'slot-celebration-video-1',
+      label: 'Celebration moment 1',
+      mediaType: 'video',
+      startMs: 0,
+      expectedDurationMs: 5000,
+    ),
     PlaceholderSlotData(
-        id: 'slot-celebration-video-2',
-        label: 'Celebration moment 2',
-        mediaType: 'video',
-        startMs: 5000,
-        expectedDurationMs: 5000),
+      id: 'slot-celebration-video-2',
+      label: 'Celebration moment 2',
+      mediaType: 'video',
+      startMs: 5000,
+      expectedDurationMs: 5000,
+    ),
     PlaceholderSlotData(
-        id: 'slot-celebration-text-1',
-        label: 'Greeting headline',
-        mediaType: 'image',
-        startMs: 0,
-        expectedDurationMs: 5000),
+      id: 'slot-celebration-text-1',
+      label: 'Greeting headline',
+      mediaType: 'image',
+      startMs: 0,
+      expectedDurationMs: 5000,
+    ),
     PlaceholderSlotData(
-        id: 'slot-celebration-text-2',
-        label: 'Personal message',
-        mediaType: 'image',
-        startMs: 5000,
-        expectedDurationMs: 5000),
+      id: 'slot-celebration-text-2',
+      label: 'Personal message',
+      mediaType: 'image',
+      startMs: 5000,
+      expectedDurationMs: 5000,
+    ),
   ],
   'tmpl-instagram-reel': [
     PlaceholderSlotData(
-        id: 'slot-reel-video-1',
-        label: 'Hook clip',
-        mediaType: 'video',
-        startMs: 0,
-        expectedDurationMs: 5000),
+      id: 'slot-reel-video-1',
+      label: 'Hook clip',
+      mediaType: 'video',
+      startMs: 0,
+      expectedDurationMs: 5000,
+    ),
     PlaceholderSlotData(
-        id: 'slot-reel-video-2',
-        label: 'Main content clip',
-        mediaType: 'video',
-        startMs: 5000,
-        expectedDurationMs: 5000),
+      id: 'slot-reel-video-2',
+      label: 'Main content clip',
+      mediaType: 'video',
+      startMs: 5000,
+      expectedDurationMs: 5000,
+    ),
     PlaceholderSlotData(
-        id: 'slot-reel-video-3',
-        label: 'Outro clip',
-        mediaType: 'video',
-        startMs: 10000,
-        expectedDurationMs: 5000),
+      id: 'slot-reel-video-3',
+      label: 'Outro clip',
+      mediaType: 'video',
+      startMs: 10000,
+      expectedDurationMs: 5000,
+    ),
     PlaceholderSlotData(
-        id: 'slot-reel-text-1',
-        label: 'Caption overlay',
-        mediaType: 'image',
-        startMs: 0,
-        expectedDurationMs: 6000),
+      id: 'slot-reel-text-1',
+      label: 'Caption overlay',
+      mediaType: 'image',
+      startMs: 0,
+      expectedDurationMs: 6000,
+    ),
   ],
   'tmpl-product-showcase': [
     PlaceholderSlotData(
-        id: 'slot-product-video-1',
-        label: 'Hero product shot',
-        mediaType: 'video',
-        startMs: 0,
-        expectedDurationMs: 7000),
+      id: 'slot-product-video-1',
+      label: 'Hero product shot',
+      mediaType: 'video',
+      startMs: 0,
+      expectedDurationMs: 7000,
+    ),
     PlaceholderSlotData(
-        id: 'slot-product-video-2',
-        label: 'Product detail closeup',
-        mediaType: 'video',
-        startMs: 7000,
-        expectedDurationMs: 7000),
+      id: 'slot-product-video-2',
+      label: 'Product detail closeup',
+      mediaType: 'video',
+      startMs: 7000,
+      expectedDurationMs: 7000,
+    ),
     PlaceholderSlotData(
-        id: 'slot-product-video-3',
-        label: 'Lifestyle / in-use shot',
-        mediaType: 'video',
-        startMs: 14000,
-        expectedDurationMs: 6000),
+      id: 'slot-product-video-3',
+      label: 'Lifestyle / in-use shot',
+      mediaType: 'video',
+      startMs: 14000,
+      expectedDurationMs: 6000,
+    ),
     PlaceholderSlotData(
-        id: 'slot-product-text-1',
-        label: 'Product name label',
-        mediaType: 'image',
-        startMs: 0,
-        expectedDurationMs: 5000),
+      id: 'slot-product-text-1',
+      label: 'Product name label',
+      mediaType: 'image',
+      startMs: 0,
+      expectedDurationMs: 5000,
+    ),
     PlaceholderSlotData(
-        id: 'slot-product-text-2',
-        label: 'Feature highlight 1',
-        mediaType: 'image',
-        startMs: 7000,
-        expectedDurationMs: 5000),
+      id: 'slot-product-text-2',
+      label: 'Feature highlight 1',
+      mediaType: 'image',
+      startMs: 7000,
+      expectedDurationMs: 5000,
+    ),
     PlaceholderSlotData(
-        id: 'slot-product-text-3',
-        label: 'Price / CTA label',
-        mediaType: 'image',
-        startMs: 14000,
-        expectedDurationMs: 5000),
+      id: 'slot-product-text-3',
+      label: 'Price / CTA label',
+      mediaType: 'image',
+      startMs: 14000,
+      expectedDurationMs: 5000,
+    ),
   ],
   'tmpl-travel-montage': [
     PlaceholderSlotData(
-        id: 'slot-travel-video-1',
-        label: 'Travel clip 1',
-        mediaType: 'video',
-        startMs: 0,
-        expectedDurationMs: 6000),
+      id: 'slot-travel-video-1',
+      label: 'Travel clip 1',
+      mediaType: 'video',
+      startMs: 0,
+      expectedDurationMs: 6000,
+    ),
     PlaceholderSlotData(
-        id: 'slot-travel-video-2',
-        label: 'Travel clip 2',
-        mediaType: 'video',
-        startMs: 6000,
-        expectedDurationMs: 6000),
+      id: 'slot-travel-video-2',
+      label: 'Travel clip 2',
+      mediaType: 'video',
+      startMs: 6000,
+      expectedDurationMs: 6000,
+    ),
     PlaceholderSlotData(
-        id: 'slot-travel-video-3',
-        label: 'Travel clip 3',
-        mediaType: 'video',
-        startMs: 12000,
-        expectedDurationMs: 6000),
+      id: 'slot-travel-video-3',
+      label: 'Travel clip 3',
+      mediaType: 'video',
+      startMs: 12000,
+      expectedDurationMs: 6000,
+    ),
     PlaceholderSlotData(
-        id: 'slot-travel-video-4',
-        label: 'Travel clip 4',
-        mediaType: 'video',
-        startMs: 18000,
-        expectedDurationMs: 6000),
+      id: 'slot-travel-video-4',
+      label: 'Travel clip 4',
+      mediaType: 'video',
+      startMs: 18000,
+      expectedDurationMs: 6000,
+    ),
     PlaceholderSlotData(
-        id: 'slot-travel-video-5',
-        label: 'Travel clip 5',
-        mediaType: 'video',
-        startMs: 24000,
-        expectedDurationMs: 6000),
+      id: 'slot-travel-video-5',
+      label: 'Travel clip 5',
+      mediaType: 'video',
+      startMs: 24000,
+      expectedDurationMs: 6000,
+    ),
     PlaceholderSlotData(
-        id: 'slot-travel-text-1',
-        label: 'Destination title card',
-        mediaType: 'image',
-        startMs: 0,
-        expectedDurationMs: 6000),
+      id: 'slot-travel-text-1',
+      label: 'Destination title card',
+      mediaType: 'image',
+      startMs: 0,
+      expectedDurationMs: 6000,
+    ),
   ],
   'tmpl-quick-tutorial': [
     PlaceholderSlotData(
-        id: 'slot-qt-video-1',
-        label: 'Step 1 demo clip',
-        mediaType: 'video',
-        startMs: 0,
-        expectedDurationMs: 10000),
+      id: 'slot-qt-video-1',
+      label: 'Step 1 demo clip',
+      mediaType: 'video',
+      startMs: 0,
+      expectedDurationMs: 10000,
+    ),
     PlaceholderSlotData(
-        id: 'slot-qt-video-2',
-        label: 'Step 2 demo clip',
-        mediaType: 'video',
-        startMs: 10000,
-        expectedDurationMs: 10000),
+      id: 'slot-qt-video-2',
+      label: 'Step 2 demo clip',
+      mediaType: 'video',
+      startMs: 10000,
+      expectedDurationMs: 10000,
+    ),
     PlaceholderSlotData(
-        id: 'slot-qt-video-3',
-        label: 'Step 3 demo clip',
-        mediaType: 'video',
-        startMs: 20000,
-        expectedDurationMs: 10000),
+      id: 'slot-qt-video-3',
+      label: 'Step 3 demo clip',
+      mediaType: 'video',
+      startMs: 20000,
+      expectedDurationMs: 10000,
+    ),
     PlaceholderSlotData(
-        id: 'slot-qt-text-1',
-        label: 'Step 1 label',
-        mediaType: 'image',
-        startMs: 0,
-        expectedDurationMs: 5000),
+      id: 'slot-qt-text-1',
+      label: 'Step 1 label',
+      mediaType: 'image',
+      startMs: 0,
+      expectedDurationMs: 5000,
+    ),
     PlaceholderSlotData(
-        id: 'slot-qt-text-2',
-        label: 'Step 2 label',
-        mediaType: 'image',
-        startMs: 10000,
-        expectedDurationMs: 5000),
+      id: 'slot-qt-text-2',
+      label: 'Step 2 label',
+      mediaType: 'image',
+      startMs: 10000,
+      expectedDurationMs: 5000,
+    ),
     PlaceholderSlotData(
-        id: 'slot-qt-text-3',
-        label: 'Step 3 label',
-        mediaType: 'image',
-        startMs: 20000,
-        expectedDurationMs: 5000),
+      id: 'slot-qt-text-3',
+      label: 'Step 3 label',
+      mediaType: 'image',
+      startMs: 20000,
+      expectedDurationMs: 5000,
+    ),
   ],
 };
 
@@ -521,8 +578,7 @@ class TemplateBrowserScreen extends ConsumerStatefulWidget {
       _TemplateBrowserScreenState();
 }
 
-class _TemplateBrowserScreenState
-    extends ConsumerState<TemplateBrowserScreen> {
+class _TemplateBrowserScreenState extends ConsumerState<TemplateBrowserScreen> {
   TemplateCategoryFilter _selectedCategory = TemplateCategoryFilter.all;
   String _searchQuery = '';
 
@@ -532,18 +588,19 @@ class _TemplateBrowserScreenState
     // Filter by category
     if (_selectedCategory != TemplateCategoryFilter.all) {
       final categoryName = _selectedCategory.label;
-      templates =
-          templates.where((t) => t.category == categoryName).toList();
+      templates = templates.where((t) => t.category == categoryName).toList();
     }
 
     // Filter by search query (matches name, description, or tags)
     if (_searchQuery.isNotEmpty) {
       final query = _searchQuery.toLowerCase();
       templates = templates
-          .where((t) =>
-              t.name.toLowerCase().contains(query) ||
-              t.description.toLowerCase().contains(query) ||
-              t.tags.any((tag) => tag.contains(query)))
+          .where(
+            (t) =>
+                t.name.toLowerCase().contains(query) ||
+                t.description.toLowerCase().contains(query) ||
+                t.tags.any((tag) => tag.contains(query)),
+          )
           .toList();
     }
 
@@ -666,7 +723,7 @@ class _TemplateBrowserScreenState
           Icon(
             Icons.search_off,
             size: 64,
-            color: AppTheme.textDisabled.withOpacity(0.5),
+            color: AppTheme.textDisabled.withValues(alpha: 0.5),
           ),
           const SizedBox(height: AppTheme.spacing16),
           Text(
@@ -704,15 +761,14 @@ class _TemplateBrowserScreenState
 
 /// Category filter chip
 class _CategoryChip extends StatelessWidget {
-  final TemplateCategoryFilter category;
-  final bool isSelected;
-  final VoidCallback onTap;
-
   const _CategoryChip({
     required this.category,
     required this.isSelected,
     required this.onTap,
   });
+  final TemplateCategoryFilter category;
+  final bool isSelected;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -726,7 +782,7 @@ class _CategoryChip extends StatelessWidget {
         ),
         decoration: BoxDecoration(
           color: isSelected
-              ? AppTheme.primary.withOpacity(0.2)
+              ? AppTheme.primary.withValues(alpha: 0.2)
               : AppTheme.surfaceVariant,
           borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
           border: Border.all(
@@ -760,13 +816,12 @@ class _CategoryChip extends StatelessWidget {
 
 /// Template card widget for the grid
 class _TemplateCard extends StatelessWidget {
-  final TemplateData template;
-  final VoidCallback onTap;
-
   const _TemplateCard({
     required this.template,
     required this.onTap,
   });
+  final TemplateData template;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -778,7 +833,7 @@ class _TemplateCard extends StatelessWidget {
           color: AppTheme.cardColor,
           borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
           border: Border.all(
-            color: AppTheme.textDisabled.withOpacity(0.1),
+            color: AppTheme.textDisabled.withValues(alpha: 0.1),
             width: 1,
           ),
         ),
@@ -790,7 +845,7 @@ class _TemplateCard extends StatelessWidget {
               flex: 3,
               child: Container(
                 decoration: BoxDecoration(
-                  color: _categoryColor().withOpacity(0.15),
+                  color: _categoryColor().withValues(alpha: 0.15),
                   borderRadius: const BorderRadius.vertical(
                     top: Radius.circular(AppTheme.radiusMedium),
                   ),
@@ -805,7 +860,7 @@ class _TemplateCard extends StatelessWidget {
                           Icon(
                             _categoryIcon(),
                             size: 32,
-                            color: _categoryColor().withOpacity(0.7),
+                            color: _categoryColor().withValues(alpha: 0.7),
                           ),
                           const SizedBox(height: 4),
                           Text(
@@ -813,7 +868,7 @@ class _TemplateCard extends StatelessWidget {
                             style: TextStyle(
                               fontSize: 12,
                               fontWeight: FontWeight.w600,
-                              color: _categoryColor().withOpacity(0.8),
+                              color: _categoryColor().withValues(alpha: 0.8),
                             ),
                           ),
                         ],
@@ -830,7 +885,7 @@ class _TemplateCard extends StatelessWidget {
                           vertical: 3,
                         ),
                         decoration: BoxDecoration(
-                          color: Colors.black.withOpacity(0.6),
+                          color: Colors.black.withValues(alpha: 0.6),
                           borderRadius: BorderRadius.circular(4),
                         ),
                         child: Text(
@@ -854,7 +909,7 @@ class _TemplateCard extends StatelessWidget {
                           vertical: 3,
                         ),
                         decoration: BoxDecoration(
-                          color: Colors.black.withOpacity(0.6),
+                          color: Colors.black.withValues(alpha: 0.6),
                           borderRadius: BorderRadius.circular(4),
                         ),
                         child: Row(
@@ -898,7 +953,7 @@ class _TemplateCard extends StatelessWidget {
                         vertical: 2,
                       ),
                       decoration: BoxDecoration(
-                        color: _categoryColor().withOpacity(0.15),
+                        color: _categoryColor().withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(3),
                       ),
                       child: Text(
@@ -984,9 +1039,8 @@ class _TemplateCard extends StatelessWidget {
 
 /// Template detail bottom sheet with "Create Project" flow
 class _TemplateDetailSheet extends ConsumerStatefulWidget {
-  final TemplateData template;
-
   const _TemplateDetailSheet({required this.template});
+  final TemplateData template;
 
   @override
   ConsumerState<_TemplateDetailSheet> createState() =>
@@ -1037,7 +1091,7 @@ class _TemplateDetailSheetState extends ConsumerState<_TemplateDetailSheet> {
                   width: 40,
                   height: 4,
                   decoration: BoxDecoration(
-                    color: AppTheme.textDisabled.withOpacity(0.3),
+                    color: AppTheme.textDisabled.withValues(alpha: 0.3),
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
@@ -1059,7 +1113,7 @@ class _TemplateDetailSheetState extends ConsumerState<_TemplateDetailSheet> {
                       vertical: 4,
                     ),
                     decoration: BoxDecoration(
-                      color: AppTheme.primary.withOpacity(0.15),
+                      color: AppTheme.primary.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(6),
                     ),
                     child: Text(
@@ -1183,9 +1237,8 @@ class _TemplateDetailSheetState extends ConsumerState<_TemplateDetailSheet> {
                   isFilled: isFilled,
                   assignedPath: _assignments[slot.id],
                   onPickMedia: () => _pickMediaForSlot(slot),
-                  onRemove: isFilled
-                      ? () => _removeMediaFromSlot(slot.id)
-                      : null,
+                  onRemove:
+                      isFilled ? () => _removeMediaFromSlot(slot.id) : null,
                 );
               }),
 
@@ -1220,7 +1273,7 @@ class _TemplateDetailSheetState extends ConsumerState<_TemplateDetailSheet> {
                   style: ElevatedButton.styleFrom(
                     backgroundColor: _canCreate
                         ? AppTheme.primary
-                        : AppTheme.textDisabled.withOpacity(0.3),
+                        : AppTheme.textDisabled.withValues(alpha: 0.3),
                     foregroundColor: Colors.white,
                   ),
                 ),
@@ -1316,10 +1369,9 @@ class _TemplateDetailSheetState extends ConsumerState<_TemplateDetailSheet> {
 
 /// Stat badge widget
 class _StatBadge extends StatelessWidget {
+  const _StatBadge({required this.icon, required this.label});
   final IconData icon;
   final String label;
-
-  const _StatBadge({required this.icon, required this.label});
 
   @override
   Widget build(BuildContext context) {
@@ -1349,19 +1401,18 @@ class _StatBadge extends StatelessWidget {
 
 /// Placeholder slot item in the detail sheet
 class _PlaceholderSlotItem extends StatelessWidget {
+  const _PlaceholderSlotItem({
+    required this.slot,
+    required this.isFilled,
+    required this.onPickMedia,
+    this.assignedPath,
+    this.onRemove,
+  });
   final PlaceholderSlotData slot;
   final bool isFilled;
   final String? assignedPath;
   final VoidCallback onPickMedia;
   final VoidCallback? onRemove;
-
-  const _PlaceholderSlotItem({
-    required this.slot,
-    required this.isFilled,
-    this.assignedPath,
-    required this.onPickMedia,
-    this.onRemove,
-  });
 
   @override
   Widget build(BuildContext context) {
@@ -1376,13 +1427,13 @@ class _PlaceholderSlotItem extends StatelessWidget {
           padding: const EdgeInsets.all(AppTheme.spacing12),
           decoration: BoxDecoration(
             color: isFilled
-                ? AppTheme.success.withOpacity(0.08)
+                ? AppTheme.success.withValues(alpha: 0.08)
                 : AppTheme.surfaceVariant,
             borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
             border: Border.all(
               color: isFilled
-                  ? AppTheme.success.withOpacity(0.3)
-                  : AppTheme.textDisabled.withOpacity(0.15),
+                  ? AppTheme.success.withValues(alpha: 0.3)
+                  : AppTheme.textDisabled.withValues(alpha: 0.15),
               width: 1,
             ),
           ),
@@ -1394,21 +1445,24 @@ class _PlaceholderSlotItem extends StatelessWidget {
                 height: 28,
                 decoration: BoxDecoration(
                   color: isFilled
-                      ? AppTheme.success.withOpacity(0.15)
+                      ? AppTheme.success.withValues(alpha: 0.15)
                       : (isVideoSlot
-                          ? AppTheme.primary.withOpacity(0.1)
-                          : AppTheme.accent.withOpacity(0.1)),
+                          ? AppTheme.primary.withValues(alpha: 0.1)
+                          : AppTheme.accent.withValues(alpha: 0.1)),
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: Center(
                   child: isFilled
-                      ? const Icon(Icons.check, size: 16, color: AppTheme.success)
+                      ? const Icon(
+                          Icons.check,
+                          size: 16,
+                          color: AppTheme.success,
+                        )
                       : Icon(
                           isVideoSlot ? Icons.videocam : Icons.image,
                           size: 16,
-                          color: isVideoSlot
-                              ? AppTheme.primary
-                              : AppTheme.accent,
+                          color:
+                              isVideoSlot ? AppTheme.primary : AppTheme.accent,
                         ),
                 ),
               ),
@@ -1433,9 +1487,8 @@ class _PlaceholderSlotItem extends StatelessWidget {
                           ? assignedPath!.split('/').last
                           : 'Tap to select ${isVideoSlot ? "video" : "image"}',
                       style: context.textTheme.bodySmall?.copyWith(
-                        color: isFilled
-                            ? AppTheme.success
-                            : AppTheme.textDisabled,
+                        color:
+                            isFilled ? AppTheme.success : AppTheme.textDisabled,
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
@@ -1468,9 +1521,8 @@ class _PlaceholderSlotItem extends StatelessWidget {
                 Icon(
                   isFilled ? Icons.swap_horiz : Icons.add_circle_outline,
                   size: 20,
-                  color: isFilled
-                      ? AppTheme.textSecondary
-                      : AppTheme.primaryLight,
+                  color:
+                      isFilled ? AppTheme.textSecondary : AppTheme.primaryLight,
                 ),
             ],
           ),

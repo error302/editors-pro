@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../core/theme/app_theme.dart';
 import '../../../core/extensions/context_extensions.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../data/models/project_model.dart';
 import '../../projects/providers/project_provider.dart';
 import '../providers/editor_provider.dart';
@@ -38,20 +38,49 @@ class _TextPanelState extends ConsumerState<TextPanel> {
     {'name': 'Open Sans', 'family': 'Open Sans', 'style': 'Regular'},
     {'name': 'Lato', 'family': 'Lato', 'style': 'Regular'},
     {'name': 'Montserrat', 'family': 'Montserrat', 'style': 'Regular'},
-    {'name': 'Playfair Display', 'family': 'Playfair Display', 'style': 'Regular'},
+    {
+      'name': 'Playfair Display',
+      'family': 'Playfair Display',
+      'style': 'Regular',
+    },
     {'name': 'Oswald', 'family': 'Oswald', 'style': 'Regular'},
     {'name': 'Raleway', 'family': 'Raleway', 'style': 'Regular'},
   ];
 
   static const List<Map<String, dynamic>> _textPresets = [
-    {'name': 'Title', 'description': 'Large bold text', 'icon': Icons.title, 'fontSize': 72.0},
-    {'name': 'Subtitle', 'description': 'Medium text', 'icon': Icons.subtitles, 'fontSize': 36.0},
-    {'name': 'Caption', 'description': 'Small text with background', 'icon': Icons.closed_caption, 'fontSize': 24.0},
-    {'name': 'Lower Third', 'description': 'Name/title bar', 'icon': Icons.text_fields, 'fontSize': 28.0},
+    {
+      'name': 'Title',
+      'description': 'Large bold text',
+      'icon': Icons.title,
+      'fontSize': 72.0,
+    },
+    {
+      'name': 'Subtitle',
+      'description': 'Medium text',
+      'icon': Icons.subtitles,
+      'fontSize': 36.0,
+    },
+    {
+      'name': 'Caption',
+      'description': 'Small text with background',
+      'icon': Icons.closed_caption,
+      'fontSize': 24.0,
+    },
+    {
+      'name': 'Lower Third',
+      'description': 'Name/title bar',
+      'icon': Icons.text_fields,
+      'fontSize': 28.0,
+    },
   ];
 
   static const List<String> _animations = [
-    'None', 'Fade In', 'Fade Out', 'Typewriter', 'Slide In', 'Pop In',
+    'None',
+    'Fade In',
+    'Fade Out',
+    'Typewriter',
+    'Slide In',
+    'Pop In',
   ];
 
   static const List<Map<String, String>> _presetColors = [
@@ -87,11 +116,13 @@ class _TextPanelState extends ConsumerState<TextPanel> {
       if (mounted && fonts.isNotEmpty) {
         setState(() {
           _availableFonts = fonts
-              .map((f) => {
-                    'name': f.name,
-                    'family': f.family,
-                    'style': f.style,
-                  })
+              .map(
+                (f) => {
+                  'name': f.name,
+                  'family': f.family,
+                  'style': f.style,
+                },
+              )
               .toList();
           if (_availableFonts.isNotEmpty) {
             _selectedFont = _availableFonts.first['family']!;
@@ -123,9 +154,8 @@ class _TextPanelState extends ConsumerState<TextPanel> {
     if (project == null) return;
 
     // Find the text track
-    final textTrack = project.tracks
-        .where((t) => t.trackType == TrackType.text)
-        .firstOrNull;
+    final textTrack =
+        project.tracks.where((t) => t.trackType == TrackType.text).firstOrNull;
 
     if (textTrack == null) {
       if (mounted) {
@@ -146,7 +176,7 @@ class _TextPanelState extends ConsumerState<TextPanel> {
     const defaultDurationMs = 5000;
 
     // Build font family string with style suffixes for bold/italic
-    String fontFamily = _selectedFont;
+    var fontFamily = _selectedFont;
     if (_isBold) fontFamily += '-Bold';
     if (_isItalic) fontFamily += '-Italic';
 
@@ -233,7 +263,11 @@ class _TextPanelState extends ConsumerState<TextPanel> {
               child: DropdownButton<String>(
                 value: _selectedFont,
                 isExpanded: true,
-                icon: const Icon(Icons.arrow_drop_down, size: 20, color: AppTheme.textSecondary),
+                icon: const Icon(
+                  Icons.arrow_drop_down,
+                  size: 20,
+                  color: AppTheme.textSecondary,
+                ),
                 style: context.textTheme.bodyMedium,
                 dropdownColor: AppTheme.surfaceVariant,
                 items: _availableFonts.map((font) {
@@ -266,7 +300,11 @@ class _TextPanelState extends ConsumerState<TextPanel> {
           // Font size slider
           Row(
             children: [
-              const Icon(Icons.format_size, size: 16, color: AppTheme.textDisabled),
+              const Icon(
+                Icons.format_size,
+                size: 16,
+                color: AppTheme.textDisabled,
+              ),
               const SizedBox(width: 8),
               Expanded(
                 child: Slider(
@@ -330,7 +368,9 @@ class _TextPanelState extends ConsumerState<TextPanel> {
                     color: _parseHexColor(hex),
                     borderRadius: BorderRadius.circular(4),
                     border: Border.all(
-                      color: isSelected ? AppTheme.primary : const Color(0xFF2A2A3E),
+                      color: isSelected
+                          ? AppTheme.primary
+                          : const Color(0xFF2A2A3E),
                       width: isSelected ? 2.5 : 1,
                     ),
                   ),
@@ -356,7 +396,11 @@ class _TextPanelState extends ConsumerState<TextPanel> {
               child: DropdownButton<String>(
                 value: _selectedAnimation,
                 isExpanded: true,
-                icon: const Icon(Icons.animation, size: 18, color: AppTheme.textSecondary),
+                icon: const Icon(
+                  Icons.animation,
+                  size: 18,
+                  color: AppTheme.textSecondary,
+                ),
                 style: context.textTheme.bodyMedium,
                 dropdownColor: AppTheme.surfaceVariant,
                 items: _animations.map((anim) {
@@ -364,7 +408,10 @@ class _TextPanelState extends ConsumerState<TextPanel> {
                     value: anim,
                     child: Text(
                       anim,
-                      style: const TextStyle(color: AppTheme.textPrimary, fontSize: 14),
+                      style: const TextStyle(
+                        color: AppTheme.textPrimary,
+                        fontSize: 14,
+                      ),
                     ),
                   );
                 }).toList(),
@@ -386,7 +433,7 @@ class _TextPanelState extends ConsumerState<TextPanel> {
               Switch(
                 value: _enableStroke,
                 onChanged: (v) => setState(() => _enableStroke = v),
-                activeColor: AppTheme.primary,
+                activeThumbColor: AppTheme.primary,
               ),
               const Text('Enable Stroke', style: TextStyle(fontSize: 13)),
             ],
@@ -394,7 +441,10 @@ class _TextPanelState extends ConsumerState<TextPanel> {
           if (_enableStroke) ...[
             Row(
               children: [
-                const Text('Width', style: TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
+                const Text(
+                  'Width',
+                  style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+                ),
                 Expanded(
                   child: Slider(
                     value: _strokeWidth,
@@ -406,19 +456,33 @@ class _TextPanelState extends ConsumerState<TextPanel> {
                     onChanged: (v) => setState(() => _strokeWidth = v),
                   ),
                 ),
-                Text(_strokeWidth.toStringAsFixed(1), style: const TextStyle(fontSize: 11, fontFamily: 'monospace')),
+                Text(
+                  _strokeWidth.toStringAsFixed(1),
+                  style: const TextStyle(fontSize: 11, fontFamily: 'monospace'),
+                ),
               ],
             ),
             Row(
               children: [
-                const Text('Color', style: TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
+                const Text(
+                  'Color',
+                  style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+                ),
                 const SizedBox(width: 8),
                 GestureDetector(
                   onTap: () {
                     // Toggle between common stroke colors
-                    final strokeColors = ['#000000', '#FFFFFF', '#FF0000', '#333333'];
+                    final strokeColors = [
+                      '#000000',
+                      '#FFFFFF',
+                      '#FF0000',
+                      '#333333',
+                    ];
                     final idx = strokeColors.indexOf(_strokeColor);
-                    setState(() => _strokeColor = strokeColors[(idx + 1) % strokeColors.length]);
+                    setState(
+                      () => _strokeColor =
+                          strokeColors[(idx + 1) % strokeColors.length],
+                    );
                   },
                   child: Container(
                     width: 24,
@@ -426,7 +490,8 @@ class _TextPanelState extends ConsumerState<TextPanel> {
                     decoration: BoxDecoration(
                       color: _parseHexColor(_strokeColor),
                       borderRadius: BorderRadius.circular(4),
-                      border: Border.all(color: AppTheme.textSecondary, width: 1),
+                      border:
+                          Border.all(color: AppTheme.textSecondary, width: 1),
                     ),
                   ),
                 ),
@@ -443,7 +508,7 @@ class _TextPanelState extends ConsumerState<TextPanel> {
               Switch(
                 value: _enableShadow,
                 onChanged: (v) => setState(() => _enableShadow = v),
-                activeColor: AppTheme.primary,
+                activeThumbColor: AppTheme.primary,
               ),
               const Text('Enable Shadow', style: TextStyle(fontSize: 13)),
             ],
@@ -451,7 +516,10 @@ class _TextPanelState extends ConsumerState<TextPanel> {
           if (_enableShadow) ...[
             Row(
               children: [
-                const Text('Blur', style: TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
+                const Text(
+                  'Blur',
+                  style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+                ),
                 Expanded(
                   child: Slider(
                     value: _shadowBlur,
@@ -463,18 +531,32 @@ class _TextPanelState extends ConsumerState<TextPanel> {
                     onChanged: (v) => setState(() => _shadowBlur = v),
                   ),
                 ),
-                Text(_shadowBlur.toStringAsFixed(0), style: const TextStyle(fontSize: 11, fontFamily: 'monospace')),
+                Text(
+                  _shadowBlur.toStringAsFixed(0),
+                  style: const TextStyle(fontSize: 11, fontFamily: 'monospace'),
+                ),
               ],
             ),
             Row(
               children: [
-                const Text('Color', style: TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
+                const Text(
+                  'Color',
+                  style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+                ),
                 const SizedBox(width: 8),
                 GestureDetector(
                   onTap: () {
-                    final shadowColors = ['#000000', '#333333', '#1a1a2e', '#0f0f23'];
+                    final shadowColors = [
+                      '#000000',
+                      '#333333',
+                      '#1a1a2e',
+                      '#0f0f23',
+                    ];
                     final idx = shadowColors.indexOf(_shadowColor);
-                    setState(() => _shadowColor = shadowColors[(idx + 1) % shadowColors.length]);
+                    setState(
+                      () => _shadowColor =
+                          shadowColors[(idx + 1) % shadowColors.length],
+                    );
                   },
                   child: Container(
                     width: 24,
@@ -482,7 +564,8 @@ class _TextPanelState extends ConsumerState<TextPanel> {
                     decoration: BoxDecoration(
                       color: _parseHexColor(_shadowColor),
                       borderRadius: BorderRadius.circular(4),
-                      border: Border.all(color: AppTheme.textSecondary, width: 1),
+                      border:
+                          Border.all(color: AppTheme.textSecondary, width: 1),
                     ),
                   ),
                 ),
@@ -527,15 +610,14 @@ class _TextPanelState extends ConsumerState<TextPanel> {
 
 /// Chip-style button for text presets
 class _TextPresetChip extends StatelessWidget {
-  final String name;
-  final IconData icon;
-  final VoidCallback onTap;
-
   const _TextPresetChip({
     required this.name,
     required this.icon,
     required this.onTap,
   });
+  final String name;
+  final IconData icon;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -548,7 +630,7 @@ class _TextPresetChip extends StatelessWidget {
           color: AppTheme.surfaceVariant,
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
-            color: AppTheme.textDisabled.withOpacity(0.2),
+            color: AppTheme.textDisabled.withValues(alpha: 0.2),
             width: 1,
           ),
         ),
@@ -573,17 +655,16 @@ class _TextPresetChip extends StatelessWidget {
 
 /// Toggle button for bold/italic
 class _StyleToggleButton extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final bool isActive;
-  final VoidCallback onTap;
-
   const _StyleToggleButton({
     required this.icon,
     required this.label,
     required this.isActive,
     required this.onTap,
   });
+  final IconData icon;
+  final String label;
+  final bool isActive;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -594,10 +675,14 @@ class _StyleToggleButton extends StatelessWidget {
         width: 40,
         height: 36,
         decoration: BoxDecoration(
-          color: isActive ? AppTheme.primary.withOpacity(0.2) : AppTheme.surfaceVariant,
+          color: isActive
+              ? AppTheme.primary.withValues(alpha: 0.2)
+              : AppTheme.surfaceVariant,
           borderRadius: BorderRadius.circular(6),
           border: Border.all(
-            color: isActive ? AppTheme.primary : AppTheme.textDisabled.withOpacity(0.3),
+            color: isActive
+                ? AppTheme.primary
+                : AppTheme.textDisabled.withValues(alpha: 0.3),
             width: 1,
           ),
         ),

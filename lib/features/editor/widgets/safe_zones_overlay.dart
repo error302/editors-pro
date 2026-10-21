@@ -13,18 +13,18 @@ import 'package:flutter/material.dart';
 ///
 /// See persona/skills/broadcast-legal/SKILL.md.
 class SafeZonesOverlay extends StatelessWidget {
+  const SafeZonesOverlay({
+    required this.config,
+    super.key,
+    this.previewAspectRatio = 16 / 9,
+  });
+
   /// Which overlays to show.
   final SafeZoneConfig config;
 
   /// Aspect ratio of the underlying preview (width / height).
   /// Used to compute the 9:16 and 4:3 reframing guides correctly.
   final double previewAspectRatio;
-
-  const SafeZonesOverlay({
-    super.key,
-    required this.config,
-    this.previewAspectRatio = 16 / 9,
-  });
 
   @override
   Widget build(BuildContext context) {
@@ -41,19 +41,6 @@ class SafeZonesOverlay extends StatelessWidget {
 }
 
 class SafeZoneConfig {
-  /// Title-safe area (90% for broadcast, 80% for social captions).
-  final bool showTitleSafe;
-  /// Action-safe area (80% for broadcast).
-  final bool showActionSafe;
-  /// Center crosshair.
-  final bool showCenter;
-  /// Rule-of-thirds grid.
-  final bool showRuleOfThirds;
-  /// 9:16 reframing guide (for vertical delivery).
-  final bool showVertical9x16;
-  /// 4:3 reframing guide (for legacy delivery).
-  final bool showLegacy4x3;
-
   const SafeZoneConfig({
     this.showTitleSafe = false,
     this.showActionSafe = false,
@@ -62,6 +49,24 @@ class SafeZoneConfig {
     this.showVertical9x16 = false,
     this.showLegacy4x3 = false,
   });
+
+  /// Title-safe area (90% for broadcast, 80% for social captions).
+  final bool showTitleSafe;
+
+  /// Action-safe area (80% for broadcast).
+  final bool showActionSafe;
+
+  /// Center crosshair.
+  final bool showCenter;
+
+  /// Rule-of-thirds grid.
+  final bool showRuleOfThirds;
+
+  /// 9:16 reframing guide (for vertical delivery).
+  final bool showVertical9x16;
+
+  /// 4:3 reframing guide (for legacy delivery).
+  final bool showLegacy4x3;
 
   SafeZoneConfig copyWith({
     bool? showTitleSafe,
@@ -115,22 +120,39 @@ class SafeZoneConfig {
 }
 
 class _SafeZonesPainter extends CustomPainter {
+  _SafeZonesPainter({required this.config, required this.previewAspectRatio});
   final SafeZoneConfig config;
   final double previewAspectRatio;
-
-  _SafeZonesPainter({required this.config, required this.previewAspectRatio});
 
   @override
   void paint(Canvas canvas, Size size) {
     // Title-safe: 90% of frame (broadcast) — drawn at 90% if showTitleSafe.
     // For social, the title-safe is 80% (since phones clip edges).
     if (config.showTitleSafe) {
-      _drawSafeRect(canvas, size, 0.90, Colors.white.withOpacity(0.7), dashed: true);
-      _drawSafeRect(canvas, size, 0.80, Colors.yellow.withOpacity(0.5), dashed: true);
+      _drawSafeRect(
+        canvas,
+        size,
+        0.90,
+        Colors.white.withValues(alpha: 0.7),
+        dashed: true,
+      );
+      _drawSafeRect(
+        canvas,
+        size,
+        0.80,
+        Colors.yellow.withValues(alpha: 0.5),
+        dashed: true,
+      );
     }
     // Action-safe: 80%
     if (config.showActionSafe) {
-      _drawSafeRect(canvas, size, 0.80, Colors.blue.withOpacity(0.5), dashed: true);
+      _drawSafeRect(
+        canvas,
+        size,
+        0.80,
+        Colors.blue.withValues(alpha: 0.5),
+        dashed: true,
+      );
     }
     // Center crosshair
     if (config.showCenter) {
@@ -142,15 +164,31 @@ class _SafeZonesPainter extends CustomPainter {
     }
     // 9:16 reframing guide
     if (config.showVertical9x16) {
-      _drawAspectGuide(canvas, size, 9 / 16, Colors.purple.withOpacity(0.5));
+      _drawAspectGuide(
+        canvas,
+        size,
+        9 / 16,
+        Colors.purple.withValues(alpha: 0.5),
+      );
     }
     // 4:3 reframing guide
     if (config.showLegacy4x3) {
-      _drawAspectGuide(canvas, size, 4 / 3, Colors.orange.withOpacity(0.5));
+      _drawAspectGuide(
+        canvas,
+        size,
+        4 / 3,
+        Colors.orange.withValues(alpha: 0.5),
+      );
     }
   }
 
-  void _drawSafeRect(Canvas canvas, Size size, double ratio, Color color, {bool dashed = false}) {
+  void _drawSafeRect(
+    Canvas canvas,
+    Size size,
+    double ratio,
+    Color color, {
+    bool dashed = false,
+  }) {
     final w = size.width * ratio;
     final h = size.height * ratio;
     final left = (size.width - w) / 2;
@@ -173,16 +211,51 @@ class _SafeZonesPainter extends CustomPainter {
     const dashLen = 8.0;
     const gapLen = 4.0;
     // Top
-    _drawDashedLine(canvas, rect.topLeft, rect.topRight, paint, dashLen, gapLen);
+    _drawDashedLine(
+      canvas,
+      rect.topLeft,
+      rect.topRight,
+      paint,
+      dashLen,
+      gapLen,
+    );
     // Bottom
-    _drawDashedLine(canvas, rect.bottomLeft, rect.bottomRight, paint, dashLen, gapLen);
+    _drawDashedLine(
+      canvas,
+      rect.bottomLeft,
+      rect.bottomRight,
+      paint,
+      dashLen,
+      gapLen,
+    );
     // Left
-    _drawDashedLine(canvas, rect.topLeft, rect.bottomLeft, paint, dashLen, gapLen);
+    _drawDashedLine(
+      canvas,
+      rect.topLeft,
+      rect.bottomLeft,
+      paint,
+      dashLen,
+      gapLen,
+    );
     // Right
-    _drawDashedLine(canvas, rect.topRight, rect.bottomRight, paint, dashLen, gapLen);
+    _drawDashedLine(
+      canvas,
+      rect.topRight,
+      rect.bottomRight,
+      paint,
+      dashLen,
+      gapLen,
+    );
   }
 
-  void _drawDashedLine(Canvas canvas, Offset start, Offset end, Paint paint, double dashLen, double gapLen) {
+  void _drawDashedLine(
+    Canvas canvas,
+    Offset start,
+    Offset end,
+    Paint paint,
+    double dashLen,
+    double gapLen,
+  ) {
     final dx = end.dx - start.dx;
     final dy = end.dy - start.dy;
     final totalLen = math.sqrt(dx * dx + dy * dy);
@@ -205,7 +278,7 @@ class _SafeZonesPainter extends CustomPainter {
     final cx = size.width / 2;
     final cy = size.height / 2;
     final paint = Paint()
-      ..color = Colors.white.withOpacity(0.6)
+      ..color = Colors.white.withValues(alpha: 0.6)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.5;
     canvas.drawLine(Offset(cx - 12, cy), Offset(cx + 12, cy), paint);
@@ -214,7 +287,7 @@ class _SafeZonesPainter extends CustomPainter {
 
   void _drawRuleOfThirds(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = Colors.white.withOpacity(0.4)
+      ..color = Colors.white.withValues(alpha: 0.4)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.0;
     // Vertical lines at 1/3 and 2/3
@@ -241,7 +314,12 @@ class _SafeZonesPainter extends CustomPainter {
     );
   }
 
-  void _drawAspectGuide(Canvas canvas, Size size, double targetAspect, Color color) {
+  void _drawAspectGuide(
+    Canvas canvas,
+    Size size,
+    double targetAspect,
+    Color color,
+  ) {
     // Fit the target aspect ratio inside the preview, centered.
     final previewAspect = size.width / size.height;
     double w, h;
@@ -266,5 +344,6 @@ class _SafeZonesPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _SafeZonesPainter oldDelegate) =>
-      config != oldDelegate.config || previewAspectRatio != oldDelegate.previewAspectRatio;
+      config != oldDelegate.config ||
+      previewAspectRatio != oldDelegate.previewAspectRatio;
 }

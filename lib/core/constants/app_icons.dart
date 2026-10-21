@@ -1,5 +1,3 @@
-import 'package:flutter/material.dart';
-
 /// Centralized SVG icon paths for EDITORS-PRO.
 class AppIcons {
   AppIcons._();
@@ -65,7 +63,8 @@ class AppIcons {
   static const String textBold = 'assets/icons/svg/text_bold.svg';
   static const String textItalic = 'assets/icons/svg/text_italic.svg';
   static const String textAlignLeft = 'assets/icons/svg/text_align_left.svg';
-  static const String textAlignCenter = 'assets/icons/svg/text_align_center.svg';
+  static const String textAlignCenter =
+      'assets/icons/svg/text_align_center.svg';
 
   // Keyframes
   static const String keyframe = 'assets/icons/svg/keyframe.svg';
@@ -99,7 +98,9 @@ class AppIcons {
   static const String film = 'assets/icons/svg/film.svg';
 
   // Onboarding
-  static const String onboardingImport = 'assets/icons/svg/onboarding_import.svg';
+  static const String onboardingImport =
+      'assets/icons/svg/onboarding_import.svg';
   static const String onboardingEdit = 'assets/icons/svg/onboarding_edit.svg';
-  static const String onboardingExport = 'assets/icons/svg/onboarding_export.svg';
+  static const String onboardingExport =
+      'assets/icons/svg/onboarding_export.svg';
 }

@@ -1,8 +1,9 @@
+import 'dart:io';
+
 import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
-import 'dart:io';
+import 'package:path_provider/path_provider.dart';
 
 part 'app_database.g.dart';
 
@@ -11,28 +12,30 @@ part 'app_database.g.dart';
 /// Stores project metadata, media assets, and user preferences.
 /// Timeline/clip state is the Rust engine's responsibility — this DB
 /// only caches what Flutter needs to display project lists and restore sessions.
-@DriftDatabase(tables: [
-  ProjectEntries,
-  MediaAssetEntries,
-  UserPreferences,
-])
+@DriftDatabase(
+  tables: [
+    ProjectEntries,
+    MediaAssetEntries,
+    UserPreferences,
+  ],
+)
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
-  AppDatabase.forTesting(QueryExecutor executor) : super(executor);
+  AppDatabase.forTesting(super.executor);
 
   @override
   int get schemaVersion => 1;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
-    onCreate: (Migrator m) async {
-      await m.createAll();
-    },
-    onUpgrade: (Migrator m, int from, int to) async {
-      // Future migration logic goes here
-    },
-  );
+        onCreate: (Migrator m) async {
+          await m.createAll();
+        },
+        onUpgrade: (Migrator m, int from, int to) async {
+          // Future migration logic goes here
+        },
+      );
 
   // ─── Project CRUD ──────────────────────────────────────────────
 
@@ -44,14 +47,14 @@ class AppDatabase extends _$AppDatabase {
   /// Get all projects, most recently updated first.
   Future<List<ProjectEntry>> getAllProjects() {
     return (select(projectEntries)
-      ..orderBy([(t) => OrderingTerm.desc(t.updatedAt)]))
-      .get();
+          ..orderBy([(t) => OrderingTerm.desc(t.updatedAt)]))
+        .get();
   }
 
   /// Get a single project by ID.
   Future<ProjectEntry?> getProject(String id) {
     return (select(projectEntries)..where((t) => t.id.equals(id)))
-      .getSingleOrNull();
+        .getSingleOrNull();
   }
 
   /// Delete a project by ID (cascades to media assets).
@@ -78,8 +81,8 @@ class AppDatabase extends _$AppDatabase {
   /// Get all media assets for a project.
   Future<List<MediaAssetEntry>> getAssetsForProject(String projectId) {
     return (select(mediaAssetEntries)
-      ..where((t) => t.projectId.equals(projectId)))
-      .get();
+          ..where((t) => t.projectId.equals(projectId)))
+        .get();
   }
 
   /// Delete a media asset by ID.
@@ -90,8 +93,8 @@ class AppDatabase extends _$AppDatabase {
   /// Delete all media assets for a project.
   Future<int> deleteAssetsForProject(String projectId) {
     return (delete(mediaAssetEntries)
-      ..where((t) => t.projectId.equals(projectId)))
-      .go();
+          ..where((t) => t.projectId.equals(projectId)))
+        .go();
   }
 
   // ─── User Preferences ──────────────────────────────────────────

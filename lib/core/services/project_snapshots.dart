@@ -124,13 +124,15 @@ class ProjectSnapshots {
         // Parse the ISO timestamp back from the filename.
         final timestamp = DateTime.tryParse(basename.replaceAll('-', ':')) ??
             file.statSync().modified;
-        snapshots.add(ProjectSnapshot(
-          id: basename,
-          projectId: projectId,
-          timestamp: timestamp,
-          sizeBytes: file.statSync().size,
-          filePath: file.path,
-        ));
+        snapshots.add(
+          ProjectSnapshot(
+            id: basename,
+            projectId: projectId,
+            timestamp: timestamp,
+            sizeBytes: file.statSync().size,
+            filePath: file.path,
+          ),
+        );
       }
 
       // Sort by timestamp ascending (oldest first).
@@ -219,14 +221,16 @@ class ProjectSnapshots {
         .whereType<File>()
         .where((f) => f.path.endsWith('.epp'))
         .toList()
-      ..sort((a, b) => p
-          .basenameWithoutExtension(a.path)
-          .compareTo(p.basenameWithoutExtension(b.path)));
+      ..sort(
+        (a, b) => p
+            .basenameWithoutExtension(a.path)
+            .compareTo(p.basenameWithoutExtension(b.path)),
+      );
 
     if (files.length <= maxSnapshotsPerProject) return;
 
     final toDelete = files.length - maxSnapshotsPerProject;
-    for (int i = 0; i < toDelete; i++) {
+    for (var i = 0; i < toDelete; i++) {
       try {
         await files[i].delete();
         developer.log(
@@ -245,6 +249,14 @@ class ProjectSnapshots {
 
 /// A single project snapshot.
 class ProjectSnapshot {
+  const ProjectSnapshot({
+    required this.id,
+    required this.projectId,
+    required this.timestamp,
+    required this.sizeBytes,
+    required this.filePath,
+  });
+
   /// The snapshot ID (ISO 8601 timestamp string used as the filename).
   final String id;
 
@@ -259,14 +271,6 @@ class ProjectSnapshot {
 
   /// Absolute path to the `.epp` file on disk.
   final String filePath;
-
-  const ProjectSnapshot({
-    required this.id,
-    required this.projectId,
-    required this.timestamp,
-    required this.sizeBytes,
-    required this.filePath,
-  });
 
   /// Human-readable size (e.g., "12.3 KB", "1.2 MB").
   String get sizeHuman {
@@ -308,7 +312,7 @@ class ProjectSnapshot {
       'Sep',
       'Oct',
       'Nov',
-      'Dec'
+      'Dec',
     ];
     return months[month - 1];
   }

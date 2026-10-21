@@ -123,9 +123,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
               Padding(
                 padding: const EdgeInsets.fromLTRB(32, 0, 32, 32),
                 child: _GradientCtaButton(
-                  label: _currentPage < _pageCount - 1
-                      ? 'Next'
-                      : 'Get Started',
+                  label: _currentPage < _pageCount - 1 ? 'Next' : 'Get Started',
                   onPressed: _onActionPressed,
                 ),
               ),
@@ -154,13 +152,11 @@ class _WelcomePage extends StatelessWidget {
             width: 120,
             height: 120,
             decoration: BoxDecoration(
-              borderRadius:
-                  BorderRadius.circular(AppTheme.radiusXLarge),
+              borderRadius: BorderRadius.circular(AppTheme.radiusXLarge),
               boxShadow: AppTheme.primaryGlow(opacity: 0.5),
             ),
             child: ClipRRect(
-              borderRadius:
-                  BorderRadius.circular(AppTheme.radiusXLarge),
+              borderRadius: BorderRadius.circular(AppTheme.radiusXLarge),
               child: Image.asset(
                 'assets/icons/logo.png',
                 fit: BoxFit.cover,
@@ -207,10 +203,7 @@ class _WelcomePage extends StatelessWidget {
           ),
         ],
       ),
-    )
-        .animate()
-        .fadeIn(duration: 500.ms)
-        .slideY(begin: 0.1);
+    ).animate().fadeIn(duration: 500.ms).slideY(begin: 0.1);
   }
 }
 
@@ -271,10 +264,7 @@ class _EditLikeAProPage extends StatelessWidget {
           ),
         ],
       ),
-    )
-        .animate()
-        .fadeIn(duration: 500.ms)
-        .slideY(begin: 0.1);
+    ).animate().fadeIn(duration: 500.ms).slideY(begin: 0.1);
   }
 }
 
@@ -335,10 +325,7 @@ class _ExportSharePage extends StatelessWidget {
           ),
         ],
       ),
-    )
-        .animate()
-        .fadeIn(duration: 500.ms)
-        .slideY(begin: 0.1);
+    ).animate().fadeIn(duration: 500.ms).slideY(begin: 0.1);
   }
 }
 
@@ -346,9 +333,8 @@ class _ExportSharePage extends StatelessWidget {
 
 /// Feature pill — surfaceVariant background, primary border, primaryLight label.
 class _FeaturePill extends StatelessWidget {
-  final String label;
-
   const _FeaturePill({required this.label});
+  final String label;
 
   @override
   Widget build(BuildContext context) {
@@ -374,15 +360,14 @@ class _FeaturePill extends StatelessWidget {
 /// Pill-style page indicator. Active dot uses the brand gradient and
 /// stretches to 24px; inactive dots are 8px square pills.
 class _PageIndicator extends StatelessWidget {
-  final int pageCount;
-  final int currentPage;
-  final ValueChanged<int> onDotTapped;
-
   const _PageIndicator({
     required this.pageCount,
     required this.currentPage,
     required this.onDotTapped,
   });
+  final int pageCount;
+  final int currentPage;
+  final ValueChanged<int> onDotTapped;
 
   @override
   Widget build(BuildContext context) {
@@ -402,8 +387,7 @@ class _PageIndicator extends StatelessWidget {
             decoration: BoxDecoration(
               gradient: isActive ? AppTheme.primaryGradient : null,
               color: isActive ? null : AppTheme.textDisabled,
-              borderRadius:
-                  BorderRadius.circular(AppTheme.radiusFull),
+              borderRadius: BorderRadius.circular(AppTheme.radiusFull),
             ),
           ),
         );
@@ -414,13 +398,12 @@ class _PageIndicator extends StatelessWidget {
 
 /// Full-width gradient CTA with primary glow.
 class _GradientCtaButton extends StatelessWidget {
-  final String label;
-  final VoidCallback onPressed;
-
   const _GradientCtaButton({
     required this.label,
     required this.onPressed,
   });
+  final String label;
+  final VoidCallback onPressed;
 
   @override
   Widget build(BuildContext context) {

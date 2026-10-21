@@ -109,10 +109,10 @@ abstract class CrashBackend {
 /// Used during development and when no DSN is configured. Safe to call
 /// from any isolate.
 class LocalCrashBackend implements CrashBackend {
-  final List<_CrashRecord> _records = [];
+  final List<CrashRecord> _records = [];
   static const int _maxRecords = 50;
 
-  List<_CrashRecord> get records => List.unmodifiable(_records);
+  List<CrashRecord> get records => List.unmodifiable(_records);
 
   @override
   Future<void> reportError(
@@ -121,7 +121,7 @@ class LocalCrashBackend implements CrashBackend {
     Map<String, dynamic>? context,
     CrashLevel level = CrashLevel.error,
   }) async {
-    final record = _CrashRecord(
+    final record = CrashRecord(
       timestamp: DateTime.now(),
       level: level,
       error: error.toString(),
@@ -145,7 +145,7 @@ class LocalCrashBackend implements CrashBackend {
     CrashLevel level = CrashLevel.info,
     Map<String, dynamic>? context,
   }) async {
-    final record = _CrashRecord(
+    final record = CrashRecord(
       timestamp: DateTime.now(),
       level: level,
       error: message,
@@ -161,7 +161,7 @@ class LocalCrashBackend implements CrashBackend {
   @override
   bool get sendsDataExternally => false;
 
-  void _addRecord(_CrashRecord record) {
+  void _addRecord(CrashRecord record) {
     _records.add(record);
     if (_records.length > _maxRecords) {
       _records.removeAt(0);
@@ -169,15 +169,8 @@ class LocalCrashBackend implements CrashBackend {
   }
 }
 
-class _CrashRecord {
-  final DateTime timestamp;
-  final CrashLevel level;
-  final String error;
-  final String? stackTrace;
-  final Map<String, dynamic> context;
-  final String kind;
-
-  _CrashRecord({
+class CrashRecord {
+  CrashRecord({
     required this.timestamp,
     required this.level,
     required this.error,
@@ -185,6 +178,12 @@ class _CrashRecord {
     required this.context,
     required this.kind,
   });
+  final DateTime timestamp;
+  final CrashLevel level;
+  final String error;
+  final String? stackTrace;
+  final Map<String, dynamic> context;
+  final String kind;
 }
 
 /// Singleton crash reporter that delegates to the configured backend.
@@ -204,6 +203,8 @@ class CrashReporter {
 
   /// Switch to a different backend. Should be called once at app
   /// startup before any errors are reported.
+  // Keep the documented initialization API for backend integrations.
+  // ignore: use_setters_to_change_properties
   void init(CrashBackend backend) {
     _backend = backend;
   }

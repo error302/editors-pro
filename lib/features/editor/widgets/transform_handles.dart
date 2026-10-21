@@ -14,17 +14,9 @@ enum HandleType {
 
 /// Transform handles overlay for the preview viewport
 class TransformHandles extends StatefulWidget {
-  final Rect bounds;
-  final double rotation;
-  final ValueChanged<Offset>? onMove;
-  final ValueChanged<HandleType>? onScaleStart;
-  final ValueChanged<Offset>? onScaleUpdate;
-  final ValueChanged<double>? onRotate;
-  final bool isSelected;
-
   const TransformHandles({
-    super.key,
     required this.bounds,
+    super.key,
     this.rotation = 0.0,
     this.onMove,
     this.onScaleStart,
@@ -32,6 +24,13 @@ class TransformHandles extends StatefulWidget {
     this.onRotate,
     this.isSelected = true,
   });
+  final Rect bounds;
+  final double rotation;
+  final ValueChanged<Offset>? onMove;
+  final ValueChanged<HandleType>? onScaleStart;
+  final ValueChanged<Offset>? onScaleUpdate;
+  final ValueChanged<double>? onRotate;
+  final bool isSelected;
 
   @override
   State<TransformHandles> createState() => _TransformHandlesState();
@@ -68,7 +67,7 @@ class _TransformHandlesState extends State<TransformHandles> {
           child: Container(
             width: 1,
             height: 30,
-            color: Colors.purple.withOpacity(0.6),
+            color: Colors.purple.withValues(alpha: 0.6),
           ),
         ),
 
@@ -85,9 +84,18 @@ class _TransformHandlesState extends State<TransformHandles> {
 
         // Edge midpoint handles
         _buildEdgeHandle(bounds.topCenter, HandleType.scaleTopLeft), // top edge
-        _buildEdgeHandle(bounds.bottomCenter, HandleType.scaleBottomLeft), // bottom edge
-        _buildEdgeHandle(bounds.centerLeft, HandleType.scaleTopLeft), // left edge
-        _buildEdgeHandle(bounds.centerRight, HandleType.scaleTopRight), // right edge
+        _buildEdgeHandle(
+          bounds.bottomCenter,
+          HandleType.scaleBottomLeft,
+        ), // bottom edge
+        _buildEdgeHandle(
+          bounds.centerLeft,
+          HandleType.scaleTopLeft,
+        ), // left edge
+        _buildEdgeHandle(
+          bounds.centerRight,
+          HandleType.scaleTopRight,
+        ), // right edge
 
         // Move handle (entire area)
         Positioned.fromRect(
@@ -180,7 +188,7 @@ class _TransformHandlesState extends State<TransformHandles> {
           width: 10,
           height: 10,
           decoration: BoxDecoration(
-            color: AppTheme.primary.withOpacity(0.8),
+            color: AppTheme.primary.withValues(alpha: 0.8),
             border: Border.all(color: Colors.white, width: 1),
             shape: BoxShape.circle,
           ),
@@ -225,7 +233,7 @@ class _TransformHandlesState extends State<TransformHandles> {
           width: 20,
           height: 20,
           decoration: BoxDecoration(
-            color: Colors.purple.withOpacity(0.8),
+            color: Colors.purple.withValues(alpha: 0.8),
             border: Border.all(color: Colors.white, width: 1.5),
             shape: BoxShape.circle,
           ),
@@ -241,9 +249,8 @@ class _TransformHandlesState extends State<TransformHandles> {
 }
 
 class _TransformHandlesPainter extends CustomPainter {
-  final double rotation;
-
   _TransformHandlesPainter({required this.rotation});
+  final double rotation;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -309,7 +316,7 @@ class _TransformHandlesPainter extends CustomPainter {
     if (size.width > 80 && size.height > 40) {
       final widthText = size.width.round().toString();
       final heightText = size.height.round().toString();
-      final sizeText = '${widthText}×$heightText';
+      final sizeText = '$widthText×$heightText';
 
       final textSpan = TextSpan(
         text: sizeText,
@@ -329,7 +336,7 @@ class _TransformHandlesPainter extends CustomPainter {
       // Background
       canvas.drawRect(
         Rect.fromLTWH(textX - 2, textY - 1, tp.width + 4, tp.height + 2),
-        Paint()..color = AppTheme.background.withOpacity(0.7),
+        Paint()..color = AppTheme.background.withValues(alpha: 0.7),
       );
       tp.paint(canvas, Offset(textX, textY));
     }
@@ -337,7 +344,7 @@ class _TransformHandlesPainter extends CustomPainter {
     // Draw rotation angle indicator
     if (rotation != 0.0) {
       final degrees = (rotation * 180 / math.pi).round();
-      final rotText = '${degrees}°';
+      final rotText = '$degrees°';
       final rotSpan = TextSpan(
         text: rotText,
         style: const TextStyle(

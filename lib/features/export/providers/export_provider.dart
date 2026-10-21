@@ -11,16 +11,6 @@ import '../../../src/rust/api/bridge_api.dart';
 
 /// Export state that tracks the current status, progress, and result.
 class ExportState {
-  final bool isExporting;
-  final double progress;
-  final String stageName;
-  final int currentFrame;
-  final int totalFrames;
-  final int estimatedSecondsRemaining;
-  final String? outputPath;
-  final String? fileSizeHuman;
-  final String? error;
-
   const ExportState({
     this.isExporting = false,
     this.progress = 0,
@@ -32,6 +22,15 @@ class ExportState {
     this.fileSizeHuman,
     this.error,
   });
+  final bool isExporting;
+  final double progress;
+  final String stageName;
+  final int currentFrame;
+  final int totalFrames;
+  final int estimatedSecondsRemaining;
+  final String? outputPath;
+  final String? fileSizeHuman;
+  final String? error;
 
   ExportState copyWith({
     bool? isExporting,
@@ -330,12 +329,6 @@ final exportPresetsProvider = Provider<List<ExportPreset>>((ref) {
 
 /// A single export preset with display info
 class ExportPreset {
-  final String name;
-  final int width;
-  final int height;
-  final int bitrateKbps;
-  final String description;
-
   const ExportPreset({
     required this.name,
     required this.width,
@@ -343,6 +336,11 @@ class ExportPreset {
     required this.bitrateKbps,
     required this.description,
   });
+  final String name;
+  final int width;
+  final int height;
+  final int bitrateKbps;
+  final String description;
 
   static const all = [
     ExportPreset(

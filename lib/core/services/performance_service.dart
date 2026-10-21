@@ -11,6 +11,8 @@ class PerformanceService {
 
   // ─── Cold-start timing ────────────────────────────────────────
 
+  // Timing may be queried before startup has been marked.
+  // ignore: use_late_for_private_fields_and_variables
   DateTime? _appStartTime;
   DateTime? _engineReadyTime;
 

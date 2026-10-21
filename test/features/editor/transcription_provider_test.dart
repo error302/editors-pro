@@ -1,5 +1,5 @@
-import 'package:flutter_test/flutter_test.dart';
 import 'package:editors_pro/features/editor/providers/transcription_provider.dart';
+import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -10,7 +10,10 @@ void main() {
       expect(TranscriptionStatus.loadingModel.label, 'Loading model…');
       expect(TranscriptionStatus.extractingAudio.label, 'Extracting audio…');
       expect(TranscriptionStatus.transcribing.label, 'Transcribing…');
-      expect(TranscriptionStatus.processingSegments.label, 'Processing segments…');
+      expect(
+        TranscriptionStatus.processingSegments.label,
+        'Processing segments…',
+      );
       expect(TranscriptionStatus.complete.label, 'Complete');
       expect(TranscriptionStatus.error.label, 'Error');
     });
@@ -105,57 +108,145 @@ void main() {
     });
 
     test('hasSegments is true when segments exist', () {
-      const state = TranscriptionState(segments: [
-        TranscriptionSegmentData(
-          id: '1',
-          text: 'Hello',
-          startMs: 0,
-          endMs: 1000,
-          confidence: 0.9,
-        ),
-      ]);
+      const state = TranscriptionState(
+        segments: [
+          TranscriptionSegmentData(
+            id: '1',
+            text: 'Hello',
+            startMs: 0,
+            endMs: 1000,
+            confidence: 0.9,
+          ),
+        ],
+      );
       expect(state.hasSegments, isTrue);
     });
 
     test('allSelected is true when all segments are selected', () {
-      const state = TranscriptionState(segments: [
-        TranscriptionSegmentData(id: '1', text: 'A', startMs: 0, endMs: 1000, confidence: 0.9, selected: true),
-        TranscriptionSegmentData(id: '2', text: 'B', startMs: 1000, endMs: 2000, confidence: 0.8, selected: true),
-      ]);
+      const state = TranscriptionState(
+        segments: [
+          TranscriptionSegmentData(
+            id: '1',
+            text: 'A',
+            startMs: 0,
+            endMs: 1000,
+            confidence: 0.9,
+            selected: true,
+          ),
+          TranscriptionSegmentData(
+            id: '2',
+            text: 'B',
+            startMs: 1000,
+            endMs: 2000,
+            confidence: 0.8,
+            selected: true,
+          ),
+        ],
+      );
       expect(state.allSelected, isTrue);
     });
 
     test('noneSelected is true when no segments are selected', () {
-      const state = TranscriptionState(segments: [
-        TranscriptionSegmentData(id: '1', text: 'A', startMs: 0, endMs: 1000, confidence: 0.9, selected: false),
-        TranscriptionSegmentData(id: '2', text: 'B', startMs: 1000, endMs: 2000, confidence: 0.8, selected: false),
-      ]);
+      const state = TranscriptionState(
+        segments: [
+          TranscriptionSegmentData(
+            id: '1',
+            text: 'A',
+            startMs: 0,
+            endMs: 1000,
+            confidence: 0.9,
+            selected: false,
+          ),
+          TranscriptionSegmentData(
+            id: '2',
+            text: 'B',
+            startMs: 1000,
+            endMs: 2000,
+            confidence: 0.8,
+            selected: false,
+          ),
+        ],
+      );
       expect(state.noneSelected, isTrue);
     });
 
     test('selectedCount works correctly', () {
-      const state = TranscriptionState(segments: [
-        TranscriptionSegmentData(id: '1', text: 'A', startMs: 0, endMs: 1000, confidence: 0.9, selected: true),
-        TranscriptionSegmentData(id: '2', text: 'B', startMs: 1000, endMs: 2000, confidence: 0.8, selected: false),
-        TranscriptionSegmentData(id: '3', text: 'C', startMs: 2000, endMs: 3000, confidence: 0.7, selected: true),
-      ]);
+      const state = TranscriptionState(
+        segments: [
+          TranscriptionSegmentData(
+            id: '1',
+            text: 'A',
+            startMs: 0,
+            endMs: 1000,
+            confidence: 0.9,
+            selected: true,
+          ),
+          TranscriptionSegmentData(
+            id: '2',
+            text: 'B',
+            startMs: 1000,
+            endMs: 2000,
+            confidence: 0.8,
+            selected: false,
+          ),
+          TranscriptionSegmentData(
+            id: '3',
+            text: 'C',
+            startMs: 2000,
+            endMs: 3000,
+            confidence: 0.7,
+            selected: true,
+          ),
+        ],
+      );
       expect(state.selectedCount, 2);
     });
 
     test('selectedSegments filters correctly', () {
-      const state = TranscriptionState(segments: [
-        TranscriptionSegmentData(id: '1', text: 'A', startMs: 0, endMs: 1000, confidence: 0.9, selected: true),
-        TranscriptionSegmentData(id: '2', text: 'B', startMs: 1000, endMs: 2000, confidence: 0.8, selected: false),
-      ]);
+      const state = TranscriptionState(
+        segments: [
+          TranscriptionSegmentData(
+            id: '1',
+            text: 'A',
+            startMs: 0,
+            endMs: 1000,
+            confidence: 0.9,
+            selected: true,
+          ),
+          TranscriptionSegmentData(
+            id: '2',
+            text: 'B',
+            startMs: 1000,
+            endMs: 2000,
+            confidence: 0.8,
+            selected: false,
+          ),
+        ],
+      );
       expect(state.selectedSegments.length, 1);
       expect(state.selectedSegments.first.id, '1');
     });
 
     test('toSrt generates valid SRT output', () {
-      const state = TranscriptionState(segments: [
-        TranscriptionSegmentData(id: '1', text: 'Hello world', startMs: 0, endMs: 3000, confidence: 0.9),
-        TranscriptionSegmentData(id: '2', text: 'Goodbye', startMs: 4000, endMs: 7000, confidence: 0.8, selected: false),
-      ]);
+      const state = TranscriptionState(
+        segments: [
+          TranscriptionSegmentData(
+            id: '1',
+            text: 'Hello world',
+            startMs: 0,
+            endMs: 3000,
+            confidence: 0.9,
+          ),
+          TranscriptionSegmentData(
+            id: '2',
+            text: 'Goodbye',
+            startMs: 4000,
+            endMs: 7000,
+            confidence: 0.8,
+            selected: false,
+          ),
+        ],
+      );
       final srt = state.toSrt();
       // Only selected segments (segment 1) should appear
       expect(srt, contains('Hello world'));
@@ -165,9 +256,17 @@ void main() {
     });
 
     test('toVtt generates valid VTT output', () {
-      const state = TranscriptionState(segments: [
-        TranscriptionSegmentData(id: '1', text: 'Test subtitle', startMs: 1000, endMs: 4000, confidence: 0.95),
-      ]);
+      const state = TranscriptionState(
+        segments: [
+          TranscriptionSegmentData(
+            id: '1',
+            text: 'Test subtitle',
+            startMs: 1000,
+            endMs: 4000,
+            confidence: 0.95,
+          ),
+        ],
+      );
       final vtt = state.toVtt();
       expect(vtt, startsWith('WEBVTT'));
       expect(vtt, contains('Test subtitle'));

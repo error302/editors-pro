@@ -1082,6 +1082,7 @@ impl AudioEncoder {
         );
 
         frame.set_pts(Some(self.next_pts));
+        frame.set_rate(self.sample_rate);
 
         // Deinterleave: [L0, R0, L1, R1, ...] → plane 0 [L0, L1, ...], plane 1 [R0, R1, ...]
         let channels = self.channels as usize;

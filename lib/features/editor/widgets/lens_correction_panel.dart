@@ -13,16 +13,16 @@ import '../../../core/theme/app_theme.dart';
 /// dial K1 until straight lines are straight. See
 /// persona/skills/lens-correction/SKILL.md.
 class LensCorrectionPanel extends StatefulWidget {
+  const LensCorrectionPanel({
+    required this.onChanged,
+    super.key,
+    this.initialValues = LensCorrectionValues.neutral,
+  });
+
   /// Called when any parameter changes. The parent applies the effect
   /// via the engine.
   final void Function(LensCorrectionValues values) onChanged;
   final LensCorrectionValues initialValues;
-
-  const LensCorrectionPanel({
-    super.key,
-    required this.onChanged,
-    this.initialValues = LensCorrectionValues.neutral,
-  });
 
   @override
   State<LensCorrectionPanel> createState() => _LensCorrectionPanelState();
@@ -50,8 +50,10 @@ class _LensCorrectionPanelState extends State<LensCorrectionPanel> {
       children: [
         Row(
           children: [
-            Text('Lens Correction',
-                style: Theme.of(context).textTheme.titleMedium),
+            Text(
+              'Lens Correction',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
             const Spacer(),
             IconButton(
               icon: Icon(_showGrid ? Icons.grid_on : Icons.grid_off),
@@ -72,47 +74,56 @@ class _LensCorrectionPanelState extends State<LensCorrectionPanel> {
         _SliderRow(
           label: 'K1 (radial)',
           value: _v.k1,
-          min: -1.0, max: 1.0,
+          min: -1.0,
+          max: 1.0,
           onChanged: (v) => _update(_v.copyWith(k1: v)),
         ),
         _SliderRow(
           label: 'K2',
           value: _v.k2,
-          min: -1.0, max: 1.0,
+          min: -1.0,
+          max: 1.0,
           onChanged: (v) => _update(_v.copyWith(k2: v)),
         ),
         _SliderRow(
           label: 'K3',
           value: _v.k3,
-          min: -1.0, max: 1.0,
+          min: -1.0,
+          max: 1.0,
           onChanged: (v) => _update(_v.copyWith(k3: v)),
         ),
         _SliderRow(
           label: 'P1 (tangential)',
           value: _v.p1,
-          min: -0.5, max: 0.5,
+          min: -0.5,
+          max: 0.5,
           onChanged: (v) => _update(_v.copyWith(p1: v)),
         ),
         _SliderRow(
           label: 'P2',
           value: _v.p2,
-          min: -0.5, max: 0.5,
+          min: -0.5,
+          max: 0.5,
           onChanged: (v) => _update(_v.copyWith(p2: v)),
         ),
         const Divider(),
         // Chromatic aberration
-        Text('Chromatic Aberration',
-            style: Theme.of(context).textTheme.bodyMedium),
+        Text(
+          'Chromatic Aberration',
+          style: Theme.of(context).textTheme.bodyMedium,
+        ),
         _SliderRow(
           label: 'Red offset',
           value: _v.caRedOffset,
-          min: -0.01, max: 0.01,
+          min: -0.01,
+          max: 0.01,
           onChanged: (v) => _update(_v.copyWith(caRedOffset: v)),
         ),
         _SliderRow(
           label: 'Blue offset',
           value: _v.caBlueOffset,
-          min: -0.01, max: 0.01,
+          min: -0.01,
+          max: 0.01,
           onChanged: (v) => _update(_v.copyWith(caBlueOffset: v)),
         ),
         const Divider(),
@@ -121,13 +132,15 @@ class _LensCorrectionPanelState extends State<LensCorrectionPanel> {
         _SliderRow(
           label: 'Amount',
           value: _v.vignetteAmount,
-          min: -1.0, max: 1.0,
+          min: -1.0,
+          max: 1.0,
           onChanged: (v) => _update(_v.copyWith(vignetteAmount: v)),
         ),
         _SliderRow(
           label: 'Midpoint',
           value: _v.vignetteMidpoint,
-          min: 0.0, max: 1.0,
+          min: 0.0,
+          max: 1.0,
           onChanged: (v) => _update(_v.copyWith(vignetteMidpoint: v)),
         ),
       ],
@@ -136,12 +149,6 @@ class _LensCorrectionPanelState extends State<LensCorrectionPanel> {
 }
 
 class _SliderRow extends StatelessWidget {
-  final String label;
-  final double value;
-  final double min;
-  final double max;
-  final ValueChanged<double> onChanged;
-
   const _SliderRow({
     required this.label,
     required this.value,
@@ -149,6 +156,11 @@ class _SliderRow extends StatelessWidget {
     required this.max,
     required this.onChanged,
   });
+  final String label;
+  final double value;
+  final double min;
+  final double max;
+  final ValueChanged<double> onChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -169,8 +181,10 @@ class _SliderRow extends StatelessWidget {
           ),
           SizedBox(
             width: 60,
-            child: Text(value.toStringAsFixed(3),
-                style: Theme.of(context).textTheme.bodySmall),
+            child: Text(
+              value.toStringAsFixed(3),
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
           ),
         ],
       ),
@@ -179,11 +193,6 @@ class _SliderRow extends StatelessWidget {
 }
 
 class LensCorrectionValues {
-  final double k1, k2, k3;
-  final double p1, p2;
-  final double caRedOffset, caBlueOffset;
-  final double vignetteAmount, vignetteMidpoint;
-
   const LensCorrectionValues({
     this.k1 = 0.0,
     this.k2 = 0.0,
@@ -195,14 +204,23 @@ class LensCorrectionValues {
     this.vignetteAmount = 0.0,
     this.vignetteMidpoint = 0.5,
   });
+  final double k1, k2, k3;
+  final double p1, p2;
+  final double caRedOffset, caBlueOffset;
+  final double vignetteAmount, vignetteMidpoint;
 
   static const neutral = LensCorrectionValues();
 
   LensCorrectionValues copyWith({
-    double? k1, double? k2, double? k3,
-    double? p1, double? p2,
-    double? caRedOffset, double? caBlueOffset,
-    double? vignetteAmount, double? vignetteMidpoint,
+    double? k1,
+    double? k2,
+    double? k3,
+    double? p1,
+    double? p2,
+    double? caRedOffset,
+    double? caBlueOffset,
+    double? vignetteAmount,
+    double? vignetteMidpoint,
   }) {
     return LensCorrectionValues(
       k1: k1 ?? this.k1,

@@ -15,6 +15,17 @@ import '../../../core/theme/app_theme.dart';
 /// verify with the loudness meter, and never ship without checking the
 /// master fader has headroom. See persona/skills/loudness-target/SKILL.md.
 class AudioMixerPanel extends StatefulWidget {
+  const AudioMixerPanel({
+    required this.tracks,
+    required this.master,
+    required this.onVolumeChanged,
+    required this.onPanChanged,
+    required this.onMuteToggled,
+    required this.onSoloToggled,
+    required this.onMasterVolumeChanged,
+    super.key,
+    this.onOpenLoudnessMeter,
+  });
   final List<MixerTrack> tracks;
   final MixerMaster master;
   final void Function(String trackId, double volume) onVolumeChanged;
@@ -23,18 +34,6 @@ class AudioMixerPanel extends StatefulWidget {
   final void Function(String trackId, bool solo) onSoloToggled;
   final void Function(double masterVolume) onMasterVolumeChanged;
   final VoidCallback? onOpenLoudnessMeter;
-
-  const AudioMixerPanel({
-    super.key,
-    required this.tracks,
-    required this.master,
-    required this.onVolumeChanged,
-    required this.onPanChanged,
-    required this.onMuteToggled,
-    required this.onSoloToggled,
-    required this.onMasterVolumeChanged,
-    this.onOpenLoudnessMeter,
-  });
 
   @override
   State<AudioMixerPanel> createState() => _AudioMixerPanelState();
@@ -48,8 +47,10 @@ class _AudioMixerPanelState extends State<AudioMixerPanel> {
       children: [
         Row(
           children: [
-            Text('Audio Mixer',
-                style: Theme.of(context).textTheme.titleMedium),
+            Text(
+              'Audio Mixer',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
             const Spacer(),
             if (widget.onOpenLoudnessMeter != null)
               IconButton(
@@ -71,15 +72,20 @@ class _AudioMixerPanelState extends State<AudioMixerPanel> {
         // Track channels (horizontal scroll)
         Expanded(
           child: widget.tracks.isEmpty
-              ? Center(
+              ? const Center(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.equalizer,
-                          size: 48, color: AppTheme.textSecondary),
-                      const SizedBox(height: AppTheme.spacing8),
-                      Text('No audio tracks yet.',
-                          style: TextStyle(color: AppTheme.textSecondary)),
+                      Icon(
+                        Icons.equalizer,
+                        size: 48,
+                        color: AppTheme.textSecondary,
+                      ),
+                      SizedBox(height: AppTheme.spacing8),
+                      Text(
+                        'No audio tracks yet.',
+                        style: TextStyle(color: AppTheme.textSecondary),
+                      ),
                     ],
                   ),
                 )
@@ -113,12 +119,6 @@ class _AudioMixerPanelState extends State<AudioMixerPanel> {
 }
 
 class _MixerChannel extends StatelessWidget {
-  final MixerTrack track;
-  final ValueChanged<double> onVolumeChanged;
-  final ValueChanged<double> onPanChanged;
-  final ValueChanged<bool> onMuteToggled;
-  final ValueChanged<bool> onSoloToggled;
-
   const _MixerChannel({
     required this.track,
     required this.onVolumeChanged,
@@ -126,6 +126,11 @@ class _MixerChannel extends StatelessWidget {
     required this.onMuteToggled,
     required this.onSoloToggled,
   });
+  final MixerTrack track;
+  final ValueChanged<double> onVolumeChanged;
+  final ValueChanged<double> onPanChanged;
+  final ValueChanged<bool> onMuteToggled;
+  final ValueChanged<bool> onSoloToggled;
 
   @override
   Widget build(BuildContext context) {
@@ -136,7 +141,7 @@ class _MixerChannel extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppTheme.cardColor,
         borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
-        border: Border.all(color: AppTheme.border.withOpacity(0.5)),
+        border: Border.all(color: AppTheme.border.withValues(alpha: 0.5)),
       ),
       child: Column(
         children: [
@@ -175,7 +180,10 @@ class _MixerChannel extends StatelessWidget {
           ),
           const SizedBox(height: AppTheme.spacing8),
           // Pan knob
-          Text('PAN', style: TextStyle(fontSize: 9, color: AppTheme.textSecondary)),
+          const Text(
+            'PAN',
+            style: TextStyle(fontSize: 9, color: AppTheme.textSecondary),
+          ),
           RotatedBox(
             quarterTurns: 1,
             child: Slider(
@@ -226,13 +234,12 @@ class _MixerChannel extends StatelessWidget {
 }
 
 class _MasterChannel extends StatelessWidget {
-  final MixerMaster master;
-  final ValueChanged<double> onVolumeChanged;
-
   const _MasterChannel({
     required this.master,
     required this.onVolumeChanged,
   });
+  final MixerMaster master;
+  final ValueChanged<double> onVolumeChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -241,9 +248,12 @@ class _MasterChannel extends StatelessWidget {
       margin: const EdgeInsets.only(right: AppTheme.spacing8),
       padding: const EdgeInsets.all(AppTheme.spacing4),
       decoration: BoxDecoration(
-        color: AppTheme.primary.withOpacity(0.1),
+        color: AppTheme.primary.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
-        border: Border.all(color: AppTheme.primary.withOpacity(0.5), width: 2),
+        border: Border.all(
+          color: AppTheme.primary.withValues(alpha: 0.5),
+          width: 2,
+        ),
       ),
       child: Column(
         children: [
@@ -285,17 +295,16 @@ class _MasterChannel extends StatelessWidget {
 }
 
 class _MiniButton extends StatelessWidget {
-  final String label;
-  final bool active;
-  final Color activeColor;
-  final VoidCallback onPressed;
-
   const _MiniButton({
     required this.label,
     required this.active,
     required this.activeColor,
     required this.onPressed,
   });
+  final String label;
+  final bool active;
+  final Color activeColor;
+  final VoidCallback onPressed;
 
   @override
   Widget build(BuildContext context) {
@@ -323,13 +332,6 @@ class _MiniButton extends StatelessWidget {
 }
 
 class MixerTrack {
-  final String id;
-  final String name;
-  final double volume;
-  final double pan; // -1 (L) to +1 (R)
-  final bool muted;
-  final bool solo;
-
   MixerTrack({
     required this.id,
     required this.name,
@@ -338,10 +340,15 @@ class MixerTrack {
     this.muted = false,
     this.solo = false,
   });
+  final String id;
+  final String name;
+  final double volume;
+  final double pan; // -1 (L) to +1 (R)
+  final bool muted;
+  final bool solo;
 }
 
 class MixerMaster {
-  final double volume;
-
   const MixerMaster({this.volume = 1.0});
+  final double volume;
 }

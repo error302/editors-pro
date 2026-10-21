@@ -1478,7 +1478,7 @@ mod tests {
         settings.width = 0;
         let result = HardwareEncoder::new(&settings);
         assert!(result.is_err());
-        assert!(result.unwrap_err().contains("non-zero"));
+        assert!(result.err().unwrap().contains("non-zero"));
     }
 
     #[test]
@@ -1487,7 +1487,7 @@ mod tests {
         settings.width = 1921;
         let result = HardwareEncoder::new(&settings);
         assert!(result.is_err());
-        assert!(result.unwrap_err().contains("even"));
+        assert!(result.err().unwrap().contains("even"));
     }
 
     #[test]
@@ -1496,7 +1496,7 @@ mod tests {
         settings.bitrate_kbps = 0;
         let result = HardwareEncoder::new(&settings);
         assert!(result.is_err());
-        assert!(result.unwrap_err().contains("Bitrate"));
+        assert!(result.err().unwrap().contains("Bitrate"));
     }
 
     #[test]
@@ -1505,7 +1505,7 @@ mod tests {
         settings.fps = 0.0;
         let result = HardwareEncoder::new(&settings);
         assert!(result.is_err());
-        assert!(result.unwrap_err().contains("FPS"));
+        assert!(result.err().unwrap().contains("FPS"));
     }
 
     #[test]
@@ -1523,7 +1523,7 @@ mod tests {
         let rgba = vec![0u8; 1920 * 1080 * 4];
         let result = encoder.encode_rgba_frame(&rgba, 0);
         assert!(result.is_err());
-        assert!(result.unwrap_err().contains("not opened"));
+        assert!(result.err().unwrap().contains("not opened"));
     }
 
     #[cfg(feature = "ffmpeg")]
@@ -1552,7 +1552,7 @@ mod tests {
             // Second open should fail
             let result = encoder.open(path_str);
             assert!(result.is_err());
-            assert!(result.unwrap_err().contains("already opened"));
+            assert!(result.err().unwrap().contains("already opened"));
         }
     }
 

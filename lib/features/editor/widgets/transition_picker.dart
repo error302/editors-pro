@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../core/theme/app_theme.dart';
 import '../../../core/extensions/context_extensions.dart';
+import '../../../core/theme/app_theme.dart';
 import '../providers/editor_provider.dart';
 
 /// Transition picker — shows available transition types and lets the user
@@ -50,10 +50,13 @@ class _TransitionPickerState extends ConsumerState<TransitionPicker> {
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           child: Row(
             children: [
-              Text('DIRECTION', style: context.textTheme.labelMedium?.copyWith(
-                color: AppTheme.textDisabled,
-                letterSpacing: 1,
-              )),
+              Text(
+                'DIRECTION',
+                style: context.textTheme.labelMedium?.copyWith(
+                  color: AppTheme.textDisabled,
+                  letterSpacing: 1,
+                ),
+              ),
               const SizedBox(width: 12),
               ChoiceChip(
                 label: const Text('In', style: TextStyle(fontSize: 11)),
@@ -118,10 +121,16 @@ class _TransitionPickerState extends ConsumerState<TransitionPicker> {
                   itemCount: _transitions.length,
                   itemBuilder: (context, index) {
                     final transition = _transitions[index];
-                    final String name = (transition.name as String?) ?? (transition['name'] as String?) ?? 'Unknown';
-                    final String icon = (transition.icon as String?) ?? (transition['icon'] as String?) ?? 'transition';
-                    final int defaultDuration = (transition.defaultDurationMs as int?) ??
-                        (transition['default_duration_ms'] as int?) ?? 500;
+                    final name = (transition.name as String?) ??
+                        (transition['name'] as String?) ??
+                        'Unknown';
+                    final icon = (transition.icon as String?) ??
+                        (transition['icon'] as String?) ??
+                        'transition';
+                    final defaultDuration =
+                        (transition.defaultDurationMs as int?) ??
+                            (transition['default_duration_ms'] as int?) ??
+                            500;
 
                     return _TransitionCard(
                       name: name,
@@ -147,17 +156,16 @@ class _TransitionPickerState extends ConsumerState<TransitionPicker> {
 }
 
 class _TransitionCard extends StatelessWidget {
-  final String name;
-  final String icon;
-  final bool enabled;
-  final VoidCallback onTap;
-
   const _TransitionCard({
     required this.name,
     required this.icon,
     required this.enabled,
     required this.onTap,
   });
+  final String name;
+  final String icon;
+  final bool enabled;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -169,7 +177,9 @@ class _TransitionCard extends StatelessWidget {
           color: AppTheme.surfaceVariant,
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
-            color: enabled ? AppTheme.textDisabled.withOpacity(0.2) : Colors.transparent,
+            color: enabled
+                ? AppTheme.textDisabled.withValues(alpha: 0.2)
+                : Colors.transparent,
             width: 1,
           ),
         ),
@@ -199,19 +209,32 @@ class _TransitionCard extends StatelessWidget {
 
   IconData get _iconData {
     switch (icon) {
-      case 'cut': return Icons.content_cut;
-      case 'fade': return Icons.gradient;
-      case 'dissolve': return Icons.auto_fix_high;
-      case 'wipe_left': return Icons.arrow_back;
-      case 'wipe_right': return Icons.arrow_forward;
-      case 'wipe_up': return Icons.arrow_upward;
-      case 'wipe_down': return Icons.arrow_downward;
-      case 'slide_left': return Icons.chevron_left;
-      case 'slide_right': return Icons.chevron_right;
-      case 'zoom_in': return Icons.zoom_in;
-      case 'zoom_out': return Icons.zoom_out;
-      case 'spin': return Icons.rotate_right;
-      default: return Icons.swap_horiz;
+      case 'cut':
+        return Icons.content_cut;
+      case 'fade':
+        return Icons.gradient;
+      case 'dissolve':
+        return Icons.auto_fix_high;
+      case 'wipe_left':
+        return Icons.arrow_back;
+      case 'wipe_right':
+        return Icons.arrow_forward;
+      case 'wipe_up':
+        return Icons.arrow_upward;
+      case 'wipe_down':
+        return Icons.arrow_downward;
+      case 'slide_left':
+        return Icons.chevron_left;
+      case 'slide_right':
+        return Icons.chevron_right;
+      case 'zoom_in':
+        return Icons.zoom_in;
+      case 'zoom_out':
+        return Icons.zoom_out;
+      case 'spin':
+        return Icons.rotate_right;
+      default:
+        return Icons.swap_horiz;
     }
   }
 }

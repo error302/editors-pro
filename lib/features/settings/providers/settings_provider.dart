@@ -8,6 +8,23 @@ import '../../onboarding/providers/onboarding_provider.dart';
 
 /// Immutable snapshot of all user-configurable settings.
 class AppSettings {
+  const AppSettings({
+    this.defaultResolution = '1080p',
+    this.defaultCodec = 'H.264',
+    this.autoSaveIntervalMinutes = 2,
+    this.autoSaveEnabled = true,
+    this.gpuAccelerationEnabled = true,
+    this.hardwareEncodingEnabled = true,
+    this.crashReportingEnabled = true,
+    this.analyticsEnabled = false,
+    this.proxyQuality = '480p',
+    this.cacheSizeMb = 500,
+    this.hardwareDecoding = true,
+    this.experimentalAutoCaptions = false,
+    this.experimentalCloudSync = false,
+    this.experimentalAiBackgroundRemoval = false,
+    this.themeMode = 'system',
+  });
   final String defaultResolution; // '720p', '1080p', '4K'
   final String defaultCodec; // 'H.264', 'H.265'
   final int autoSaveIntervalMinutes; // 1-10
@@ -55,24 +72,6 @@ class AppSettings {
   /// - `'light'`: force light theme.
   /// - `'dark'`: force dark theme.
   final String themeMode;
-
-  const AppSettings({
-    this.defaultResolution = '1080p',
-    this.defaultCodec = 'H.264',
-    this.autoSaveIntervalMinutes = 2,
-    this.autoSaveEnabled = true,
-    this.gpuAccelerationEnabled = true,
-    this.hardwareEncodingEnabled = true,
-    this.crashReportingEnabled = true,
-    this.analyticsEnabled = false,
-    this.proxyQuality = '480p',
-    this.cacheSizeMb = 500,
-    this.hardwareDecoding = true,
-    this.experimentalAutoCaptions = false,
-    this.experimentalCloudSync = false,
-    this.experimentalAiBackgroundRemoval = false,
-    this.themeMode = 'system',
-  });
 
   /// Phase E.6: resolve the string preference to a Flutter [ThemeMode].
   ThemeMode get themeModeEnum {
@@ -124,9 +123,8 @@ class AppSettings {
           experimentalAutoCaptions ?? this.experimentalAutoCaptions,
       experimentalCloudSync:
           experimentalCloudSync ?? this.experimentalCloudSync,
-      experimentalAiBackgroundRemoval:
-          experimentalAiBackgroundRemoval ??
-              this.experimentalAiBackgroundRemoval,
+      experimentalAiBackgroundRemoval: experimentalAiBackgroundRemoval ??
+          this.experimentalAiBackgroundRemoval,
       themeMode: themeMode ?? this.themeMode,
     );
   }
@@ -137,6 +135,9 @@ class AppSettings {
 /// Riverpod notifier that persists every settings change to
 /// SharedPreferences immediately.
 class SettingsNotifier extends StateNotifier<AppSettings> {
+  SettingsNotifier(this._prefs) : super(const AppSettings()) {
+    _loadFromPrefs();
+  }
   final SharedPreferences _prefs;
 
   // Preference keys
@@ -155,40 +156,29 @@ class SettingsNotifier extends StateNotifier<AppSettings> {
   // Phase B.7: experimental feature flag keys.
   static const _keyExperimentalAutoCaptions =
       'settings_experimental_auto_captions';
-  static const _keyExperimentalCloudSync =
-      'settings_experimental_cloud_sync';
+  static const _keyExperimentalCloudSync = 'settings_experimental_cloud_sync';
   static const _keyExperimentalAiBackgroundRemoval =
       'settings_experimental_ai_bg_removal';
 
   // Phase E.5/E.6: theme mode key.
   static const _keyThemeMode = 'settings_theme_mode';
 
-  SettingsNotifier(this._prefs) : super(const AppSettings()) {
-    _loadFromPrefs();
-  }
-
   void _loadFromPrefs() {
     state = AppSettings(
       defaultResolution: _prefs.getString(_keyResolution) ?? '1080p',
       defaultCodec: _prefs.getString(_keyCodec) ?? 'H.264',
-      autoSaveIntervalMinutes:
-          _prefs.getInt(_keyAutoSaveInterval) ?? 2,
+      autoSaveIntervalMinutes: _prefs.getInt(_keyAutoSaveInterval) ?? 2,
       autoSaveEnabled: _prefs.getBool(_keyAutoSaveEnabled) ?? true,
-      gpuAccelerationEnabled:
-          _prefs.getBool(_keyGpuAcceleration) ?? true,
-      hardwareEncodingEnabled:
-          _prefs.getBool(_keyHardwareEncoding) ?? true,
-      crashReportingEnabled:
-          _prefs.getBool(_keyCrashReporting) ?? true,
+      gpuAccelerationEnabled: _prefs.getBool(_keyGpuAcceleration) ?? true,
+      hardwareEncodingEnabled: _prefs.getBool(_keyHardwareEncoding) ?? true,
+      crashReportingEnabled: _prefs.getBool(_keyCrashReporting) ?? true,
       analyticsEnabled: _prefs.getBool(_keyAnalytics) ?? false,
       proxyQuality: _prefs.getString(_keyProxyQuality) ?? '480p',
       cacheSizeMb: _prefs.getInt(_keyCacheSizeMb) ?? 500,
-      hardwareDecoding:
-          _prefs.getBool(_keyHardwareDecoding) ?? true,
+      hardwareDecoding: _prefs.getBool(_keyHardwareDecoding) ?? true,
       experimentalAutoCaptions:
           _prefs.getBool(_keyExperimentalAutoCaptions) ?? false,
-      experimentalCloudSync:
-          _prefs.getBool(_keyExperimentalCloudSync) ?? false,
+      experimentalCloudSync: _prefs.getBool(_keyExperimentalCloudSync) ?? false,
       experimentalAiBackgroundRemoval:
           _prefs.getBool(_keyExperimentalAiBackgroundRemoval) ?? false,
       themeMode: _prefs.getString(_keyThemeMode) ?? 'system',

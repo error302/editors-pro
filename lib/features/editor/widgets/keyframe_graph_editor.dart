@@ -6,17 +6,16 @@ import '../providers/editor_provider.dart';
 
 /// Keyframe data for display
 class KeyframePoint {
-  final String id;
-  final int timeMs;
-  final double value;
-  final String easingName;
-
   const KeyframePoint({
     required this.id,
     required this.timeMs,
     required this.value,
     required this.easingName,
   });
+  final String id;
+  final int timeMs;
+  final double value;
+  final String easingName;
 
   KeyframePoint copyWith({
     String? id,
@@ -35,17 +34,17 @@ class KeyframePoint {
 
 /// Keyframe graph editor widget
 class KeyframeGraphEditor extends ConsumerStatefulWidget {
+  const KeyframeGraphEditor({
+    required this.clipId,
+    required this.clipDurationMs,
+    super.key,
+  });
   final String clipId;
   final int clipDurationMs;
 
-  const KeyframeGraphEditor({
-    super.key,
-    required this.clipId,
-    required this.clipDurationMs,
-  });
-
   @override
-  ConsumerState<KeyframeGraphEditor> createState() => _KeyframeGraphEditorState();
+  ConsumerState<KeyframeGraphEditor> createState() =>
+      _KeyframeGraphEditorState();
 }
 
 class _KeyframeGraphEditorState extends ConsumerState<KeyframeGraphEditor> {
@@ -56,15 +55,43 @@ class _KeyframeGraphEditorState extends ConsumerState<KeyframeGraphEditor> {
   String? _selectedKeyframeId;
 
   static const Map<String, _PropertyConfig> _propertyConfigs = {
-    'position_x': _PropertyConfig(label: 'Position X', min: -500, max: 500, color: Colors.blue),
-    'position_y': _PropertyConfig(label: 'Position Y', min: -500, max: 500, color: Colors.green),
-    'scale': _PropertyConfig(label: 'Scale', min: 0.0, max: 5.0, color: Colors.orange),
-    'rotation': _PropertyConfig(label: 'Rotation', min: -360, max: 360, color: Colors.purple),
-    'opacity': _PropertyConfig(label: 'Opacity', min: 0.0, max: 1.0, color: Colors.red),
+    'position_x': _PropertyConfig(
+      label: 'Position X',
+      min: -500,
+      max: 500,
+      color: Colors.blue,
+    ),
+    'position_y': _PropertyConfig(
+      label: 'Position Y',
+      min: -500,
+      max: 500,
+      color: Colors.green,
+    ),
+    'scale': _PropertyConfig(
+      label: 'Scale',
+      min: 0.0,
+      max: 5.0,
+      color: Colors.orange,
+    ),
+    'rotation': _PropertyConfig(
+      label: 'Rotation',
+      min: -360,
+      max: 360,
+      color: Colors.purple,
+    ),
+    'opacity': _PropertyConfig(
+      label: 'Opacity',
+      min: 0.0,
+      max: 1.0,
+      color: Colors.red,
+    ),
   };
 
   static const List<String> _easingTypes = [
-    'linear', 'ease_in', 'ease_out', 'ease_in_out',
+    'linear',
+    'ease_in',
+    'ease_out',
+    'ease_in_out',
   ];
 
   @override
@@ -125,7 +152,8 @@ class _KeyframeGraphEditorState extends ConsumerState<KeyframeGraphEditor> {
                       isDense: true,
                       dropdownColor: AppTheme.surfaceVariant,
                       style: TextStyle(
-                        color: _propertyConfigs[_selectedProperty]?.color ?? AppTheme.textPrimary,
+                        color: _propertyConfigs[_selectedProperty]?.color ??
+                            AppTheme.textPrimary,
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
                       ),
@@ -150,7 +178,9 @@ class _KeyframeGraphEditorState extends ConsumerState<KeyframeGraphEditor> {
                         );
                       }).toList(),
                       onChanged: (value) {
-                        if (value != null) setState(() => _selectedProperty = value);
+                        if (value != null) {
+                          setState(() => _selectedProperty = value);
+                        }
                       },
                     ),
                   ),
@@ -164,7 +194,8 @@ class _KeyframeGraphEditorState extends ConsumerState<KeyframeGraphEditor> {
                   color: AppTheme.primary,
                   tooltip: 'Add keyframe at playhead',
                   padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                  constraints:
+                      const BoxConstraints(minWidth: 32, minHeight: 32),
                 ),
 
                 // Delete keyframe button
@@ -174,7 +205,8 @@ class _KeyframeGraphEditorState extends ConsumerState<KeyframeGraphEditor> {
                   color: Colors.redAccent,
                   tooltip: 'Delete selected keyframe',
                   padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                  constraints:
+                      const BoxConstraints(minWidth: 32, minHeight: 32),
                 ),
 
                 // Open in graph editor (full screen) button
@@ -192,7 +224,8 @@ class _KeyframeGraphEditorState extends ConsumerState<KeyframeGraphEditor> {
                   color: AppTheme.textSecondary,
                   tooltip: 'Expand graph editor',
                   padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                  constraints:
+                      const BoxConstraints(minWidth: 32, minHeight: 32),
                 ),
               ],
             ),
@@ -235,12 +268,18 @@ class _KeyframeGraphEditorState extends ConsumerState<KeyframeGraphEditor> {
               children: [
                 Text(
                   'Keyframes: ${_keyframeData[_selectedProperty]?.length ?? 0}',
-                  style: const TextStyle(color: AppTheme.textSecondary, fontSize: 11),
+                  style: const TextStyle(
+                    color: AppTheme.textSecondary,
+                    fontSize: 11,
+                  ),
                 ),
                 if (_playheadMs != null)
                   Text(
                     'Playhead: ${(_playheadMs! / 1000.0).toStringAsFixed(2)}s',
-                    style: const TextStyle(color: AppTheme.textSecondary, fontSize: 11),
+                    style: const TextStyle(
+                      color: AppTheme.textSecondary,
+                      fontSize: 11,
+                    ),
                   ),
               ],
             ),
@@ -252,7 +291,8 @@ class _KeyframeGraphEditorState extends ConsumerState<KeyframeGraphEditor> {
 
   Widget _buildSelectedKeyframeEditor() {
     final keyframes = _keyframeData[_selectedProperty] ?? [];
-    final selectedKf = keyframes.where((kf) => kf.id == _selectedKeyframeId).firstOrNull;
+    final selectedKf =
+        keyframes.where((kf) => kf.id == _selectedKeyframeId).firstOrNull;
     if (selectedKf == null) {
       _selectedKeyframeId = null;
       return const SizedBox.shrink();
@@ -293,7 +333,10 @@ class _KeyframeGraphEditorState extends ConsumerState<KeyframeGraphEditor> {
                   child: DropdownButton<String>(
                     value: selectedKf.easingName,
                     isDense: true,
-                    style: const TextStyle(color: AppTheme.textPrimary, fontSize: 11),
+                    style: const TextStyle(
+                      color: AppTheme.textPrimary,
+                      fontSize: 11,
+                    ),
                     dropdownColor: AppTheme.surfaceVariant,
                     items: _easingTypes.map((easing) {
                       return DropdownMenuItem(
@@ -316,7 +359,10 @@ class _KeyframeGraphEditorState extends ConsumerState<KeyframeGraphEditor> {
             children: [
               Text(
                 '${config.label}: ',
-                style: const TextStyle(color: AppTheme.textSecondary, fontSize: 11),
+                style: const TextStyle(
+                  color: AppTheme.textSecondary,
+                  fontSize: 11,
+                ),
               ),
               Expanded(
                 child: Slider(
@@ -365,24 +411,27 @@ class _KeyframeGraphEditorState extends ConsumerState<KeyframeGraphEditor> {
 
     final newId = 'kf_${DateTime.now().millisecondsSinceEpoch}';
     setState(() {
-      _keyframeData[_selectedProperty]!.add(KeyframePoint(
-        id: newId,
-        timeMs: timeMs,
-        value: defaultValue,
-        easingName: 'linear',
-      ));
-      _keyframeData[_selectedProperty]!.sort((a, b) => a.timeMs.compareTo(b.timeMs));
+      _keyframeData[_selectedProperty]!.add(
+        KeyframePoint(
+          id: newId,
+          timeMs: timeMs,
+          value: defaultValue,
+          easingName: 'linear',
+        ),
+      );
+      _keyframeData[_selectedProperty]!
+          .sort((a, b) => a.timeMs.compareTo(b.timeMs));
       _selectedKeyframeId = newId;
     });
 
     // Wire to engine bridge API
     ref.read(editorProvider.notifier).addKeyframe(
-      widget.clipId,
-      _selectedProperty,
-      timeMs,
-      defaultValue,
-      'linear',
-    );
+          widget.clipId,
+          _selectedProperty,
+          timeMs,
+          defaultValue,
+          'linear',
+        );
   }
 
   void _deleteSelectedKeyframe() {
@@ -390,17 +439,18 @@ class _KeyframeGraphEditorState extends ConsumerState<KeyframeGraphEditor> {
     final keyframes = _keyframeData[_selectedProperty];
     if (keyframes == null || keyframes.isEmpty) return;
 
-    final toRemove = keyframes.where((kf) => kf.id == _selectedKeyframeId).firstOrNull;
+    final toRemove =
+        keyframes.where((kf) => kf.id == _selectedKeyframeId).firstOrNull;
     if (toRemove != null) {
       setState(() {
         keyframes.remove(toRemove);
         _selectedKeyframeId = null;
       });
       ref.read(editorProvider.notifier).removeKeyframe(
-        widget.clipId,
-        _selectedProperty,
-        toRemove.id,
-      );
+            widget.clipId,
+            _selectedProperty,
+            toRemove.id,
+          );
     }
   }
 
@@ -419,12 +469,12 @@ class _KeyframeGraphEditorState extends ConsumerState<KeyframeGraphEditor> {
     });
 
     ref.read(editorProvider.notifier).updateKeyframe(
-      widget.clipId,
-      _selectedProperty,
-      keyframeId,
-      value: value ?? keyframes[idx].value,
-      easing: easingName ?? keyframes[idx].easingName,
-    );
+          widget.clipId,
+          _selectedProperty,
+          keyframeId,
+          value: value ?? keyframes[idx].value,
+          easing: easingName ?? keyframes[idx].easingName,
+        );
   }
 
   void _onTapUp(TapUpDetails details) {
@@ -434,18 +484,23 @@ class _KeyframeGraphEditorState extends ConsumerState<KeyframeGraphEditor> {
 
     final box = context.findRenderObject() as RenderBox;
     final localPos = details.localPosition;
-    final padding = 40.0;
+    const padding = 40.0;
     final graphWidth = box.size.width - padding * 2;
     final graphHeight = box.size.height - padding * 2;
     final config = _propertyConfigs[_selectedProperty]!;
 
-    double closestDist = 20.0;
+    var closestDist = 20.0;
     String? closestId;
 
     for (final kf in keyframes) {
-      final x = padding + (kf.timeMs / (widget.clipDurationMs > 0 ? widget.clipDurationMs : 1)) * graphWidth;
-      final y = padding + graphHeight - _valueToY(kf.value, config) * graphHeight;
-      final dist = math.sqrt(math.pow(localPos.dx - x, 2) + math.pow(localPos.dy - y, 2));
+      final x = padding +
+          (kf.timeMs /
+                  (widget.clipDurationMs > 0 ? widget.clipDurationMs : 1)) *
+              graphWidth;
+      final y =
+          padding + graphHeight - _valueToY(kf.value, config) * graphHeight;
+      final dist = math
+          .sqrt(math.pow(localPos.dx - x, 2) + math.pow(localPos.dy - y, 2));
       if (dist < closestDist) {
         closestDist = dist;
         closestId = kf.id;
@@ -464,17 +519,22 @@ class _KeyframeGraphEditorState extends ConsumerState<KeyframeGraphEditor> {
 
     final box = context.findRenderObject() as RenderBox;
     final localPos = details.localPosition;
-    final padding = 40.0;
+    const padding = 40.0;
     final graphWidth = box.size.width - padding * 2;
     final graphHeight = box.size.height - padding * 2;
     final config = _propertyConfigs[_selectedProperty]!;
 
-    double closestDist = 20.0;
+    var closestDist = 20.0;
 
     for (final kf in keyframes) {
-      final x = padding + (kf.timeMs / (widget.clipDurationMs > 0 ? widget.clipDurationMs : 1)) * graphWidth;
-      final y = padding + graphHeight - _valueToY(kf.value, config) * graphHeight;
-      final dist = math.sqrt(math.pow(localPos.dx - x, 2) + math.pow(localPos.dy - y, 2));
+      final x = padding +
+          (kf.timeMs /
+                  (widget.clipDurationMs > 0 ? widget.clipDurationMs : 1)) *
+              graphWidth;
+      final y =
+          padding + graphHeight - _valueToY(kf.value, config) * graphHeight;
+      final dist = math
+          .sqrt(math.pow(localPos.dx - x, 2) + math.pow(localPos.dy - y, 2));
       if (dist < closestDist) {
         closestDist = dist;
         _draggingKeyframeId = kf.id;
@@ -493,14 +553,16 @@ class _KeyframeGraphEditorState extends ConsumerState<KeyframeGraphEditor> {
     if (idx < 0) return;
 
     final box = context.findRenderObject() as RenderBox;
-    final padding = 40.0;
+    const padding = 40.0;
     final graphWidth = box.size.width - padding * 2;
     final graphHeight = box.size.height - padding * 2;
     final config = _propertyConfigs[_selectedProperty]!;
 
     // Convert delta to time and value changes
-    final timeDelta = (details.delta.dx / graphWidth * widget.clipDurationMs).round();
-    final valueDelta = -details.delta.dy / graphHeight * (config.max - config.min);
+    final timeDelta =
+        (details.delta.dx / graphWidth * widget.clipDurationMs).round();
+    final valueDelta =
+        -details.delta.dy / graphHeight * (config.max - config.min);
 
     final kf = keyframes[idx];
     final newTime = (kf.timeMs + timeDelta).clamp(0, widget.clipDurationMs);
@@ -513,12 +575,12 @@ class _KeyframeGraphEditorState extends ConsumerState<KeyframeGraphEditor> {
     });
 
     ref.read(editorProvider.notifier).updateKeyframe(
-      widget.clipId,
-      _selectedProperty,
-      kf.id,
-      value: newValue,
-      easing: kf.easingName,
-    );
+          widget.clipId,
+          _selectedProperty,
+          kf.id,
+          value: newValue,
+          easing: kf.easingName,
+        );
   }
 
   void _onPanEnd(DragEndDetails details) {
@@ -532,21 +594,29 @@ class _KeyframeGraphEditorState extends ConsumerState<KeyframeGraphEditor> {
 }
 
 class _PropertyConfig {
-  final String label;
-  final double min;
-  final double max;
-  final Color color;
-
   const _PropertyConfig({
     required this.label,
     required this.min,
     required this.max,
     required this.color,
   });
+  final String label;
+  final double min;
+  final double max;
+  final Color color;
 }
 
 /// Custom painter for keyframe graph
 class _KeyframeGraphPainter extends CustomPainter {
+  _KeyframeGraphPainter({
+    required this.keyframes,
+    required this.config,
+    required this.durationMs,
+    required this.allProperties,
+    required this.propertyConfigs,
+    this.playheadMs,
+    this.selectedKeyframeId,
+  });
   final List<KeyframePoint> keyframes;
   final _PropertyConfig config;
   final int durationMs;
@@ -554,16 +624,6 @@ class _KeyframeGraphPainter extends CustomPainter {
   final Map<String, List<KeyframePoint>> allProperties;
   final Map<String, _PropertyConfig> propertyConfigs;
   final String? selectedKeyframeId;
-
-  _KeyframeGraphPainter({
-    required this.keyframes,
-    required this.config,
-    required this.durationMs,
-    this.playheadMs,
-    required this.allProperties,
-    required this.propertyConfigs,
-    this.selectedKeyframeId,
-  });
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -581,15 +641,25 @@ class _KeyframeGraphPainter extends CustomPainter {
       if (propConfig == null || entry.value.isEmpty) continue;
 
       _drawCurve(
-        canvas, padding, graphWidth, graphHeight,
-        entry.value, propConfig, true,
+        canvas,
+        padding,
+        graphWidth,
+        graphHeight,
+        entry.value,
+        propConfig,
+        true,
       );
     }
 
     // Draw current property curve (bright)
     _drawCurve(
-      canvas, padding, graphWidth, graphHeight,
-      keyframes, config, false,
+      canvas,
+      padding,
+      graphWidth,
+      graphHeight,
+      keyframes,
+      config,
+      false,
     );
 
     // Draw keyframe diamonds
@@ -599,9 +669,13 @@ class _KeyframeGraphPainter extends CustomPainter {
     if (playheadMs != null && durationMs > 0) {
       final x = padding + (playheadMs! / durationMs) * graphWidth;
       final playheadPaint = Paint()
-        ..color = AppTheme.playheadColor.withOpacity(0.7)
+        ..color = AppTheme.playheadColor.withValues(alpha: 0.7)
         ..strokeWidth = 1;
-      canvas.drawLine(Offset(x, padding), Offset(x, size.height - padding), playheadPaint);
+      canvas.drawLine(
+        Offset(x, padding),
+        Offset(x, size.height - padding),
+        playheadPaint,
+      );
 
       // Playhead triangle at top
       final triPath = Path();
@@ -623,9 +697,15 @@ class _KeyframeGraphPainter extends CustomPainter {
     return '';
   }
 
-  void _drawGrid(Canvas canvas, Size size, double padding, double gw, double gh) {
+  void _drawGrid(
+    Canvas canvas,
+    Size size,
+    double padding,
+    double gw,
+    double gh,
+  ) {
     final gridPaint = Paint()
-      ..color = const Color(0xFF2A2A3E).withOpacity(0.3)
+      ..color = const Color(0xFF2A2A3E).withValues(alpha: 0.3)
       ..strokeWidth = 0.5;
 
     // Horizontal lines (value axis)
@@ -641,12 +721,19 @@ class _KeyframeGraphPainter extends CustomPainter {
     }
   }
 
-  void _drawCurve(Canvas canvas, double pad, double gw, double gh,
-      List<KeyframePoint> kfs, _PropertyConfig cfg, bool dimmed) {
+  void _drawCurve(
+    Canvas canvas,
+    double pad,
+    double gw,
+    double gh,
+    List<KeyframePoint> kfs,
+    _PropertyConfig cfg,
+    bool dimmed,
+  ) {
     if (kfs.isEmpty) return;
 
     final paint = Paint()
-      ..color = dimmed ? cfg.color.withOpacity(0.3) : cfg.color
+      ..color = dimmed ? cfg.color.withValues(alpha: 0.3) : cfg.color
       ..style = PaintingStyle.stroke
       ..strokeWidth = dimmed ? 1 : 2.5
       ..strokeCap = StrokeCap.round;
@@ -660,7 +747,7 @@ class _KeyframeGraphPainter extends CustomPainter {
 
     // Draw interpolated curve between keyframes with easing
     final path = Path();
-    final stepsPerSegment = 40;
+    const stepsPerSegment = 40;
 
     for (var i = 0; i < kfs.length; i++) {
       final x = pad + (kfs[i].timeMs / (durationMs > 0 ? durationMs : 1)) * gw;
@@ -677,7 +764,8 @@ class _KeyframeGraphPainter extends CustomPainter {
 
       if (i < kfs.length - 1) {
         // Draw interpolated segment with easing
-        final nextX = pad + (kfs[i + 1].timeMs / (durationMs > 0 ? durationMs : 1)) * gw;
+        final nextX =
+            pad + (kfs[i + 1].timeMs / (durationMs > 0 ? durationMs : 1)) * gw;
         final nextY = pad + gh - _valueToY(kfs[i + 1].value, cfg) * gh;
 
         for (var s = 1; s <= stepsPerSegment; s++) {
@@ -737,7 +825,7 @@ class _KeyframeGraphPainter extends CustomPainter {
       if (isSelected) {
         canvas.drawPath(
           path,
-          Paint()..color = config.color.withOpacity(0.4),
+          Paint()..color = config.color.withValues(alpha: 0.4),
         );
       }
 
@@ -755,7 +843,13 @@ class _KeyframeGraphPainter extends CustomPainter {
     }
   }
 
-  void _drawAxisLabels(Canvas canvas, Size size, double pad, double gw, double gh) {
+  void _drawAxisLabels(
+    Canvas canvas,
+    Size size,
+    double pad,
+    double gw,
+    double gh,
+  ) {
     // Time labels (bottom)
     for (var i = 0; i <= 5; i++) {
       final t = i / 5;

@@ -12,14 +12,13 @@ import '../../../core/theme/app_theme.dart';
 /// cleanliness, with the right stock for the look. See
 /// persona/skills/film-grain-recipe/SKILL.md.
 class FilmGrainPicker extends StatefulWidget {
-  final void Function(FilmGrainValues values) onChanged;
-  final FilmGrainValues initialValues;
-
   const FilmGrainPicker({
-    super.key,
     required this.onChanged,
+    super.key,
     this.initialValues = FilmGrainValues.neutral,
   });
+  final void Function(FilmGrainValues values) onChanged;
+  final FilmGrainValues initialValues;
 
   @override
   State<FilmGrainPicker> createState() => _FilmGrainPickerState();
@@ -64,19 +63,43 @@ class _FilmGrainPickerState extends State<FilmGrainPicker> {
               enabled: false,
               child: Divider(height: 1),
             ),
-            DropdownMenuItem(value: 'kodak_5219_500T', child: Text('Kodak Vision3 500T (warm)')),
-            DropdownMenuItem(value: 'kodak_5213_200T', child: Text('Kodak Vision3 200T')),
-            DropdownMenuItem(value: 'kodak_5207_250D', child: Text('Kodak Vision3 250D (daylight)')),
-            DropdownMenuItem(value: 'fuji_eterna_500T', child: Text('Fuji Eterna 500T (cool)')),
-            DropdownMenuItem(value: 'fuji_8543_500T', child: Text('Fuji Eterna Vivid 500T')),
-            DropdownMenuItem(value: 'ilford_hp5', child: Text('Ilford HP5 (B&W)')),
-            DropdownMenuItem(value: 'ilford_delta_3200', child: Text('Ilford Delta 3200 (B&W push)')),
+            DropdownMenuItem(
+              value: 'kodak_5219_500T',
+              child: Text('Kodak Vision3 500T (warm)'),
+            ),
+            DropdownMenuItem(
+              value: 'kodak_5213_200T',
+              child: Text('Kodak Vision3 200T'),
+            ),
+            DropdownMenuItem(
+              value: 'kodak_5207_250D',
+              child: Text('Kodak Vision3 250D (daylight)'),
+            ),
+            DropdownMenuItem(
+              value: 'fuji_eterna_500T',
+              child: Text('Fuji Eterna 500T (cool)'),
+            ),
+            DropdownMenuItem(
+              value: 'fuji_8543_500T',
+              child: Text('Fuji Eterna Vivid 500T'),
+            ),
+            DropdownMenuItem(
+              value: 'ilford_hp5',
+              child: Text('Ilford HP5 (B&W)'),
+            ),
+            DropdownMenuItem(
+              value: 'ilford_delta_3200',
+              child: Text('Ilford Delta 3200 (B&W push)'),
+            ),
             DropdownMenuItem<String>(
               enabled: false,
               child: Divider(height: 1),
             ),
             DropdownMenuItem(value: 'vhs', child: Text('VHS (tape noise)')),
-            DropdownMenuItem(value: 'halation', child: Text('Halation (red glow on highlights)')),
+            DropdownMenuItem(
+              value: 'halation',
+              child: Text('Halation (red glow on highlights)'),
+            ),
           ],
           onChanged: (v) {
             if (v != null) _update(_v.copyWith(stockPreset: v));
@@ -87,7 +110,8 @@ class _FilmGrainPickerState extends State<FilmGrainPicker> {
         Text('Intensity', style: Theme.of(context).textTheme.bodyMedium),
         Slider(
           value: _v.intensity,
-          min: 0.0, max: 1.0,
+          min: 0.0,
+          max: 1.0,
           divisions: 100,
           label: '${(_v.intensity * 100).round()}%',
           onChanged: (v) => _update(_v.copyWith(intensity: v)),
@@ -103,7 +127,8 @@ class _FilmGrainPickerState extends State<FilmGrainPicker> {
         Text('Grain Size', style: Theme.of(context).textTheme.bodyMedium),
         Slider(
           value: _v.grainSize,
-          min: 0.5, max: 4.0,
+          min: 0.5,
+          max: 4.0,
           divisions: 35,
           label: _v.grainSize.toStringAsFixed(1),
           onChanged: (v) => _update(_v.copyWith(grainSize: v)),
@@ -117,10 +142,14 @@ class _FilmGrainPickerState extends State<FilmGrainPicker> {
           onChanged: (b) => _update(_v.copyWith(halation: b)),
         ),
         if (_v.halation) ...[
-          Text('Halation intensity', style: Theme.of(context).textTheme.bodyMedium),
+          Text(
+            'Halation intensity',
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
           Slider(
             value: _v.halationIntensity,
-            min: 0.0, max: 1.0,
+            min: 0.0,
+            max: 1.0,
             divisions: 100,
             label: '${(_v.halationIntensity * 100).round()}%',
             onChanged: (v) => _update(_v.copyWith(halationIntensity: v)),
@@ -132,12 +161,6 @@ class _FilmGrainPickerState extends State<FilmGrainPicker> {
 }
 
 class FilmGrainValues {
-  final String stockPreset;
-  final double intensity;
-  final double grainSize;
-  final bool halation;
-  final double halationIntensity;
-
   const FilmGrainValues({
     this.stockPreset = 'none',
     this.intensity = 0.2,
@@ -145,6 +168,11 @@ class FilmGrainValues {
     this.halation = false,
     this.halationIntensity = 0.3,
   });
+  final String stockPreset;
+  final double intensity;
+  final double grainSize;
+  final bool halation;
+  final double halationIntensity;
 
   static const neutral = FilmGrainValues();
 

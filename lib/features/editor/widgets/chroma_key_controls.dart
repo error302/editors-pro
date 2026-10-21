@@ -6,28 +6,29 @@
 /// - Edge softness slider
 /// - Spill suppression slider
 /// - Preview toggle (show/hide removed areas with red overlay)
+library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../core/theme/app_theme.dart';
 import '../../../core/extensions/context_extensions.dart';
+import '../../../core/theme/app_theme.dart';
 import '../providers/editor_provider.dart';
 
 /// Chroma key controls panel — displayed in the inspector when
 /// a Chroma Key effect is selected on the active clip.
 class ChromaKeyControls extends ConsumerStatefulWidget {
+  const ChromaKeyControls({
+    required this.effectId,
+    required this.clipId,
+    super.key,
+  });
+
   /// The effect ID for this chroma key instance
   final String effectId;
 
   /// The clip ID that owns this effect
   final String clipId;
-
-  const ChromaKeyControls({
-    super.key,
-    required this.effectId,
-    required this.clipId,
-  });
 
   @override
   ConsumerState<ChromaKeyControls> createState() => _ChromaKeyControlsState();
@@ -212,7 +213,7 @@ class _ChromaKeyControlsState extends ConsumerState<ChromaKeyControls> {
             // In production, this would toggle a visual overlay on the
             // preview viewport showing which areas are keyed out.
           },
-          activeColor: AppTheme.primary,
+          activeThumbColor: AppTheme.primary,
           contentPadding: EdgeInsets.zero,
           dense: true,
         ),
@@ -226,17 +227,16 @@ enum ChromaKeyPreset { green, blue }
 
 /// Preset button for green/blue screen selection
 class _PresetButton extends StatelessWidget {
-  final String label;
-  final Color color;
-  final bool isSelected;
-  final VoidCallback onTap;
-
   const _PresetButton({
     required this.label,
     required this.color,
     required this.isSelected,
     required this.onTap,
   });
+  final String label;
+  final Color color;
+  final bool isSelected;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -245,10 +245,14 @@ class _PresetButton extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
-          color: isSelected ? color.withOpacity(0.2) : AppTheme.surfaceVariant,
+          color: isSelected
+              ? color.withValues(alpha: 0.2)
+              : AppTheme.surfaceVariant,
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
-            color: isSelected ? color : AppTheme.textDisabled.withOpacity(0.3),
+            color: isSelected
+                ? color
+                : AppTheme.textDisabled.withValues(alpha: 0.3),
             width: isSelected ? 2 : 1,
           ),
         ),
@@ -262,7 +266,7 @@ class _PresetButton extends StatelessWidget {
                 color: color,
                 shape: BoxShape.circle,
                 border: Border.all(
-                  color: Colors.white.withOpacity(0.5),
+                  color: Colors.white.withValues(alpha: 0.5),
                   width: 1,
                 ),
               ),
@@ -284,13 +288,12 @@ class _PresetButton extends StatelessWidget {
 
 /// Custom color button that opens a hue picker dialog
 class _CustomColorButton extends StatelessWidget {
-  final double currentHue;
-  final ValueChanged<double> onHueSelected;
-
   const _CustomColorButton({
     required this.currentHue,
     required this.onHueSelected,
   });
+  final double currentHue;
+  final ValueChanged<double> onHueSelected;
 
   @override
   Widget build(BuildContext context) {
@@ -302,7 +305,7 @@ class _CustomColorButton extends StatelessWidget {
           color: AppTheme.surfaceVariant,
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
-            color: AppTheme.textDisabled.withOpacity(0.3),
+            color: AppTheme.textDisabled.withValues(alpha: 0.3),
             width: 1,
           ),
         ),
@@ -328,7 +331,7 @@ class _CustomColorButton extends StatelessWidget {
   }
 
   void _showHuePicker(BuildContext context) {
-    double selectedHue = currentHue;
+    var selectedHue = currentHue;
 
     showDialog(
       context: context,
@@ -381,6 +384,16 @@ class _CustomColorButton extends StatelessWidget {
 
 /// Parameter slider widget for chroma key effect parameters
 class _ParameterSlider extends StatelessWidget {
+  const _ParameterSlider({
+    required this.label,
+    required this.value,
+    required this.min,
+    required this.max,
+    required this.divisions,
+    required this.unit,
+    required this.onChanged,
+    this.displayValue,
+  });
   final String label;
   final double value;
   final double min;
@@ -389,17 +402,6 @@ class _ParameterSlider extends StatelessWidget {
   final String unit;
   final String? displayValue;
   final ValueChanged<double> onChanged;
-
-  const _ParameterSlider({
-    required this.label,
-    required this.value,
-    required this.min,
-    required this.max,
-    required this.divisions,
-    required this.unit,
-    this.displayValue,
-    required this.onChanged,
-  });
 
   @override
   Widget build(BuildContext context) {

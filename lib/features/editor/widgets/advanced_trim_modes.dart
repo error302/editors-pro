@@ -12,16 +12,17 @@ import '../../../core/theme/app_theme.dart';
 /// close gaps, roll for cut-point refinement, slip for reframing, slide
 /// for nudging. See persona/skills/ripple-roll-trim/SKILL.md.
 class AdvancedTrimModes extends StatefulWidget {
-  final AdvancedTrimMode activeMode;
-  final void Function(AdvancedTrimMode mode) onModeChanged;
-  final int deltaMs; // The delta applied per frame while scrubbing
+  // The delta applied per frame while scrubbing
 
   const AdvancedTrimModes({
-    super.key,
     required this.activeMode,
     required this.onModeChanged,
+    super.key,
     this.deltaMs = 100,
   });
+  final AdvancedTrimMode activeMode;
+  final void Function(AdvancedTrimMode mode) onModeChanged;
+  final int deltaMs;
 
   @override
   State<AdvancedTrimModes> createState() => _AdvancedTrimModesState();
@@ -41,8 +42,10 @@ class _AdvancedTrimModesState extends State<AdvancedTrimModes> {
       ),
       child: Row(
         children: [
-          Text('Trim mode:',
-              style: Theme.of(context).textTheme.bodySmall),
+          Text(
+            'Trim mode:',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
           const SizedBox(width: AppTheme.spacing8),
           for (final mode in AdvancedTrimMode.values)
             Padding(
@@ -78,23 +81,31 @@ class _AdvancedTrimModesState extends State<AdvancedTrimModes> {
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text('Ripple',
-                  style: TextStyle(fontWeight: FontWeight.bold)),
+              Text(
+                'Ripple',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
               Text('Trim clip + shift subsequent clips to close the gap. '
                   'Total timeline duration changes.'),
               SizedBox(height: 8),
-              Text('Roll',
-                  style: TextStyle(fontWeight: FontWeight.bold)),
+              Text(
+                'Roll',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
               Text('Trim two adjacent clips simultaneously — one shorter, '
                   'one longer. Total duration unchanged.'),
               SizedBox(height: 8),
-              Text('Slip',
-                  style: TextStyle(fontWeight: FontWeight.bold)),
+              Text(
+                'Slip',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
               Text('Change in/out without changing duration or position. '
                   'You see different frames of the same shot.'),
               SizedBox(height: 8),
-              Text('Slide',
-                  style: TextStyle(fontWeight: FontWeight.bold)),
+              Text(
+                'Slide',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
               Text('Move clip between neighbors — neighbors trimmed to '
                   'make room. Total duration unchanged; slid clip unchanged.'),
             ],
@@ -112,15 +123,14 @@ class _AdvancedTrimModesState extends State<AdvancedTrimModes> {
 }
 
 class _ModeButton extends StatelessWidget {
-  final AdvancedTrimMode mode;
-  final bool isActive;
-  final VoidCallback onTap;
-
   const _ModeButton({
     required this.mode,
     required this.isActive,
     required this.onTap,
   });
+  final AdvancedTrimMode mode;
+  final bool isActive;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -136,7 +146,8 @@ class _ModeButton extends StatelessWidget {
           color: isActive
               ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.15)
               : Colors.transparent,
-          border: Border.all(color: color.withValues(alpha: isActive ? 0.7 : 0.3)),
+          border:
+              Border.all(color: color.withValues(alpha: isActive ? 0.7 : 0.3)),
           borderRadius: BorderRadius.circular(4),
         ),
         child: Row(
@@ -158,8 +169,7 @@ enum AdvancedTrimMode {
   slip('Slip', Icons.swap_calls),
   slide('Slide', Icons.compare_arrows);
 
+  const AdvancedTrimMode(this.label, this.icon);
   final String label;
   final IconData icon;
-
-  const AdvancedTrimMode(this.label, this.icon);
 }

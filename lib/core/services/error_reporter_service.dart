@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:developer' as developer;
 
 /// Error severity level
 enum ErrorSeverity { info, warning, error, critical }
@@ -19,24 +20,14 @@ enum ErrorCategory {
 
 /// A structured error with full context from the engine
 class EngineError {
-  final ErrorCategory category;
-  final ErrorSeverity severity;
-  final String code;
-  final String message;
-  final Map<String, String> context;
-  final String? cause;
-  final int timestampMs;
-  final bool recoverable;
-  final String? recoveryHint;
-
   const EngineError({
     required this.category,
     required this.severity,
     required this.code,
     required this.message,
+    required this.timestampMs,
     this.context = const {},
     this.cause,
-    required this.timestampMs,
     this.recoverable = true,
     this.recoveryHint,
   });
@@ -54,6 +45,15 @@ class EngineError {
         recoverable: json['recoverable'] as bool? ?? true,
         recoveryHint: json['recovery_hint'] as String?,
       );
+  final ErrorCategory category;
+  final ErrorSeverity severity;
+  final String code;
+  final String message;
+  final Map<String, String> context;
+  final String? cause;
+  final int timestampMs;
+  final bool recoverable;
+  final String? recoveryHint;
 
   Map<String, dynamic> toJson() => {
         'category': category.name,
@@ -85,8 +85,7 @@ class EngineError {
   bool get shouldShowToUser => severity != ErrorSeverity.info;
 
   @override
-  String toString() =>
-      'EngineError([$severity][$category] $code: $message)';
+  String toString() => 'EngineError([$severity][$category] $code: $message)';
 
   static ErrorCategory _parseCategory(String s) {
     return ErrorCategory.values.firstWhere(
@@ -113,7 +112,6 @@ class ErrorReporterService {
   final Map<ErrorCategory, int> _errorCounts = {};
 
   final _errorController = StreamController<EngineError>.broadcast();
-  static final _criticalErrorController = StreamController<EngineError>.broadcast();
 
   /// Stream of all reported errors
   Stream<EngineError> get onError => _errorController.stream;
@@ -149,13 +147,13 @@ class ErrorReporterService {
         // Skip logging info-level errors
         break;
       case ErrorSeverity.warning:
-        print('[WARNING] ${error.formatLog()}');
+        developer.log('[WARNING] ${error.formatLog()}');
         break;
       case ErrorSeverity.error:
-        print('[ERROR] ${error.formatLog()}');
+        developer.log('[ERROR] ${error.formatLog()}');
         break;
       case ErrorSeverity.critical:
-        print('[CRITICAL] ${error.formatLog()}');
+        developer.log('[CRITICAL] ${error.formatLog()}');
         break;
     }
   }
@@ -171,17 +169,19 @@ class ErrorReporterService {
     bool recoverable = true,
     String? recoveryHint,
   }) {
-    report(EngineError(
-      category: category,
-      severity: severity,
-      code: code,
-      message: message,
-      context: context ?? {},
-      cause: cause,
-      timestampMs: DateTime.now().millisecondsSinceEpoch,
-      recoverable: recoverable,
-      recoveryHint: recoveryHint,
-    ));
+    report(
+      EngineError(
+        category: category,
+        severity: severity,
+        code: code,
+        message: message,
+        context: context ?? {},
+        cause: cause,
+        timestampMs: DateTime.now().millisecondsSinceEpoch,
+        recoverable: recoverable,
+        recoveryHint: recoveryHint,
+      ),
+    );
   }
 
   /// Clear all errors
@@ -220,8 +220,7 @@ extension EngineErrorFormatting on EngineError {
     final ctx = context.isEmpty
         ? ''
         : ' [${context.entries.map((e) => '${e.key}=${e.value}').join(', ')}]';
-    final causeStr =
-        cause != null ? ' (caused by: $cause)' : '';
+    final causeStr = cause != null ? ' (caused by: $cause)' : '';
     final recoveryStr =
         recoveryHint != null ? ' [recovery: $recoveryHint]' : '';
 

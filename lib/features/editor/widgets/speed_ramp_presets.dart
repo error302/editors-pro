@@ -10,12 +10,6 @@ import '../providers/editor_provider.dart';
 /// tuples of (startSpeed, endSpeed, easingName) which are evenly divided
 /// across the clip duration when applied.
 class _RampPreset {
-  final String name;
-  final String description;
-  final IconData icon;
-  final List<(double, double, String)> segments;
-  final Color accentColor;
-
   const _RampPreset({
     required this.name,
     required this.description,
@@ -23,6 +17,11 @@ class _RampPreset {
     required this.segments,
     required this.accentColor,
   });
+  final String name;
+  final String description;
+  final IconData icon;
+  final List<(double, double, String)> segments;
+  final Color accentColor;
 }
 
 /// Speed ramp presets panel — displays 8 professional speed-ramp presets
@@ -37,14 +36,13 @@ class _RampPreset {
 /// The custom entry section allows manual specification of start speed,
 /// end speed, easing type, and what portion of the clip the ramp occupies.
 class SpeedRampPresets extends ConsumerStatefulWidget {
-  final String clipId;
-  final int clipDurationMs;
-
   const SpeedRampPresets({
-    super.key,
     required this.clipId,
     required this.clipDurationMs,
+    super.key,
   });
+  final String clipId;
+  final int clipDurationMs;
 
   @override
   ConsumerState<SpeedRampPresets> createState() => _SpeedRampPresetsState();
@@ -235,11 +233,11 @@ class _SpeedRampPresetsState extends ConsumerState<SpeedRampPresets> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         // Section header
-        Row(
+        const Row(
           children: [
-            const Icon(Icons.tune, color: AppTheme.primaryLight, size: 16),
-            const SizedBox(width: 6),
-            const Text(
+            Icon(Icons.tune, color: AppTheme.primaryLight, size: 16),
+            SizedBox(width: 6),
+            Text(
               'Custom Speed Curve',
               style: TextStyle(
                 color: AppTheme.textPrimary,
@@ -268,7 +266,11 @@ class _SpeedRampPresetsState extends ConsumerState<SpeedRampPresets> {
             const SizedBox(width: 8),
 
             // Arrow
-            const Icon(Icons.arrow_forward, color: AppTheme.textDisabled, size: 18),
+            const Icon(
+              Icons.arrow_forward,
+              color: AppTheme.textDisabled,
+              size: 18,
+            ),
             const SizedBox(width: 8),
 
             // End speed
@@ -412,7 +414,7 @@ class _SpeedRampPresetsState extends ConsumerState<SpeedRampPresets> {
 
     final segments = <Map<String, dynamic>>[];
 
-    for (int i = 0; i < segCount; i++) {
+    for (var i = 0; i < segCount; i++) {
       final (startSpeed, endSpeed, easing) = preset.segments[i];
       segments.add({
         'start_ms': rampStartMs + i * segDuration,
@@ -425,7 +427,9 @@ class _SpeedRampPresetsState extends ConsumerState<SpeedRampPresets> {
       });
     }
 
-    ref.read(editorProvider.notifier).setClipSpeedCurve(widget.clipId, segments);
+    ref
+        .read(editorProvider.notifier)
+        .setClipSpeedCurve(widget.clipId, segments);
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -451,7 +455,9 @@ class _SpeedRampPresetsState extends ConsumerState<SpeedRampPresets> {
       },
     ];
 
-    ref.read(editorProvider.notifier).setClipSpeedCurve(widget.clipId, segments);
+    ref
+        .read(editorProvider.notifier)
+        .setClipSpeedCurve(widget.clipId, segments);
 
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
@@ -469,13 +475,12 @@ class _SpeedRampPresetsState extends ConsumerState<SpeedRampPresets> {
 
 /// A single preset card showing a mini curve preview, name, and description.
 class _PresetCard extends StatelessWidget {
-  final _RampPreset preset;
-  final VoidCallback onTap;
-
   const _PresetCard({
     required this.preset,
     required this.onTap,
   });
+  final _RampPreset preset;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -554,13 +559,12 @@ class _PresetCard extends StatelessWidget {
 /// divides the canvas width evenly among the segments and draws a smooth
 /// curve from start to end speed for each.
 class _SpeedCurvePreviewPainter extends CustomPainter {
-  final List<(double, double, String)> segments;
-  final Color accentColor;
-
   _SpeedCurvePreviewPainter({
     required this.segments,
     required this.accentColor,
   });
+  final List<(double, double, String)> segments;
+  final Color accentColor;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -568,7 +572,7 @@ class _SpeedCurvePreviewPainter extends CustomPainter {
 
     // Draw subtle background grid
     final gridPaint = Paint()
-      ..color = AppTheme.border.withOpacity(0.3)
+      ..color = AppTheme.border.withValues(alpha: 0.3)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 0.5;
 
@@ -583,7 +587,7 @@ class _SpeedCurvePreviewPainter extends CustomPainter {
     // Draw 0x baseline
     final zeroY = _speedToY(0.0, size.height);
     final baselinePaint = Paint()
-      ..color = AppTheme.border.withOpacity(0.2)
+      ..color = AppTheme.border.withValues(alpha: 0.2)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 0.5;
     canvas.drawLine(
@@ -601,21 +605,21 @@ class _SpeedCurvePreviewPainter extends CustomPainter {
       ..strokeJoin = StrokeJoin.round;
 
     final fillPaint = Paint()
-      ..color = accentColor.withOpacity(0.1)
+      ..color = accentColor.withValues(alpha: 0.1)
       ..style = PaintingStyle.fill;
 
     final path = Path();
     final fillPath = Path();
-    final stepsPerSegment = 20;
+    const stepsPerSegment = 20;
     final segWidth = size.width / segments.length;
 
-    bool firstPoint = true;
+    var firstPoint = true;
 
-    for (int s = 0; s < segments.length; s++) {
+    for (var s = 0; s < segments.length; s++) {
       final (startSpeed, endSpeed, easing) = segments[s];
       final segStartX = s * segWidth;
 
-      for (int i = 0; i <= stepsPerSegment; i++) {
+      for (var i = 0; i <= stepsPerSegment; i++) {
         final t = i / stepsPerSegment;
         final easedT = _applyEasing(t, easing);
         final speed = startSpeed + (endSpeed - startSpeed) * easedT;
@@ -646,7 +650,11 @@ class _SpeedCurvePreviewPainter extends CustomPainter {
       final (firstStart, _, _) = segments.first;
       final (_, lastEnd, _) = segments.last;
 
-      _drawDot(canvas, Offset(0, _speedToY(firstStart, size.height)), accentColor);
+      _drawDot(
+        canvas,
+        Offset(0, _speedToY(firstStart, size.height)),
+        accentColor,
+      );
       _drawDot(
         canvas,
         Offset(size.width, _speedToY(lastEnd, size.height)),
@@ -700,7 +708,8 @@ class _SpeedCurvePreviewPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _SpeedCurvePreviewPainter oldDelegate) =>
-      segments != oldDelegate.segments || accentColor != oldDelegate.accentColor;
+      segments != oldDelegate.segments ||
+      accentColor != oldDelegate.accentColor;
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -709,15 +718,14 @@ class _SpeedCurvePreviewPainter extends CustomPainter {
 
 /// A compact text input field for entering speed values (supports negative).
 class _SpeedInputField extends StatelessWidget {
-  final String label;
-  final TextEditingController controller;
-  final ValueChanged<String> onChanged;
-
   const _SpeedInputField({
     required this.label,
     required this.controller,
     required this.onChanged,
   });
+  final String label;
+  final TextEditingController controller;
+  final ValueChanged<String> onChanged;
 
   @override
   Widget build(BuildContext context) {

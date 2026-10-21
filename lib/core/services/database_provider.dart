@@ -11,7 +11,7 @@ import '../../data/database/app_database.dart';
 /// Singleton database instance provider.
 ///
 /// The database is lazily created on first access and shared across
-/// the entire app lifecycle. Calling [ref.invalidate] on this provider
+/// the entire app lifecycle. Calling `ref.invalidate` on this provider
 /// is safe — it will close the old database and open a new one.
 final databaseProvider = Provider<AppDatabase>((ref) {
   final db = AppDatabase();

@@ -5,8 +5,8 @@
 
 use super::clip::Clip;
 use super::command::{
-    AddClipCommand, Command, CommandHistory, MoveClipCommand, RemoveClipCommand,
-    SplitClipCommand, TrimClipCommand,
+    AddClipCommand, Command, CommandHistory, MoveClipCommand, RemoveClipCommand, SplitClipCommand,
+    TrimClipCommand,
 };
 use super::track::TrackType;
 use super::Timeline;
@@ -76,11 +76,7 @@ fn remove_clip_command_executes_and_undo() {
 
     tl.add_clip_to_track(&track_id, clip).unwrap();
 
-    let mut cmd = RemoveClipCommand {
-        track_id: track_id.clone(),
-        clip_id: clip_id.clone(),
-        removed_clip: None,
-    };
+    let mut cmd = RemoveClipCommand::new(clip_id.clone());
 
     let result = cmd.execute(&mut tl).unwrap();
     assert!(result.success);
@@ -97,11 +93,7 @@ fn remove_clip_command_nonexistent_clip_fails() {
     let mut tl = make_timeline_with_track();
     let track_id = tl.tracks[0].id.clone();
 
-    let mut cmd = RemoveClipCommand {
-        track_id,
-        clip_id: "nonexistent".into(),
-        removed_clip: None,
-    };
+    let mut cmd = RemoveClipCommand::new("nonexistent".into());
 
     let result = cmd.execute(&mut tl);
     assert!(result.is_err());
@@ -118,13 +110,7 @@ fn move_clip_command_changes_start_ms() {
 
     tl.add_clip_to_track(&track_id, clip).unwrap();
 
-    let mut cmd = MoveClipCommand {
-        clip_id: clip_id.clone(),
-        new_start_ms: 5000,
-        old_start_ms: 0,
-        new_track_id: None,
-        old_track_id: track_id,
-    };
+    let mut cmd = MoveClipCommand::new(clip_id.clone(), 5000, None);
 
     let result = cmd.execute(&mut tl).unwrap();
     assert!(result.success);
@@ -140,13 +126,7 @@ fn move_clip_command_nonexistent_clip_fails() {
     let mut tl = make_timeline_with_track();
     let track_id = tl.tracks[0].id.clone();
 
-    let mut cmd = MoveClipCommand {
-        clip_id: "nonexistent".into(),
-        new_start_ms: 5000,
-        old_start_ms: 0,
-        new_track_id: None,
-        old_track_id: track_id,
-    };
+    let mut cmd = MoveClipCommand::new("nonexistent".into(), 5000, None);
 
     let result = cmd.execute(&mut tl);
     assert!(result.is_err());
@@ -163,13 +143,7 @@ fn split_clip_command_splits_and_undo() {
 
     tl.add_clip_to_track(&track_id, clip).unwrap();
 
-    let mut cmd = SplitClipCommand {
-        clip_id: clip_id.clone(),
-        time_ms: 2500,
-        original_clip: None,
-        left_clip: None,
-        right_clip: None,
-    };
+    let mut cmd = SplitClipCommand::new(clip_id.clone(), 2500);
 
     let result = cmd.execute(&mut tl).unwrap();
     assert!(result.success);
@@ -192,13 +166,7 @@ fn split_clip_command_invalid_time_fails() {
 
     tl.add_clip_to_track(&track_id, clip).unwrap();
 
-    let mut cmd = SplitClipCommand {
-        clip_id,
-        time_ms: 0, // at start — invalid
-        original_clip: None,
-        left_clip: None,
-        right_clip: None,
-    };
+    let mut cmd = SplitClipCommand::new(clip_id, 0);
 
     let result = cmd.execute(&mut tl);
     assert!(result.is_err());
@@ -215,13 +183,7 @@ fn trim_clip_command_changes_trim_points() {
 
     tl.add_clip_to_track(&track_id, clip).unwrap();
 
-    let mut cmd = TrimClipCommand {
-        clip_id: clip_id.clone(),
-        new_trim_start_ms: 500,
-        new_trim_end_ms: 500,
-        old_trim_start_ms: 0,
-        old_trim_end_ms: 0,
-    };
+    let mut cmd = TrimClipCommand::new(clip_id.clone(), 500, 500);
 
     let result = cmd.execute(&mut tl).unwrap();
     assert!(result.success);
@@ -241,13 +203,7 @@ fn trim_clip_command_changes_trim_points() {
 fn trim_clip_command_nonexistent_clip_fails() {
     let mut tl = make_timeline_with_track();
 
-    let mut cmd = TrimClipCommand {
-        clip_id: "nonexistent".into(),
-        new_trim_start_ms: 500,
-        new_trim_end_ms: 0,
-        old_trim_start_ms: 0,
-        old_trim_end_ms: 0,
-    };
+    let mut cmd = TrimClipCommand::new("nonexistent".into(), 500, 0);
 
     let result = cmd.execute(&mut tl);
     assert!(result.is_err());
@@ -270,7 +226,7 @@ fn command_history_execute_pushes_to_undo_stack() {
     let clip = make_clip(0, 1000);
 
     let cmd = AddClipCommand::new(track_id, clip);
-    history.execute(cmd, &mut tl).unwrap();
+    history.execute(Box::new(cmd), &mut tl).unwrap();
 
     assert_eq!(history.undo_stack_len(), 1);
     assert_eq!(history.redo_stack_len(), 0);
@@ -284,7 +240,7 @@ fn command_history_undo_moves_to_redo_stack() {
     let clip = make_clip(0, 1000);
 
     let cmd = AddClipCommand::new(track_id, clip);
-    history.execute(cmd, &mut tl).unwrap();
+    history.execute(Box::new(cmd), &mut tl).unwrap();
 
     history.undo(&mut tl).unwrap();
     assert_eq!(history.undo_stack_len(), 0);
@@ -300,7 +256,7 @@ fn command_history_redo_restores_command() {
     let clip_id = clip.id.clone();
 
     let cmd = AddClipCommand::new(track_id, clip);
-    history.execute(cmd, &mut tl).unwrap();
+    history.execute(Box::new(cmd), &mut tl).unwrap();
     history.undo(&mut tl).unwrap();
 
     assert!(tl.find_clip(&clip_id).is_none());
@@ -316,7 +272,7 @@ fn command_history_undo_on_empty_does_nothing() {
     let mut history = CommandHistory::new();
     let mut tl = Timeline::new();
     let result = history.undo(&mut tl);
-    assert!(result.is_none());
+    assert!(result.is_err());
 }
 
 #[test]
@@ -324,7 +280,7 @@ fn command_history_redo_on_empty_does_nothing() {
     let mut history = CommandHistory::new();
     let mut tl = Timeline::new();
     let result = history.redo(&mut tl);
-    assert!(result.is_none());
+    assert!(result.is_err());
 }
 
 #[test]
@@ -336,7 +292,7 @@ fn command_history_new_command_clears_redo_stack() {
     // First command
     let clip1 = make_clip(0, 1000);
     let cmd1 = AddClipCommand::new(track_id.clone(), clip1);
-    history.execute(cmd1, &mut tl).unwrap();
+    history.execute(Box::new(cmd1), &mut tl).unwrap();
 
     // Undo
     history.undo(&mut tl).unwrap();
@@ -345,7 +301,7 @@ fn command_history_new_command_clears_redo_stack() {
     // New command should clear redo stack
     let clip2 = make_clip(2000, 1000);
     let cmd2 = AddClipCommand::new(track_id, clip2);
-    history.execute(cmd2, &mut tl).unwrap();
+    history.execute(Box::new(cmd2), &mut tl).unwrap();
 
     assert_eq!(history.redo_stack_len(), 0);
     assert_eq!(history.undo_stack_len(), 1);
@@ -354,7 +310,8 @@ fn command_history_new_command_clears_redo_stack() {
 #[test]
 fn command_history_description() {
     let history = CommandHistory::new();
-    assert_eq!(history.description(), "Command History (0 undo, 0 redo)");
+    assert!(!history.can_undo());
+    assert!(!history.can_redo());
 }
 
 #[test]
@@ -364,7 +321,7 @@ fn command_history_clear() {
     let track_id = tl.tracks[0].id.clone();
     let clip = make_clip(0, 1000);
     let cmd = AddClipCommand::new(track_id, clip);
-    history.execute(cmd, &mut tl).unwrap();
+    history.execute(Box::new(cmd), &mut tl).unwrap();
 
     history.clear();
     assert_eq!(history.undo_stack_len(), 0);
@@ -380,7 +337,7 @@ fn command_history_multiple_undo_redo() {
     for i in 0..5 {
         let clip = make_clip(i * 1000, 1000);
         let cmd = AddClipCommand::new(track_id.clone(), clip);
-        history.execute(cmd, &mut tl).unwrap();
+        history.execute(Box::new(cmd), &mut tl).unwrap();
     }
 
     assert_eq!(history.undo_stack_len(), 5);

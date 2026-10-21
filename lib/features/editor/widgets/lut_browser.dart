@@ -1,6 +1,4 @@
-import 'dart:convert';
 import 'dart:io';
-import 'dart:math' as math;
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -19,6 +17,13 @@ import '../../../src/rust/api/bridge_api.dart';
 /// The pro move is: technical LUT first (Log→Rec.709), then grade, then
 /// creative LUT last. See persona/skills/lut-management/SKILL.md.
 class LutBrowser extends StatefulWidget {
+  const LutBrowser({
+    required this.onLutSelected,
+    required this.onIntensityChanged,
+    super.key,
+    this.initialIntensity = 1.0,
+  });
+
   /// Called with the parsed LUT data when the user picks one.
   final void Function(Map<String, dynamic> lutData) onLutSelected;
 
@@ -27,13 +32,6 @@ class LutBrowser extends StatefulWidget {
 
   /// Initial intensity. Defaults to 1.0 (full LUT).
   final double initialIntensity;
-
-  const LutBrowser({
-    super.key,
-    required this.onLutSelected,
-    required this.onIntensityChanged,
-    this.initialIntensity = 1.0,
-  });
 
   @override
   State<LutBrowser> createState() => _LutBrowserState();
@@ -101,7 +99,8 @@ class _LutBrowserState extends State<LutBrowser> {
               onPressed: _isLoading ? null : _importLut,
               icon: _isLoading
                   ? const SizedBox(
-                      width: 16, height: 16,
+                      width: 16,
+                      height: 16,
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
                   : const Icon(Icons.file_upload_outlined),

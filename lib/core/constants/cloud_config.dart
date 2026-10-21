@@ -35,6 +35,5 @@ class CloudConfig {
   static const String googleDriveClientId = '';
 
   /// Whether Google Drive sync is configured (client ID is set).
-  static bool get isGoogleDriveConfigured =>
-      googleDriveClientId.isNotEmpty;
+  static bool get isGoogleDriveConfigured => googleDriveClientId.isNotEmpty;
 }

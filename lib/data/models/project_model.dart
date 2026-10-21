@@ -7,19 +7,6 @@ import 'package:flutter/foundation.dart';
 
 /// Project data model matching the Rust engine's Project struct
 class ProjectModel {
-  final String id;
-  final String name;
-  final int createdAt;
-  final int updatedAt;
-  final int width;
-  final int height;
-  final double fps;
-  final int durationMs;
-  final List<TrackModel> tracks;
-  final List<MediaAssetModel> mediaAssets;
-  final String? thumbnailPath;
-  final String? eppFilePath;
-
   const ProjectModel({
     required this.id,
     required this.name,
@@ -34,6 +21,18 @@ class ProjectModel {
     this.thumbnailPath,
     this.eppFilePath,
   });
+  final String id;
+  final String name;
+  final int createdAt;
+  final int updatedAt;
+  final int width;
+  final int height;
+  final double fps;
+  final int durationMs;
+  final List<TrackModel> tracks;
+  final List<MediaAssetModel> mediaAssets;
+  final String? thumbnailPath;
+  final String? eppFilePath;
 
   ProjectModel copyWith({
     String? id,
@@ -102,15 +101,6 @@ class ProjectModel {
 
 /// Track data model
 class TrackModel {
-  final String id;
-  final String name;
-  final TrackType trackType;
-  final List<ClipModel> clips;
-  final bool locked;
-  final bool visible;
-  final double volume;
-  final int orderIndex;
-
   const TrackModel({
     required this.id,
     required this.name,
@@ -121,6 +111,14 @@ class TrackModel {
     this.volume = 1.0,
     this.orderIndex = 0,
   });
+  final String id;
+  final String name;
+  final TrackType trackType;
+  final List<ClipModel> clips;
+  final bool locked;
+  final bool visible;
+  final double volume;
+  final int orderIndex;
 
   TrackModel copyWith({
     String? id,
@@ -155,6 +153,20 @@ enum TrackType {
 
 /// Clip data model
 class ClipModel {
+  const ClipModel({
+    required this.id,
+    required this.assetId,
+    required this.startMs,
+    required this.durationMs,
+    this.trimStartMs = 0,
+    this.trimEndMs = 0,
+    this.speed = 1.0,
+    this.opacity = 1.0,
+    this.effects = const [],
+    this.transitionIn,
+    this.transitionOut,
+    this.locked = false,
+  });
   final String id;
   final String assetId;
   final int startMs;
@@ -172,21 +184,6 @@ class ClipModel {
   /// the timeline. Useful for protecting key clips (e.g., the opening
   /// title or the closing logo) from accidental edits.
   final bool locked;
-
-  const ClipModel({
-    required this.id,
-    required this.assetId,
-    required this.startMs,
-    required this.durationMs,
-    this.trimStartMs = 0,
-    this.trimEndMs = 0,
-    this.speed = 1.0,
-    this.opacity = 1.0,
-    this.effects = const [],
-    this.transitionIn,
-    this.transitionOut,
-    this.locked = false,
-  });
 
   ClipModel copyWith({
     String? id,
@@ -221,13 +218,6 @@ class ClipModel {
 
 /// Effect model for clip effects
 class EffectModel {
-  final String id;
-  final String name;
-  final String effectType;
-  final bool enabled;
-  final int order;
-  final List<EffectParameterModel> parameters;
-
   const EffectModel({
     required this.id,
     required this.name,
@@ -236,18 +226,16 @@ class EffectModel {
     this.order = 0,
     this.parameters = const [],
   });
+  final String id;
+  final String name;
+  final String effectType;
+  final bool enabled;
+  final int order;
+  final List<EffectParameterModel> parameters;
 }
 
 /// Effect parameter model
 class EffectParameterModel {
-  final String name;
-  final String displayName;
-  final double value;
-  final double minValue;
-  final double maxValue;
-  final double defaultValue;
-  final double step;
-
   const EffectParameterModel({
     required this.name,
     required this.displayName,
@@ -257,16 +245,17 @@ class EffectParameterModel {
     required this.defaultValue,
     required this.step,
   });
+  final String name;
+  final String displayName;
+  final double value;
+  final double minValue;
+  final double maxValue;
+  final double defaultValue;
+  final double step;
 }
 
 /// Transition model for clip transitions
 class TransitionModel {
-  final String id;
-  final String transitionType;
-  final int durationMs;
-  final String fromClipId;
-  final String toClipId;
-
   const TransitionModel({
     required this.id,
     required this.transitionType,
@@ -274,22 +263,15 @@ class TransitionModel {
     required this.fromClipId,
     required this.toClipId,
   });
+  final String id;
+  final String transitionType;
+  final int durationMs;
+  final String fromClipId;
+  final String toClipId;
 }
 
 /// Media asset data model
 class MediaAssetModel {
-  final String id;
-  final String filePath;
-  final String fileName;
-  final MediaType mediaType;
-  final int? durationMs;
-  final int? width;
-  final int? height;
-  final int fileSizeBytes;
-  final String? codec;
-  final int? bitrate;
-  final String? thumbnailPath;
-
   const MediaAssetModel({
     required this.id,
     required this.filePath,
@@ -303,6 +285,17 @@ class MediaAssetModel {
     this.bitrate,
     this.thumbnailPath,
   });
+  final String id;
+  final String filePath;
+  final String fileName;
+  final MediaType mediaType;
+  final int? durationMs;
+  final int? width;
+  final int? height;
+  final int fileSizeBytes;
+  final String? codec;
+  final int? bitrate;
+  final String? thumbnailPath;
 }
 
 /// Media type enum

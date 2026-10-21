@@ -147,12 +147,16 @@ impl RenderPipeline {
         let settings = self.config.to_export_settings();
         let mut encoder = VideoEncoder::new(&settings)
             .map_err(|e| anyhow::anyhow!("Failed to create encoder: {}", e))?;
-        encoder.open(&self.config.output_path)
-            .map_err(|e| anyhow::anyhow!("Failed to open output '{}': {}", self.config.output_path, e))?;
+        encoder.open(&self.config.output_path).map_err(|e| {
+            anyhow::anyhow!("Failed to open output '{}': {}", self.config.output_path, e)
+        })?;
 
         for frame_idx in 0..self.total_frames {
             if self.is_cancelled() {
-                warn!("Render cancelled at frame {}/{}", frame_idx, self.total_frames);
+                warn!(
+                    "Render cancelled at frame {}/{}",
+                    frame_idx, self.total_frames
+                );
                 break;
             }
 
@@ -177,7 +181,8 @@ impl RenderPipeline {
         }
 
         let duration_ms = (self.total_frames as f64 / self.config.fps * 1000.0) as u64;
-        encoder.finish(duration_ms)
+        encoder
+            .finish(duration_ms)
             .map_err(|e| anyhow::anyhow!("Failed to finalize encoder: {}", e))?;
 
         info!(
@@ -209,7 +214,8 @@ impl RenderPipeline {
                 }
 
                 let clip_volume = clip.volume as f32 * track_volume;
-                let clip_duration_samples = (clip.effective_duration() as f64 / 1000.0 * sample_rate as f64) as usize;
+                let clip_duration_samples =
+                    (clip.effective_duration() as f64 / 1000.0 * sample_rate as f64) as usize;
 
                 // Generate silence for now (real implementation would decode audio)
                 for i in 0..clip_duration_samples.min(total_samples) {
@@ -282,7 +288,9 @@ mod tests {
 
     fn make_project() -> Project {
         let mut project = Project::new("Render Test");
-        project.timeline.add_track(Track::new("V1", TrackType::Video));
+        project
+            .timeline
+            .add_track(TrackType::Video, Some("V1".into()));
         project
     }
 

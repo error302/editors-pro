@@ -3,6 +3,7 @@
 /// Provides user-configurable preferences for the editor including
 /// default project settings, storage management, performance tuning,
 /// export defaults, and privacy options.
+library;
 
 import 'dart:async';
 
@@ -10,11 +11,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../core/theme/app_theme.dart';
-import '../../core/extensions/context_extensions.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/constants/cloud_config.dart';
+import '../../core/extensions/context_extensions.dart';
 import '../../core/services/database_provider.dart';
+import '../../core/theme/app_theme.dart';
 import '../cloud/providers/cloud_provider.dart';
 import '../projects/providers/project_provider.dart';
 import 'providers/settings_provider.dart';
@@ -71,9 +72,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(count == 0
-                ? 'There are no projects to delete'
-                : '$count projects deleted; original media files were left untouched'),
+            content: Text(
+              count == 0
+                  ? 'There are no projects to delete'
+                  : '$count projects deleted; original media files were left untouched',
+            ),
           ),
         );
       }
@@ -105,7 +108,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         padding: const EdgeInsets.all(16),
         children: [
           // ─── Project Defaults ──────────────────────────────
-          _SectionHeader(title: 'Project Defaults'),
+          const _SectionHeader(title: 'Project Defaults'),
           _SettingsCard(
             children: [
               _SettingsDropdown(
@@ -142,7 +145,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           const SizedBox(height: 24),
 
           // ─── Appearance (Phase E.5/E.6) ─────────────────────
-          _SectionHeader(title: 'Appearance'),
+          const _SectionHeader(title: 'Appearance'),
           _SettingsCard(
             children: [
               _SettingsDropdown(
@@ -168,7 +171,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           const SizedBox(height: 24),
 
           // ─── Editor Behavior ───────────────────────────────
-          _SectionHeader(title: 'Editor Behavior'),
+          const _SectionHeader(title: 'Editor Behavior'),
           _SettingsCard(
             children: [
               _SettingsSwitch(
@@ -202,10 +205,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           const SizedBox(height: 24),
 
           // ─── Performance ───────────────────────────────────
-          _SectionHeader(title: 'Performance'),
-          _SettingsCard(
+          const _SectionHeader(title: 'Performance'),
+          const _SettingsCard(
             children: [
-              const ListTile(
+              ListTile(
                 leading: Icon(Icons.info_outline),
                 title: Text('Performance controls unavailable'),
                 subtitle:
@@ -218,9 +221,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           const SizedBox(height: 24),
 
           // ─── Proxy & Performance ───────────────────────────
-          _SectionHeader(title: 'Proxy & Performance'),
-          _SettingsCard(
-            children: const [
+          const _SectionHeader(title: 'Proxy & Performance'),
+          const _SettingsCard(
+            children: [
               ListTile(
                 leading: Icon(Icons.info_outline),
                 title: Text('Proxy tools unavailable'),
@@ -234,7 +237,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           const SizedBox(height: 24),
 
           // ─── Export ────────────────────────────────────────
-          _SectionHeader(title: 'Export'),
+          const _SectionHeader(title: 'Export'),
           _SettingsCard(
             children: [
               _SettingsDropdown(
@@ -259,7 +262,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           const SizedBox(height: 24),
 
           // ─── Storage ───────────────────────────────────────
-          _SectionHeader(title: 'Storage'),
+          const _SectionHeader(title: 'Storage'),
           _SettingsCard(
             children: [
               const ListTile(
@@ -271,20 +274,28 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               ),
               const Divider(height: 1),
               ListTile(
-                leading: const Icon(Icons.delete_sweep_outlined,
-                    color: AppTheme.error),
-                title: Text('Delete All Projects',
-                    style: context.textTheme.bodyMedium),
+                leading: const Icon(
+                  Icons.delete_sweep_outlined,
+                  color: AppTheme.error,
+                ),
+                title: Text(
+                  'Delete All Projects',
+                  style: context.textTheme.bodyMedium,
+                ),
                 subtitle: Text(
-                    'Remove saved projects; keep original media files',
-                    style: context.textTheme.bodySmall),
+                  'Remove saved projects; keep original media files',
+                  style: context.textTheme.bodySmall,
+                ),
                 trailing: _isDeletingAllProjects
                     ? const SizedBox(
                         width: 20,
                         height: 20,
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
-                    : Icon(Icons.chevron_right, color: AppTheme.textDisabled),
+                    : const Icon(
+                        Icons.chevron_right,
+                        color: AppTheme.textDisabled,
+                      ),
                 onTap: _isDeletingAllProjects
                     ? null
                     : () => _showDeleteAllDialog(context),
@@ -297,7 +308,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           // Cloud Sync stays opt-in. Sign-in is unavailable until OAuth is
           // configured for this package and signing certificate.
           if (settings.experimentalCloudSync) ...[
-            _SectionHeader(title: 'Cloud Sync'),
+            const _SectionHeader(title: 'Cloud Sync'),
             _SettingsCard(
               children: [
                 _SettingsDropdown(
@@ -314,41 +325,43 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 ),
                 if (_cloudProvider != 'None') ...[
                   const Divider(height: 1),
-                  Consumer(builder: (context, ref, _) {
-                    final syncState = ref.watch(cloudSyncProvider);
-                    return ListTile(
-                      leading: Icon(
-                        syncState.isAuthenticated
-                            ? Icons.cloud_done
-                            : Icons.cloud_outlined,
-                        color: syncState.isAuthenticated
-                            ? AppTheme.success
-                            : AppTheme.textSecondary,
-                      ),
-                      title: Text(
-                        syncState.isAuthenticated ? 'Signed In' : 'Sign In',
-                        style: context.textTheme.bodyMedium,
-                      ),
-                      subtitle: syncState.isAuthenticated &&
-                              syncState.accountName != null
-                          ? Text(
-                              syncState.accountName!,
-                              style: context.textTheme.bodySmall,
-                            )
-                          : null,
-                      trailing: syncState.isAuthenticated
-                          ? TextButton(
-                              onPressed: () => ref
-                                  .read(cloudSyncProvider.notifier)
-                                  .signOut(),
-                              child: const Text('Sign Out'),
-                            )
-                          : ElevatedButton(
-                              onPressed: () => context.push('/cloud'),
-                              child: const Text('Sign In'),
-                            ),
-                    );
-                  }),
+                  Consumer(
+                    builder: (context, ref, _) {
+                      final syncState = ref.watch(cloudSyncProvider);
+                      return ListTile(
+                        leading: Icon(
+                          syncState.isAuthenticated
+                              ? Icons.cloud_done
+                              : Icons.cloud_outlined,
+                          color: syncState.isAuthenticated
+                              ? AppTheme.success
+                              : AppTheme.textSecondary,
+                        ),
+                        title: Text(
+                          syncState.isAuthenticated ? 'Signed In' : 'Sign In',
+                          style: context.textTheme.bodyMedium,
+                        ),
+                        subtitle: syncState.isAuthenticated &&
+                                syncState.accountName != null
+                            ? Text(
+                                syncState.accountName!,
+                                style: context.textTheme.bodySmall,
+                              )
+                            : null,
+                        trailing: syncState.isAuthenticated
+                            ? TextButton(
+                                onPressed: () => ref
+                                    .read(cloudSyncProvider.notifier)
+                                    .signOut(),
+                                child: const Text('Sign Out'),
+                              )
+                            : ElevatedButton(
+                                onPressed: () => context.push('/cloud'),
+                                child: const Text('Sign In'),
+                              ),
+                      );
+                    },
+                  ),
                 ],
                 const Divider(height: 1),
                 ListTile(
@@ -364,8 +377,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     'View synced projects and resolve conflicts',
                     style: context.textTheme.bodySmall,
                   ),
-                  trailing:
-                      Icon(Icons.chevron_right, color: AppTheme.textDisabled),
+                  trailing: const Icon(
+                    Icons.chevron_right,
+                    color: AppTheme.textDisabled,
+                  ),
                   onTap: () => context.push('/cloud'),
                 ),
               ],
@@ -374,14 +389,18 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ],
 
           // ─── Privacy & Data ────────────────────────────────
-          _SectionHeader(title: 'Privacy & Data'),
+          const _SectionHeader(title: 'Privacy & Data'),
           _SettingsCard(
             children: [
               ListTile(
-                leading: const Icon(Icons.bug_report_outlined,
-                    color: AppTheme.textSecondary),
-                title: Text('Crash diagnostics',
-                    style: context.textTheme.bodyMedium),
+                leading: const Icon(
+                  Icons.bug_report_outlined,
+                  color: AppTheme.textSecondary,
+                ),
+                title: Text(
+                  'Crash diagnostics',
+                  style: context.textTheme.bodyMedium,
+                ),
                 subtitle: Text(
                   'Kept in memory on this device. No external crash-reporting service is configured.',
                   style: context.textTheme.bodySmall,
@@ -389,10 +408,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               ),
               const Divider(height: 1),
               ListTile(
-                leading: const Icon(Icons.insights_outlined,
-                    color: AppTheme.textSecondary),
-                title: Text('Usage analytics',
-                    style: context.textTheme.bodyMedium),
+                leading: const Icon(
+                  Icons.insights_outlined,
+                  color: AppTheme.textSecondary,
+                ),
+                title: Text(
+                  'Usage analytics',
+                  style: context.textTheme.bodyMedium,
+                ),
                 subtitle: Text(
                   'This build does not collect or send usage analytics.',
                   style: context.textTheme.bodySmall,
@@ -407,7 +430,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           // Features whose UI ships but whose Rust-side implementation
           // is a placeholder. Defaults to OFF so regular users never
           // see broken behavior. See AUDIT_REPORT.md §1.4-1.5.
-          _SectionHeader(title: 'Experimental'),
+          const _SectionHeader(title: 'Experimental'),
           _SettingsCard(
             children: [
               _SettingsSwitch(
@@ -442,15 +465,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           const SizedBox(height: 32),
 
           // ─── About ─────────────────────────────────────────
-          _SectionHeader(title: 'About'),
+          const _SectionHeader(title: 'About'),
           _SettingsCard(
             children: [
               ListTile(
-                leading: const Icon(Icons.info_outline,
-                    color: AppTheme.textSecondary),
+                leading: const Icon(
+                  Icons.info_outline,
+                  color: AppTheme.textSecondary,
+                ),
                 title: Text('Version', style: context.textTheme.bodyMedium),
                 trailing: Text(
-                  '${AppConstants.appVersion}',
+                  AppConstants.appVersion,
                   style: context.textTheme.bodySmall
                       ?.copyWith(color: AppTheme.textSecondary),
                 ),
@@ -468,23 +493,33 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               ),
               const Divider(height: 1),
               ListTile(
-                leading: const Icon(Icons.privacy_tip_outlined,
-                    color: AppTheme.textSecondary),
+                leading: const Icon(
+                  Icons.privacy_tip_outlined,
+                  color: AppTheme.textSecondary,
+                ),
                 title:
                     Text('Privacy & Data', style: context.textTheme.bodyMedium),
-                subtitle: Text('How this build handles your information',
-                    style: context.textTheme.bodySmall),
-                trailing:
-                    Icon(Icons.chevron_right, color: AppTheme.textDisabled),
+                subtitle: Text(
+                  'How this build handles your information',
+                  style: context.textTheme.bodySmall,
+                ),
+                trailing: const Icon(
+                  Icons.chevron_right,
+                  color: AppTheme.textDisabled,
+                ),
                 onTap: _showPrivacyAndData,
               ),
               const Divider(height: 1),
               ListTile(
-                leading: const Icon(Icons.description_outlined,
-                    color: AppTheme.textSecondary),
+                leading: const Icon(
+                  Icons.description_outlined,
+                  color: AppTheme.textSecondary,
+                ),
                 title: Text('Licenses', style: context.textTheme.bodyMedium),
-                trailing:
-                    Icon(Icons.chevron_right, color: AppTheme.textDisabled),
+                trailing: const Icon(
+                  Icons.chevron_right,
+                  color: AppTheme.textDisabled,
+                ),
                 onTap: () {
                   showLicensePage(
                     context: context,
@@ -495,12 +530,18 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               ),
               const Divider(height: 1),
               ListTile(
-                leading: const Icon(Icons.source_outlined,
-                    color: AppTheme.textSecondary),
-                title: Text('Open Source Notices',
-                    style: context.textTheme.bodyMedium),
-                trailing:
-                    Icon(Icons.chevron_right, color: AppTheme.textDisabled),
+                leading: const Icon(
+                  Icons.source_outlined,
+                  color: AppTheme.textSecondary,
+                ),
+                title: Text(
+                  'Open Source Notices',
+                  style: context.textTheme.bodyMedium,
+                ),
+                trailing: const Icon(
+                  Icons.chevron_right,
+                  color: AppTheme.textDisabled,
+                ),
                 onTap: () {
                   showLicensePage(
                     context: context,
@@ -523,36 +564,48 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: const Text('Privacy & Data'),
-        content: SizedBox(
+        content: const SizedBox(
           width: 440,
           child: SingleChildScrollView(
-            child: const Column(
+            child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text('On-device data',
-                    style: TextStyle(fontWeight: FontWeight.w600)),
+                Text(
+                  'On-device data',
+                  style: TextStyle(fontWeight: FontWeight.w600),
+                ),
                 SizedBox(height: 6),
                 Text(
-                    'Project records, editing choices, and preferences are stored on this device. The app reads media from the locations you select; exports are saved to the destination you choose.'),
+                  'Project records, editing choices, and preferences are stored on this device. The app reads media from the locations you select; exports are saved to the destination you choose.',
+                ),
                 SizedBox(height: 16),
-                Text('Diagnostics and analytics',
-                    style: TextStyle(fontWeight: FontWeight.w600)),
+                Text(
+                  'Diagnostics and analytics',
+                  style: TextStyle(fontWeight: FontWeight.w600),
+                ),
                 SizedBox(height: 6),
                 Text(
-                    'This build keeps crash diagnostics in memory while the app is running. It does not send crash reports or usage analytics to EDITORS-PRO.'),
+                  'This build keeps crash diagnostics in memory while the app is running. It does not send crash reports or usage analytics to EDITORS-PRO.',
+                ),
                 SizedBox(height: 16),
-                Text('Google Drive',
-                    style: TextStyle(fontWeight: FontWeight.w600)),
+                Text(
+                  'Google Drive',
+                  style: TextStyle(fontWeight: FontWeight.w600),
+                ),
                 SizedBox(height: 6),
                 Text(
-                    'Cloud transfer is optional. If enabled and configured, signing in and syncing sends project data to Google Drive under your Google account. Signing out disconnects this app but does not remove copies already stored in Drive.'),
+                  'Cloud transfer is optional. If enabled and configured, signing in and syncing sends project data to Google Drive under your Google account. Signing out disconnects this app but does not remove copies already stored in Drive.',
+                ),
                 SizedBox(height: 16),
-                Text('Store-release status',
-                    style: TextStyle(fontWeight: FontWeight.w600)),
+                Text(
+                  'Store-release status',
+                  style: TextStyle(fontWeight: FontWeight.w600),
+                ),
                 SizedBox(height: 6),
                 Text(
-                    'A public privacy-policy URL and support contact have not been configured for this build. This in-app notice does not replace the policy and disclosures required for store release.'),
+                  'A public privacy-policy URL and support contact have not been configured for this build. This in-app notice does not replace the policy and disclosures required for store release.',
+                ),
               ],
             ),
           ),
@@ -600,8 +653,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 // ─── Reusable Settings Widgets ────────────────────────────────────
 
 class _SectionHeader extends StatelessWidget {
-  final String title;
   const _SectionHeader({required this.title});
+  final String title;
 
   @override
   Widget build(BuildContext context) {
@@ -620,8 +673,8 @@ class _SectionHeader extends StatelessWidget {
 }
 
 class _SettingsCard extends StatelessWidget {
-  final List<Widget> children;
   const _SettingsCard({required this.children});
+  final List<Widget> children;
 
   @override
   Widget build(BuildContext context) {
@@ -633,17 +686,16 @@ class _SettingsCard extends StatelessWidget {
 }
 
 class _SettingsSwitch extends StatelessWidget {
+  const _SettingsSwitch({
+    required this.label,
+    required this.value,
+    required this.onChanged,
+    this.subtitle,
+  });
   final String label;
   final String? subtitle;
   final bool value;
   final ValueChanged<bool> onChanged;
-
-  const _SettingsSwitch({
-    required this.label,
-    this.subtitle,
-    required this.value,
-    required this.onChanged,
-  });
 
   @override
   Widget build(BuildContext context) {
@@ -654,28 +706,27 @@ class _SettingsSwitch extends StatelessWidget {
           : null,
       value: value,
       onChanged: onChanged,
-      activeColor: AppTheme.primary,
+      activeThumbColor: AppTheme.primary,
     );
   }
 }
 
 /// Switch tile with an optional trailing badge (e.g. "GPU").
 class _SettingsSwitchWithBadge extends StatelessWidget {
+  const _SettingsSwitchWithBadge({
+    required this.label,
+    required this.value,
+    required this.onChanged,
+    required this.badgeLabel,
+    required this.showBadge,
+    this.subtitle,
+  });
   final String label;
   final String? subtitle;
   final bool value;
   final ValueChanged<bool> onChanged;
   final String badgeLabel;
   final bool showBadge;
-
-  const _SettingsSwitchWithBadge({
-    required this.label,
-    this.subtitle,
-    required this.value,
-    required this.onChanged,
-    required this.badgeLabel,
-    required this.showBadge,
-  });
 
   @override
   Widget build(BuildContext context) {
@@ -688,16 +739,16 @@ class _SettingsSwitchWithBadge extends StatelessWidget {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
               decoration: BoxDecoration(
-                color: AppTheme.secondary.withOpacity(0.15),
+                color: AppTheme.secondary.withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(4),
                 border: Border.all(
-                  color: AppTheme.secondary.withOpacity(0.4),
+                  color: AppTheme.secondary.withValues(alpha: 0.4),
                   width: 1,
                 ),
               ),
               child: Text(
                 badgeLabel,
-                style: TextStyle(
+                style: const TextStyle(
                   fontSize: 10,
                   fontWeight: FontWeight.w700,
                   color: AppTheme.secondary,
@@ -713,23 +764,22 @@ class _SettingsSwitchWithBadge extends StatelessWidget {
           : null,
       value: value,
       onChanged: onChanged,
-      activeColor: AppTheme.primary,
+      activeThumbColor: AppTheme.primary,
     );
   }
 }
 
 class _SettingsDropdown extends StatelessWidget {
-  final String label;
-  final String value;
-  final List<String> options;
-  final ValueChanged<String> onChanged;
-
   const _SettingsDropdown({
     required this.label,
     required this.value,
     required this.options,
     required this.onChanged,
   });
+  final String label;
+  final String value;
+  final List<String> options;
+  final ValueChanged<String> onChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -750,14 +800,6 @@ class _SettingsDropdown extends StatelessWidget {
 }
 
 class _SettingsSlider extends StatelessWidget {
-  final String label;
-  final double value;
-  final double min;
-  final double max;
-  final int divisions;
-  final String unit;
-  final ValueChanged<double> onChanged;
-
   const _SettingsSlider({
     required this.label,
     required this.value,
@@ -767,6 +809,13 @@ class _SettingsSlider extends StatelessWidget {
     required this.unit,
     required this.onChanged,
   });
+  final String label;
+  final double value;
+  final double min;
+  final double max;
+  final int divisions;
+  final String unit;
+  final ValueChanged<double> onChanged;
 
   @override
   Widget build(BuildContext context) {

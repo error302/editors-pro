@@ -13,26 +13,25 @@ import 'dart:developer' as developer;
 import 'dart:io' show Directory, File;
 
 import 'package:drift/drift.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:path/path.dart' as p;
-import 'package:uuid/uuid.dart';
 import 'package:editors_pro/src/rust/api/bridge_api.dart' as bridge
     show BridgeProjectSettings, MediaAssetInfo;
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
+import 'package:uuid/uuid.dart';
 
+import '../../core/constants/app_constants.dart';
+import '../../core/services/database_provider.dart';
+import '../../core/services/engine_service.dart';
+import '../../core/services/project_snapshots.dart';
 import '../../data/database/app_database.dart';
 import '../../data/models/project_model.dart';
-import '../../core/constants/app_constants.dart';
-import '../../core/services/engine_service.dart';
-import '../../core/services/database_provider.dart';
-import '../../core/services/project_snapshots.dart';
 
 class ProjectRepository {
+  ProjectRepository(this._db, Ref _);
   final AppDatabase _db;
-  final Ref _ref;
-  final _uuid = const Uuid();
 
-  ProjectRepository(this._db, this._ref);
+  final _uuid = const Uuid();
 
   // ─── Create ────────────────────────────────────────────────────
 
@@ -50,15 +49,17 @@ class ProjectRepository {
     final id = _uuid.v4();
 
     // Persist to database
-    await _db.upsertProject(ProjectEntriesCompanion(
-      id: Value(id),
-      name: Value(name),
-      width: Value(width),
-      height: Value(height),
-      fps: Value(fps),
-      createdAt: Value(now),
-      updatedAt: Value(now),
-    ));
+    await _db.upsertProject(
+      ProjectEntriesCompanion(
+        id: Value(id),
+        name: Value(name),
+        width: Value(width),
+        height: Value(height),
+        fps: Value(fps),
+        createdAt: Value(now),
+        updatedAt: Value(now),
+      ),
+    );
 
     // Initialize in the Rust engine
     if (EngineService.instance.isInitialized) {
@@ -72,8 +73,10 @@ class ProjectRepository {
           ),
         );
       } catch (e) {
-        developer.log('Engine createProject failed: $e',
-            name: 'ProjectRepository');
+        developer.log(
+          'Engine createProject failed: $e',
+          name: 'ProjectRepository',
+        );
       }
     }
 
@@ -92,20 +95,23 @@ class ProjectRepository {
       fps: fps,
       tracks: [
         TrackModel(
-            id: videoTrackId,
-            name: 'Video 1',
-            trackType: TrackType.video,
-            orderIndex: 0),
+          id: videoTrackId,
+          name: 'Video 1',
+          trackType: TrackType.video,
+          orderIndex: 0,
+        ),
         TrackModel(
-            id: audioTrackId,
-            name: 'Audio 1',
-            trackType: TrackType.audio,
-            orderIndex: 1),
+          id: audioTrackId,
+          name: 'Audio 1',
+          trackType: TrackType.audio,
+          orderIndex: 1,
+        ),
         TrackModel(
-            id: textTrackId,
-            name: 'Text',
-            trackType: TrackType.text,
-            orderIndex: 2),
+          id: textTrackId,
+          name: 'Text',
+          trackType: TrackType.text,
+          orderIndex: 2,
+        ),
       ],
     );
   }
@@ -137,17 +143,19 @@ class ProjectRepository {
 
   /// Update a project's metadata in the database.
   Future<void> updateProject(ProjectModel project) async {
-    await _db.upsertProject(ProjectEntriesCompanion(
-      id: Value(project.id),
-      name: Value(project.name),
-      width: Value(project.width),
-      height: Value(project.height),
-      fps: Value(project.fps),
-      durationMs: Value(project.durationMs),
-      createdAt: Value(project.createdAt),
-      updatedAt: Value(DateTime.now().millisecondsSinceEpoch),
-      thumbnailPath: Value(project.thumbnailPath),
-    ));
+    await _db.upsertProject(
+      ProjectEntriesCompanion(
+        id: Value(project.id),
+        name: Value(project.name),
+        width: Value(project.width),
+        height: Value(project.height),
+        fps: Value(project.fps),
+        durationMs: Value(project.durationMs),
+        createdAt: Value(project.createdAt),
+        updatedAt: Value(DateTime.now().millisecondsSinceEpoch),
+        thumbnailPath: Value(project.thumbnailPath),
+      ),
+    );
   }
 
   /// Save a project's full state via the Rust engine (.epp format).
@@ -160,19 +168,25 @@ class ProjectRepository {
       final projectsDir = p.join(dir.path, AppConstants.projectsDir);
       await Directory(projectsDir).create(recursive: true);
       final eppPath = p.join(
-          projectsDir, '${project.id}${AppConstants.projectFileExtension}');
+        projectsDir,
+        '${project.id}${AppConstants.projectFileExtension}',
+      );
 
       await EngineService.instance.api.saveProject(filePath: eppPath);
 
       // Update the DB with the .epp file path
-      await _db.upsertProject(ProjectEntriesCompanion(
-        id: Value(project.id),
-        eppFilePath: Value(eppPath),
-        updatedAt: Value(DateTime.now().millisecondsSinceEpoch),
-      ));
+      await _db.upsertProject(
+        ProjectEntriesCompanion(
+          id: Value(project.id),
+          eppFilePath: Value(eppPath),
+          updatedAt: Value(DateTime.now().millisecondsSinceEpoch),
+        ),
+      );
     } catch (e) {
-      developer.log('saveProjectToEngine failed: $e',
-          name: 'ProjectRepository');
+      developer.log(
+        'saveProjectToEngine failed: $e',
+        name: 'ProjectRepository',
+      );
       rethrow;
     }
   }
@@ -192,8 +206,10 @@ class ProjectRepository {
       if (!file.existsSync()) return null;
       return await file.readAsBytes();
     } catch (e) {
-      developer.log('readProjectEppBytes failed: $e',
-          name: 'ProjectRepository');
+      developer.log(
+        'readProjectEppBytes failed: $e',
+        name: 'ProjectRepository',
+      );
       return null;
     }
   }
@@ -204,8 +220,10 @@ class ProjectRepository {
     try {
       await EngineService.instance.api.loadProject(filePath: eppFilePath);
     } catch (e) {
-      developer.log('loadProjectFromEngine failed: $e',
-          name: 'ProjectRepository');
+      developer.log(
+        'loadProjectFromEngine failed: $e',
+        name: 'ProjectRepository',
+      );
     }
   }
 
@@ -213,21 +231,23 @@ class ProjectRepository {
 
   /// Persist a media asset record to the database.
   Future<void> addMediaAsset(String projectId, MediaAssetModel asset) async {
-    await _db.upsertMediaAsset(MediaAssetEntriesCompanion(
-      id: Value(asset.id),
-      projectId: Value(projectId),
-      filePath: Value(asset.filePath),
-      fileName: Value(asset.fileName),
-      mediaType: Value(asset.mediaType.name),
-      durationMs: Value(asset.durationMs),
-      width: Value(asset.width),
-      height: Value(asset.height),
-      fileSizeBytes: Value(asset.fileSizeBytes),
-      codec: Value(asset.codec),
-      bitrate: Value(asset.bitrate),
-      thumbnailPath: Value(asset.thumbnailPath),
-      importedAt: Value(DateTime.now().millisecondsSinceEpoch),
-    ));
+    await _db.upsertMediaAsset(
+      MediaAssetEntriesCompanion(
+        id: Value(asset.id),
+        projectId: Value(projectId),
+        filePath: Value(asset.filePath),
+        fileName: Value(asset.fileName),
+        mediaType: Value(asset.mediaType.name),
+        durationMs: Value(asset.durationMs),
+        width: Value(asset.width),
+        height: Value(asset.height),
+        fileSizeBytes: Value(asset.fileSizeBytes),
+        codec: Value(asset.codec),
+        bitrate: Value(asset.bitrate),
+        thumbnailPath: Value(asset.thumbnailPath),
+        importedAt: Value(DateTime.now().millisecondsSinceEpoch),
+      ),
+    );
   }
 
   /// Register an app-owned media file in the native project using its stable

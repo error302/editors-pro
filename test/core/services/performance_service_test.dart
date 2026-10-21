@@ -1,5 +1,5 @@
-import 'package:flutter_test/flutter_test.dart';
 import 'package:editors_pro/core/services/performance_service.dart';
+import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -16,12 +16,16 @@ void main() {
       expect(service.coldStartDuration, isNull);
     });
 
-    test('coldStartDuration is set after marking app start and engine ready', () {
+    test('coldStartDuration is set after marking app start and engine ready',
+        () {
       service.markAppStart();
       // Simulate some time passing
       service.markEngineReady();
       expect(service.coldStartDuration, isNotNull);
-      expect(service.coldStartDuration!.inMilliseconds, greaterThanOrEqualTo(0));
+      expect(
+        service.coldStartDuration!.inMilliseconds,
+        greaterThanOrEqualTo(0),
+      );
     });
 
     test('averageDecodeTime is zero with no samples', () {

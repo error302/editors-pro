@@ -167,7 +167,9 @@ class _TimelinePanelState extends ConsumerState<TimelinePanel> {
                                           // to avoid jitter from sub-pixel noise.
                                           onScaleUpdate: (details) {
                                             if ((details.scale - 1.0).abs() <
-                                                0.01) return;
+                                                0.01) {
+                                              return;
+                                            }
                                             final notifier = ref
                                                 .read(editorProvider.notifier);
                                             final currentZoom =
@@ -176,7 +178,8 @@ class _TimelinePanelState extends ConsumerState<TimelinePanel> {
                                             // Multiply rather than add so the gesture
                                             // feels proportional to finger distance.
                                             notifier.setZoom(
-                                                currentZoom * details.scale);
+                                              currentZoom * details.scale,
+                                            );
                                           },
                                           child: SizedBox(
                                             width: totalWidth,
@@ -198,22 +201,27 @@ class _TimelinePanelState extends ConsumerState<TimelinePanel> {
                                                   assetNames: assetNames,
                                                   waveformCache: _waveformCache,
                                                   onClipTap: (clipId) => ref
-                                                      .read(editorProvider
-                                                          .notifier)
+                                                      .read(
+                                                        editorProvider.notifier,
+                                                      )
                                                       .selectClip(clipId),
                                                   onClipDragUpdate:
                                                       (clipId, newStartMs) {
                                                     final current = ref.read(
-                                                        currentProjectProvider);
+                                                      currentProjectProvider,
+                                                    );
                                                     if (current == null) return;
                                                     ref
-                                                        .read(projectProvider
-                                                            .notifier)
+                                                        .read(
+                                                          projectProvider
+                                                              .notifier,
+                                                        )
                                                         .updateClip(
                                                           clipId,
                                                           current.tracks
-                                                              .expand((t) =>
-                                                                  t.clips)
+                                                              .expand(
+                                                                (t) => t.clips,
+                                                              )
                                                               .firstWhere(
                                                                 (c) =>
                                                                     c.id ==
@@ -228,8 +236,10 @@ class _TimelinePanelState extends ConsumerState<TimelinePanel> {
                                                   onClipDragEnd:
                                                       (clipId, finalStartMs) {
                                                     ref
-                                                        .read(editorProvider
-                                                            .notifier)
+                                                        .read(
+                                                          editorProvider
+                                                              .notifier,
+                                                        )
                                                         .moveClip(
                                                           clipId: clipId,
                                                           newStartMs:
@@ -359,7 +369,7 @@ class _TimelinePanelState extends ConsumerState<TimelinePanel> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          AppIcon(
+          const AppIcon(
             AppIcons.timeline,
             size: 32,
             color: AppTheme.textDisabled,
@@ -766,19 +776,19 @@ class _DraggableClipWidgetState extends State<_DraggableClipWidget> {
               ),
               // Trim handles.
               if (widget.isSelected) ...[
-                Positioned(
+                const Positioned(
                   left: 0,
                   top: 0,
                   bottom: 0,
                   width: 4,
-                  child: const _TrimHandle(left: true),
+                  child: _TrimHandle(left: true),
                 ),
-                Positioned(
+                const Positioned(
                   right: 0,
                   top: 0,
                   bottom: 0,
                   width: 4,
-                  child: const _TrimHandle(left: false),
+                  child: _TrimHandle(left: false),
                 ),
               ],
             ],
@@ -906,9 +916,9 @@ class _PlayheadIndicator extends StatelessWidget {
             Positioned(
               left: x - 6,
               top: 16,
-              child: CustomPaint(
-                size: const Size(12, 8),
-                painter: const _TriangleHandlePainter(
+              child: const CustomPaint(
+                size: Size(12, 8),
+                painter: _TriangleHandlePainter(
                   color: AppTheme.playheadColor,
                 ),
               ),

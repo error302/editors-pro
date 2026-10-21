@@ -88,7 +88,7 @@ class _AudioMeterBridgeState extends ConsumerState<AudioMeterBridge> {
     if (project == null) return;
 
     final random = math.Random();
-    bool anyChange = false;
+    var anyChange = false;
 
     for (final track in project.tracks) {
       final trackId = track.id;
@@ -105,7 +105,8 @@ class _AudioMeterBridgeState extends ConsumerState<AudioMeterBridge> {
       // Simulate audio level based on track volume with some randomness.
       // A track at volume 1.0 might produce levels around -12 to -3 dB.
       // A track at volume 0.5 might produce levels around -24 to -12 dB.
-      final baseLevel = 20 * math.log(track.volume) / math.ln2; // dBFS approximation
+      final baseLevel =
+          20 * math.log(track.volume) / math.ln2; // dBFS approximation
       final noise = (random.nextDouble() - 0.5) * 12; // ±6 dB jitter
       final level = (baseLevel + noise).clamp(_dbFloor, _dbCeiling);
 
@@ -122,7 +123,8 @@ class _AudioMeterBridgeState extends ConsumerState<AudioMeterBridge> {
       if (smoothed > oldPeak) {
         _trackPeaks[trackId] = smoothed;
       } else {
-        _trackPeaks[trackId] = (oldPeak - _peakDecayRate).clamp(_dbFloor, _dbCeiling);
+        _trackPeaks[trackId] =
+            (oldPeak - _peakDecayRate).clamp(_dbFloor, _dbCeiling);
       }
 
       // Update clip indicator
@@ -135,8 +137,9 @@ class _AudioMeterBridgeState extends ConsumerState<AudioMeterBridge> {
     }
 
     // Update master levels (sum of all audio tracks)
-    final audioTracks = project.tracks
-        .where((t) => t.trackType == TrackType.audio || t.trackType == TrackType.video);
+    final audioTracks = project.tracks.where(
+      (t) => t.trackType == TrackType.audio || t.trackType == TrackType.video,
+    );
 
     if (audioTracks.isEmpty) {
       _masterL = _dbFloor;
@@ -164,13 +167,15 @@ class _AudioMeterBridgeState extends ConsumerState<AudioMeterBridge> {
     if (_masterL > _masterPeakL) {
       _masterPeakL = _masterL;
     } else {
-      _masterPeakL = (_masterPeakL - _peakDecayRate).clamp(_dbFloor, _dbCeiling);
+      _masterPeakL =
+          (_masterPeakL - _peakDecayRate).clamp(_dbFloor, _dbCeiling);
     }
 
     if (_masterR > _masterPeakR) {
       _masterPeakR = _masterR;
     } else {
-      _masterPeakR = (_masterPeakR - _peakDecayRate).clamp(_dbFloor, _dbCeiling);
+      _masterPeakR =
+          (_masterPeakR - _peakDecayRate).clamp(_dbFloor, _dbCeiling);
     }
 
     // Update master clip indicators
@@ -204,7 +209,7 @@ class _AudioMeterBridgeState extends ConsumerState<AudioMeterBridge> {
           // Per-track VU meters
           Expanded(
             child: tracks.isEmpty
-                ? Center(
+                ? const Center(
                     child: Text(
                       'No tracks',
                       style: TextStyle(
@@ -215,7 +220,8 @@ class _AudioMeterBridgeState extends ConsumerState<AudioMeterBridge> {
                   )
                 : ListView.separated(
                     scrollDirection: Axis.horizontal,
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
                     itemCount: tracks.length,
                     separatorBuilder: (_, __) => const SizedBox(width: 4),
                     itemBuilder: (context, index) {
@@ -304,7 +310,7 @@ class _AudioMeterBridgeState extends ConsumerState<AudioMeterBridge> {
                 Container(
                   width: 8,
                   height: 8,
-                  decoration: BoxDecoration(
+                  decoration: const BoxDecoration(
                     color: AppTheme.border,
                     shape: BoxShape.circle,
                   ),
@@ -347,16 +353,6 @@ class _AudioMeterBridgeState extends ConsumerState<AudioMeterBridge> {
 /// - A clip indicator (red dot) if the level exceeded 0 dB
 /// - The track name abbreviated below
 class _TrackMeter extends StatelessWidget {
-  final String trackName;
-  final TrackType trackType;
-  final double level; // in dB
-  final double peak; // in dB
-  final bool clipped;
-  final VoidCallback onClearClip;
-
-  static const double _dbFloor = -60.0;
-  static const double _dbCeiling = 6.0;
-
   const _TrackMeter({
     required this.trackName,
     required this.trackType,
@@ -365,6 +361,12 @@ class _TrackMeter extends StatelessWidget {
     required this.clipped,
     required this.onClearClip,
   });
+  final String trackName;
+  final TrackType trackType;
+  final double level; // in dB
+  final double peak; // in dB
+  final bool clipped;
+  final VoidCallback onClearClip;
 
   @override
   Widget build(BuildContext context) {
@@ -392,7 +394,7 @@ class _TrackMeter extends StatelessWidget {
           Text(
             trackName.length > 3 ? trackName.substring(0, 3) : trackName,
             style: TextStyle(
-              color: trackColor.withOpacity(0.7),
+              color: trackColor.withValues(alpha: 0.7),
               fontSize: 7,
               fontWeight: FontWeight.w600,
             ),
@@ -422,20 +424,16 @@ class _TrackMeter extends StatelessWidget {
 
 /// A single channel meter for the master stereo display.
 class _StereoChannelMeter extends StatelessWidget {
-  final String label;
-  final double level; // in dB
-  final double peak; // in dB
-  final bool clipped;
-
-  static const double _dbFloor = -60.0;
-  static const double _dbCeiling = 6.0;
-
   const _StereoChannelMeter({
     required this.label,
     required this.level,
     required this.peak,
     required this.clipped,
   });
+  final String label;
+  final double level; // in dB
+  final double peak; // in dB
+  final bool clipped;
 
   @override
   Widget build(BuildContext context) {
@@ -481,6 +479,12 @@ class _StereoChannelMeter extends StatelessWidget {
 /// - Yellow: -20 dB to -6 dB
 /// - Red: -6 dB to +6 dB
 class _VuMeterPainter extends CustomPainter {
+  _VuMeterPainter({
+    required this.level,
+    required this.peak,
+    required this.clipped,
+    required this.trackColor,
+  });
   final double level; // in dB
   final double peak; // in dB
   final bool clipped;
@@ -497,13 +501,6 @@ class _VuMeterPainter extends CustomPainter {
   static const Color _greenColor = Color(0xFF00D9A0);
   static const Color _yellowColor = Color(0xFFFFB84D);
   static const Color _redColor = Color(0xFFFF5C5C);
-
-  _VuMeterPainter({
-    required this.level,
-    required this.peak,
-    required this.clipped,
-    required this.trackColor,
-  });
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -526,11 +523,11 @@ class _VuMeterPainter extends CustomPainter {
 
     // Draw segmented meter bars
     final segmentCount = (height / 3).floor(); // 3px segments with 1px gaps
-    final segmentHeight = 2.0;
-    final gapHeight = 1.0;
-    final totalSegmentSpace = segmentHeight + gapHeight;
+    const segmentHeight = 2.0;
+    const gapHeight = 1.0;
+    const totalSegmentSpace = segmentHeight + gapHeight;
 
-    for (int i = 0; i < segmentCount; i++) {
+    for (var i = 0; i < segmentCount; i++) {
       // i=0 is the top (highest dB), i=segmentCount-1 is the bottom (lowest dB)
       final segmentFraction = 1.0 - (i / segmentCount);
 
@@ -605,12 +602,11 @@ class _VuMeterPainter extends CustomPainter {
 /// Custom painter that renders dB scale markings on the left side of
 /// the meter bridge.
 class _DbScalePainter extends CustomPainter {
+  _DbScalePainter({required this.markings});
   final List<int> markings;
 
   static const double _dbFloor = -60.0;
   static const double _dbCeiling = 6.0;
-
-  _DbScalePainter({required this.markings});
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -626,7 +622,7 @@ class _DbScalePainter extends CustomPainter {
         Offset(size.width - 4, y),
         Offset(size.width, y),
         Paint()
-          ..color = AppTheme.textDisabled.withOpacity(0.4)
+          ..color = AppTheme.textDisabled.withValues(alpha: 0.4)
           ..strokeWidth = 0.5,
       );
 
@@ -636,8 +632,8 @@ class _DbScalePainter extends CustomPainter {
         text: label,
         style: TextStyle(
           color: db >= 0
-              ? AppTheme.error.withOpacity(0.7)
-              : AppTheme.textDisabled.withOpacity(0.6),
+              ? AppTheme.error.withValues(alpha: 0.7)
+              : AppTheme.textDisabled.withValues(alpha: 0.6),
           fontSize: 6,
           fontFamily: 'monospace',
         ),

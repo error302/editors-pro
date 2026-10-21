@@ -60,9 +60,10 @@ pub fn decode(path: &str) -> Result<FrameData, String> {
     let mut image = image::DynamicImage::from_decoder(decoder)
         .map_err(|error| format!("Could not decode image: {error}"))?;
     image.apply_orientation(orientation);
-    let image = image
-        .thumbnail(MAX_FRAME_DIMENSION, MAX_FRAME_DIMENSION)
-        .into_rgba8();
+    if image.width() > MAX_FRAME_DIMENSION || image.height() > MAX_FRAME_DIMENSION {
+        image = image.thumbnail(MAX_FRAME_DIMENSION, MAX_FRAME_DIMENSION);
+    }
+    let image = image.into_rgba8();
     let (width, height) = image.dimensions();
 
     Ok(FrameData {

@@ -183,7 +183,9 @@ impl<T: Clone + Send + 'static> AsyncTaskQueue<T> {
 
     /// Block until a result is received.
     pub fn recv(&self) -> TaskResult<T> {
-        self.receiver.recv().unwrap_or(TaskResult::Error("Channel disconnected".into()))
+        self.receiver
+            .recv()
+            .unwrap_or(TaskResult::Error("Channel disconnected".into()))
     }
 
     /// Cancel all pending tasks.
@@ -326,7 +328,7 @@ mod tests {
 
     #[test]
     fn test_channel_progress_reporter() {
-        let (sender, receiver) = flume::unbounded();
+        let (sender, receiver) = flume::unbounded::<TaskResult<()>>();
         let reporter = ChannelProgressReporter::new(sender);
         reporter.report(0.75, "Progress".to_string());
         let result = receiver.try_recv().unwrap();

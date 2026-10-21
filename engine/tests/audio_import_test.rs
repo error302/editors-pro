@@ -116,6 +116,11 @@ mod ffmpeg_tests {
             "Export must preserve the audible tone"
         );
         assert_eq!(buffer.sample_rate, 48_000);
+        assert!(
+            (buffer.duration_ms as i64 - 1_000).abs() < 100,
+            "Decoded duration must exclude padded frame capacity: {}ms",
+            buffer.duration_ms
+        );
     }
 }
 

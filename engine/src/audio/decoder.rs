@@ -284,61 +284,90 @@ impl AudioDecoder {
         let mut frames_decoded = 0u64;
 
         // Decode packets
-        let mut receive_and_send =
-            |decoder: &mut ff::decoder::Audio,
-             resampler: &mut Option<ff::software::resampling::context::Context>|
-             -> Result<(), String> {
-                // Send packet already done outside
-                let mut frame = ff::util::frame::Audio::empty();
+        let mut receive_and_send = |decoder: &mut ff::decoder::Audio,
+                                    resampler: &mut Option<
+            ff::software::resampling::context::Context,
+        >|
+         -> Result<(), String> {
+            // Send packet already done outside
+            let mut frame = ff::util::frame::Audio::empty();
 
-                loop {
-                    match decoder.receive_frame(&mut frame) {
-                        Ok(()) => {
-                            frames_decoded += 1;
+            loop {
+                match decoder.receive_frame(&mut frame) {
+                    Ok(()) => {
+                        frames_decoded += 1;
 
-                            if let Some(r) = resampler {
-                                let mut resampled = ff::util::frame::Audio::empty();
-                                r.run(&frame, &mut resampled)
-                                    .map_err(|e| format!("Resampling failed: {}", e))?;
-
-                                let data = resampled.data(0);
-                                let sample_count = data.len() / 4; // f32 = 4 bytes
-                                let samples = unsafe {
-                                    std::slice::from_raw_parts(
-                                        data.as_ptr() as *const f32,
-                                        sample_count,
-                                    )
-                                };
-                                all_samples.extend_from_slice(samples);
-                            } else {
-                                // Direct f32 packed data
-                                let data = frame.data(0);
-                                let sample_count = data.len() / 4;
-                                let samples = unsafe {
-                                    std::slice::from_raw_parts(
-                                        data.as_ptr() as *const f32,
-                                        sample_count,
-                                    )
-                                };
-                                all_samples.extend_from_slice(samples);
-                            }
-
-                            frame = ff::util::frame::Audio::empty();
+                        // Containers such as PCM WAV can omit the layout
+                        // on decoded frames even though the channel count
+                        // is known. swr_convert_frame requires it to match.
+                        if frame.channel_layout().is_empty() {
+                            frame.set_channel_layout(ff::channel_layout::ChannelLayout::default(
+                                decoder.channels() as i32,
+                            ));
                         }
-                        Err(ff::Error::Other {
-                            errno: ff::sys::EAGAIN,
-                        }) => {
-                            // Need more input
-                            break;
+                        if frame.rate() == 0 {
+                            frame.set_rate(decoder.rate());
                         }
-                        Err(ff::Error::Eof) => {
-                            // Flush resampler
-                            if let Some(r) = resampler {
-                                let mut resampled = ff::util::frame::Audio::empty();
-                                r.flush(&mut resampled)
+
+                        if let Some(r) = resampler {
+                            let capacity = (frame.samples() as u64 * target_sample_rate as u64)
+                                .div_ceil(frame.rate() as u64)
+                                as usize
+                                + 32;
+                            let mut resampled = ff::util::frame::Audio::new(
+                                ff::format::Sample::F32(ff::format::sample::Type::Packed),
+                                capacity,
+                                ff::channel_layout::ChannelLayout::default(target_channels as i32),
+                            );
+                            r.run(&frame, &mut resampled)
+                                .map_err(|e| format!("Resampling failed: {}", e))?;
+
+                            let data = resampled.data(0);
+                            let sample_count = resampled.samples() * target_channels as usize;
+                            let samples = unsafe {
+                                std::slice::from_raw_parts(
+                                    data.as_ptr() as *const f32,
+                                    sample_count,
+                                )
+                            };
+                            all_samples.extend_from_slice(samples);
+                        } else {
+                            // Direct f32 packed data
+                            let data = frame.data(0);
+                            let sample_count = frame.samples() * target_channels as usize;
+                            let samples = unsafe {
+                                std::slice::from_raw_parts(
+                                    data.as_ptr() as *const f32,
+                                    sample_count,
+                                )
+                            };
+                            all_samples.extend_from_slice(samples);
+                        }
+
+                        frame = ff::util::frame::Audio::empty();
+                    }
+                    Err(ff::Error::Other {
+                        errno: ff::sys::EAGAIN,
+                    }) => {
+                        // Need more input
+                        break;
+                    }
+                    Err(ff::Error::Eof) => {
+                        // Flush resampler
+                        if let Some(r) = resampler {
+                            loop {
+                                let mut resampled = ff::util::frame::Audio::new(
+                                    ff::format::Sample::F32(ff::format::sample::Type::Packed),
+                                    4096,
+                                    ff::channel_layout::ChannelLayout::default(
+                                        target_channels as i32,
+                                    ),
+                                );
+                                let delay = r
+                                    .flush(&mut resampled)
                                     .map_err(|e| format!("Resampler flush failed: {}", e))?;
                                 let data = resampled.data(0);
-                                let sample_count = data.len() / 4;
+                                let sample_count = resampled.samples() * target_channels as usize;
                                 let samples = unsafe {
                                     std::slice::from_raw_parts(
                                         data.as_ptr() as *const f32,
@@ -346,18 +375,21 @@ impl AudioDecoder {
                                     )
                                 };
                                 all_samples.extend_from_slice(samples);
+                                if delay.is_none() || sample_count == 0 {
+                                    break;
+                                }
                             }
-                            break;
                         }
-                        Err(e) => {
-                            log::warn!("Audio decode error: {}", e);
-                            break;
-                        }
+                        break;
+                    }
+                    Err(e) => {
+                        return Err(format!("Audio decode error: {}", e));
                     }
                 }
+            }
 
-                Ok(())
-            };
+            Ok(())
+        };
 
         // Process all packets from the audio stream
         for (stream, packet) in input.packets() {

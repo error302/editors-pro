@@ -12,14 +12,13 @@ import '../../../core/theme/app_theme.dart';
 /// of grain back to break up the plasticity. See
 /// persona/skills/noise-reduction/SKILL.md.
 class NoiseReductionPanel extends StatefulWidget {
-  final void Function(NoiseReductionValues values) onChanged;
-  final NoiseReductionValues initialValues;
-
   const NoiseReductionPanel({
-    super.key,
     required this.onChanged,
+    super.key,
     this.initialValues = NoiseReductionValues.neutral,
   });
+  final void Function(NoiseReductionValues values) onChanged;
+  final NoiseReductionValues initialValues;
 
   @override
   State<NoiseReductionPanel> createState() => _NoiseReductionPanelState();
@@ -44,8 +43,10 @@ class _NoiseReductionPanelState extends State<NoiseReductionPanel> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Noise Reduction',
-            style: Theme.of(context).textTheme.titleMedium),
+        Text(
+          'Noise Reduction',
+          style: Theme.of(context).textTheme.titleMedium,
+        ),
         const SizedBox(height: AppTheme.spacing4),
         Text(
           'Method by shot type. 30–50% is enough. Add a tiny bit of grain '
@@ -87,7 +88,8 @@ class _NoiseReductionPanelState extends State<NoiseReductionPanel> {
         Text('Strength', style: Theme.of(context).textTheme.bodyMedium),
         Slider(
           value: _v.strength,
-          min: 0.0, max: 1.0,
+          min: 0.0,
+          max: 1.0,
           divisions: 100,
           label: '${(_v.strength * 100).round()}%',
           onChanged: (v) => _update(_v.copyWith(strength: v)),
@@ -102,7 +104,9 @@ class _NoiseReductionPanelState extends State<NoiseReductionPanel> {
         // Luma/chroma separation
         SwitchListTile(
           title: const Text('Luma/chroma separation'),
-          subtitle: const Text('NR on luma and chroma independently (better detail retention)'),
+          subtitle: const Text(
+            'NR on luma and chroma independently (better detail retention)',
+          ),
           value: _v.lumaChromaSeparation,
           onChanged: (b) => _update(_v.copyWith(lumaChromaSeparation: b)),
         ),
@@ -115,10 +119,14 @@ class _NoiseReductionPanelState extends State<NoiseReductionPanel> {
           onChanged: (b) => _update(_v.copyWith(addGrainBack: b)),
         ),
         if (_v.addGrainBack) ...[
-          Text('Grain intensity', style: Theme.of(context).textTheme.bodyMedium),
+          Text(
+            'Grain intensity',
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
           Slider(
             value: _v.grainIntensity,
-            min: 0.0, max: 0.3,
+            min: 0.0,
+            max: 0.3,
             divisions: 30,
             label: '${(_v.grainIntensity * 100).round()}%',
             onChanged: (v) => _update(_v.copyWith(grainIntensity: v)),
@@ -132,12 +140,6 @@ class _NoiseReductionPanelState extends State<NoiseReductionPanel> {
 enum NoiseReductionMethod { bilateral, wiener, nlm, temporal }
 
 class NoiseReductionValues {
-  final NoiseReductionMethod method;
-  final double strength;
-  final bool lumaChromaSeparation;
-  final bool addGrainBack;
-  final double grainIntensity;
-
   const NoiseReductionValues({
     this.method = NoiseReductionMethod.bilateral,
     this.strength = 0.3,
@@ -145,6 +147,11 @@ class NoiseReductionValues {
     this.addGrainBack = true,
     this.grainIntensity = 0.05,
   });
+  final NoiseReductionMethod method;
+  final double strength;
+  final bool lumaChromaSeparation;
+  final bool addGrainBack;
+  final double grainIntensity;
 
   static const neutral = NoiseReductionValues();
 

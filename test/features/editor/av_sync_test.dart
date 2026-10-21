@@ -1,6 +1,5 @@
-import 'package:flutter_test/flutter_test.dart';
-
 import 'package:editors_pro/features/editor/services/av_sync_coordinator.dart';
+import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('AvSyncDiagnostics', () {

@@ -1,13 +1,11 @@
 import 'dart:developer' as developer;
 
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-
-import '../../../core/services/engine_service.dart';
-import 'engine_bridge_provider.dart';
-
 // Re-export the bridge DTO for convenience
 import 'package:editors_pro/src/rust/api/bridge_api.dart'
     show TranscriptionSegmentInfo;
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../../core/services/engine_service.dart';
 
 /// Transcription status — mirrors the Rust TranscriptionStatus enum
 enum TranscriptionStatus {
@@ -44,13 +42,6 @@ enum TranscriptionStatus {
 
 /// UI-friendly transcription segment data
 class TranscriptionSegmentData {
-  final String id;
-  final String text;
-  final int startMs;
-  final int endMs;
-  final double confidence;
-  final bool selected;
-
   const TranscriptionSegmentData({
     required this.id,
     required this.text,
@@ -70,6 +61,12 @@ class TranscriptionSegmentData {
       confidence: dto.confidence,
     );
   }
+  final String id;
+  final String text;
+  final int startMs;
+  final int endMs;
+  final double confidence;
+  final bool selected;
 
   /// Format start time as M:SS
   String get startTimeFormatted {
@@ -128,14 +125,6 @@ class TranscriptionSegmentData {
 
 /// State for the transcription feature
 class TranscriptionState {
-  final bool isTranscribing;
-  final double progress;
-  final TranscriptionStatus status;
-  final List<TranscriptionSegmentData> segments;
-  final String? errorMessage;
-  final String selectedLanguage;
-  final String selectedModel;
-
   const TranscriptionState({
     this.isTranscribing = false,
     this.progress = 0.0,
@@ -145,15 +134,24 @@ class TranscriptionState {
     this.selectedLanguage = 'auto',
     this.selectedModel = 'base',
   });
+  final bool isTranscribing;
+  final double progress;
+  final TranscriptionStatus status;
+  final List<TranscriptionSegmentData> segments;
+  final String? errorMessage;
+  final String selectedLanguage;
+  final String selectedModel;
 
   /// Whether there are any segments
   bool get hasSegments => segments.isNotEmpty;
 
   /// Whether all segments are selected
-  bool get allSelected => segments.isNotEmpty && segments.every((s) => s.selected);
+  bool get allSelected =>
+      segments.isNotEmpty && segments.every((s) => s.selected);
 
   /// Whether no segments are selected
-  bool get noneSelected => segments.isNotEmpty && segments.every((s) => !s.selected);
+  bool get noneSelected =>
+      segments.isNotEmpty && segments.every((s) => !s.selected);
 
   /// Number of selected segments
   int get selectedCount => segments.where((s) => s.selected).length;
@@ -170,7 +168,9 @@ class TranscriptionState {
       final seg = selected[i];
       if (i > 0) buffer.writeln();
       buffer.writeln(i + 1);
-      buffer.writeln('${_srtTimestamp(seg.startMs)} --> ${_srtTimestamp(seg.endMs)}');
+      buffer.writeln(
+        '${_srtTimestamp(seg.startMs)} --> ${_srtTimestamp(seg.endMs)}',
+      );
       buffer.writeln(seg.text);
     }
     return buffer.toString();
@@ -184,7 +184,9 @@ class TranscriptionState {
       final seg = selected[i];
       if (i > 0) buffer.writeln();
       buffer.writeln(i + 1);
-      buffer.writeln('${_vttTimestamp(seg.startMs)} --> ${_vttTimestamp(seg.endMs)}');
+      buffer.writeln(
+        '${_vttTimestamp(seg.startMs)} --> ${_vttTimestamp(seg.endMs)}',
+      );
       buffer.writeln(seg.text);
     }
     return buffer.toString();
@@ -234,9 +236,7 @@ class TranscriptionState {
 
 /// Notifier that manages transcription state and interacts with the engine
 class TranscriptionNotifier extends StateNotifier<TranscriptionState> {
-  final Ref _ref;
-
-  TranscriptionNotifier(this._ref) : super(const TranscriptionState());
+  TranscriptionNotifier(Ref _) : super(const TranscriptionState());
 
   /// Whether the engine is available for use.
   bool get _engineReady => EngineService.instance.isInitialized;
@@ -301,9 +301,8 @@ class TranscriptionNotifier extends StateNotifier<TranscriptionState> {
       );
 
       // Convert bridge DTOs to UI data
-      final segments = bridgeSegments
-          .map(TranscriptionSegmentData.fromBridgeDto)
-          .toList();
+      final segments =
+          bridgeSegments.map(TranscriptionSegmentData.fromBridgeDto).toList();
 
       state = state.copyWith(
         isTranscribing: false,
@@ -366,13 +365,15 @@ class TranscriptionNotifier extends StateNotifier<TranscriptionState> {
       final endMs = startMs + 4000;
       // Simulate varying confidence
       final confidence = 0.75 + (i % 5) * 0.05;
-      segments.add(TranscriptionSegmentData(
-        id: 'sim-$i',
-        text: samplePhrases[i],
-        startMs: startMs,
-        endMs: endMs,
-        confidence: confidence.clamp(0.0, 1.0),
-      ));
+      segments.add(
+        TranscriptionSegmentData(
+          id: 'sim-$i',
+          text: samplePhrases[i],
+          startMs: startMs,
+          endMs: endMs,
+          confidence: confidence.clamp(0.0, 1.0),
+        ),
+      );
     }
 
     state = state.copyWith(
@@ -494,13 +495,15 @@ class TranscriptionNotifier extends StateNotifier<TranscriptionState> {
 
   /// Select all segments
   void selectAllSegments() {
-    final segments = state.segments.map((s) => s.copyWith(selected: true)).toList();
+    final segments =
+        state.segments.map((s) => s.copyWith(selected: true)).toList();
     state = state.copyWith(segments: segments);
   }
 
   /// Deselect all segments
   void deselectAllSegments() {
-    final segments = state.segments.map((s) => s.copyWith(selected: false)).toList();
+    final segments =
+        state.segments.map((s) => s.copyWith(selected: false)).toList();
     state = state.copyWith(segments: segments);
   }
 

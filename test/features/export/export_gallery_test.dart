@@ -18,7 +18,9 @@ void main() {
 
   test('maps supported video extensions to Gallery MIME types', () {
     expect(
-        StorageService.videoMimeTypeForPath('/export/clip.MP4'), 'video/mp4');
+      StorageService.videoMimeTypeForPath('/export/clip.MP4'),
+      'video/mp4',
+    );
     expect(
       StorageService.videoMimeTypeForPath('/export/clip.mov'),
       'video/quicktime',

@@ -123,7 +123,8 @@ class StorageService {
   /// Get available storage space in bytes.
   static Future<int> getAvailableStorageBytes() async {
     try {
-      final bytes = await _channel.invokeMethod<int>('getAvailableStorageBytes');
+      final bytes =
+          await _channel.invokeMethod<int>('getAvailableStorageBytes');
       return bytes ?? 0;
     } on PlatformException {
       return 0;

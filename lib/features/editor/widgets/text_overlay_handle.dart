@@ -4,17 +4,6 @@ import '../../../core/theme/app_theme.dart';
 
 /// Data model representing a text overlay's position and style on the preview.
 class TextOverlayData {
-  final String clipId;
-  final String text;
-  final double positionX; // 0.0–1.0 relative to preview width
-  final double positionY; // 0.0–1.0 relative to preview height
-  final double width; // 0.0–1.0 relative to preview width
-  final double height; // 0.0–1.0 relative to preview height
-  final String fontFamily;
-  final double fontSize;
-  final String colorHex;
-  final bool isSelected;
-
   const TextOverlayData({
     required this.clipId,
     required this.text,
@@ -27,6 +16,16 @@ class TextOverlayData {
     this.colorHex = '#FFFFFF',
     this.isSelected = false,
   });
+  final String clipId;
+  final String text;
+  final double positionX; // 0.0–1.0 relative to preview width
+  final double positionY; // 0.0–1.0 relative to preview height
+  final double width; // 0.0–1.0 relative to preview width
+  final double height; // 0.0–1.0 relative to preview height
+  final String fontFamily;
+  final double fontSize;
+  final String colorHex;
+  final bool isSelected;
 
   TextOverlayData copyWith({
     String? clipId,
@@ -73,18 +72,17 @@ typedef TextSizeChanged = void Function(
 /// clip is selected. It shows a bounding box around the text overlay area,
 /// supports drag to reposition, and shows resize handles at corners.
 class TextOverlayHandle extends StatefulWidget {
+  const TextOverlayHandle({
+    required this.data,
+    required this.onPositionChanged,
+    super.key,
+    this.onSizeChanged,
+    this.onTap,
+  });
   final TextOverlayData data;
   final TextPositionChanged onPositionChanged;
   final TextSizeChanged? onSizeChanged;
   final VoidCallback? onTap;
-
-  const TextOverlayHandle({
-    super.key,
-    required this.data,
-    required this.onPositionChanged,
-    this.onSizeChanged,
-    this.onTap,
-  });
 
   @override
   State<TextOverlayHandle> createState() => _TextOverlayHandleState();
@@ -126,7 +124,8 @@ class _TextOverlayHandleState extends State<TextOverlayHandle> {
           height: boxHeight,
           child: GestureDetector(
             onPanStart: _onDragStart,
-            onPanUpdate: (details) => _onDragUpdate(details, parentWidth, parentHeight),
+            onPanUpdate: (details) =>
+                _onDragUpdate(details, parentWidth, parentHeight),
             onPanEnd: _onDragEnd,
             onTap: widget.onTap,
             child: MouseRegion(
@@ -134,11 +133,12 @@ class _TextOverlayHandleState extends State<TextOverlayHandle> {
               child: Container(
                 decoration: BoxDecoration(
                   border: Border.all(
-                    color: selected ? AppTheme.primary : AppTheme.textTrackColor,
+                    color:
+                        selected ? AppTheme.primary : AppTheme.textTrackColor,
                     width: selected ? 2.0 : 1.0,
                   ),
                   color: selected
-                      ? AppTheme.primary.withOpacity(0.05)
+                      ? AppTheme.primary.withValues(alpha: 0.05)
                       : Colors.transparent,
                 ),
                 child: Stack(
@@ -147,7 +147,10 @@ class _TextOverlayHandleState extends State<TextOverlayHandle> {
                     // Text preview
                     Center(
                       child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
                         child: Text(
                           data.text,
                           style: TextStyle(
@@ -164,10 +167,26 @@ class _TextOverlayHandleState extends State<TextOverlayHandle> {
 
                     // Resize handles (only when selected)
                     if (selected) ...[
-                      _buildResizeHandle(_ResizeCorner.topLeft, parentWidth, parentHeight),
-                      _buildResizeHandle(_ResizeCorner.topRight, parentWidth, parentHeight),
-                      _buildResizeHandle(_ResizeCorner.bottomLeft, parentWidth, parentHeight),
-                      _buildResizeHandle(_ResizeCorner.bottomRight, parentWidth, parentHeight),
+                      _buildResizeHandle(
+                        _ResizeCorner.topLeft,
+                        parentWidth,
+                        parentHeight,
+                      ),
+                      _buildResizeHandle(
+                        _ResizeCorner.topRight,
+                        parentWidth,
+                        parentHeight,
+                      ),
+                      _buildResizeHandle(
+                        _ResizeCorner.bottomLeft,
+                        parentWidth,
+                        parentHeight,
+                      ),
+                      _buildResizeHandle(
+                        _ResizeCorner.bottomRight,
+                        parentWidth,
+                        parentHeight,
+                      ),
                     ],
                   ],
                 ),
@@ -179,7 +198,11 @@ class _TextOverlayHandleState extends State<TextOverlayHandle> {
     );
   }
 
-  Widget _buildResizeHandle(_ResizeCorner corner, double parentWidth, double parentHeight) {
+  Widget _buildResizeHandle(
+    _ResizeCorner corner,
+    double parentWidth,
+    double parentHeight,
+  ) {
     double? left, top, right, bottom;
 
     switch (corner) {
@@ -213,13 +236,17 @@ class _TextOverlayHandleState extends State<TextOverlayHandle> {
           _startHeight = widget.data.height;
         },
         onPanUpdate: (details) {
-          if (_activeCorner == null || _startWidth == null || _startHeight == null) return;
+          if (_activeCorner == null ||
+              _startWidth == null ||
+              _startHeight == null) {
+            return;
+          }
 
           final dx = details.delta.dx / parentWidth;
           final dy = details.delta.dy / parentHeight;
 
-          double newWidth = _startWidth!;
-          double newHeight = _startHeight!;
+          var newWidth = _startWidth!;
+          var newHeight = _startHeight!;
 
           switch (_activeCorner!) {
             case _ResizeCorner.topLeft:
@@ -274,7 +301,11 @@ class _TextOverlayHandleState extends State<TextOverlayHandle> {
     _startPosY = widget.data.positionY;
   }
 
-  void _onDragUpdate(DragUpdateDetails details, double parentWidth, double parentHeight) {
+  void _onDragUpdate(
+    DragUpdateDetails details,
+    double parentWidth,
+    double parentHeight,
+  ) {
     if (_dragStart == null || _startPosX == null || _startPosY == null) return;
 
     final dx = details.globalPosition.dx - _dragStart!.dx;
@@ -301,7 +332,8 @@ class _TextOverlayHandleState extends State<TextOverlayHandle> {
   double _scaledFontSize(double baseFontSize, double boxWidth) {
     // Scale font size based on the overlay width relative to the preview
     if (boxWidth <= 0) return baseFontSize.clamp(8.0, 120.0);
-    final scale = boxWidth / 400; // 400px is the reference width for baseFontSize
+    final scale =
+        boxWidth / 400; // 400px is the reference width for baseFontSize
     return (baseFontSize * scale).clamp(8.0, 120.0);
   }
 

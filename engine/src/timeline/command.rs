@@ -61,7 +61,11 @@ impl Command for AddClipCommand {
         Ok(CommandResult {
             success: true,
             message: "Clip addition undone".to_string(),
-            affected_clip_ids: self.clip.as_ref().map(|c| vec![c.id.clone()]).unwrap_or_default(),
+            affected_clip_ids: self
+                .clip
+                .as_ref()
+                .map(|c| vec![c.id.clone()])
+                .unwrap_or_default(),
         })
     }
 
@@ -91,7 +95,9 @@ impl RemoveClipCommand {
 impl Command for RemoveClipCommand {
     fn execute(&mut self, timeline: &mut Timeline) -> Result<CommandResult, String> {
         // Find which track contains the clip
-        let track_id = timeline.tracks.iter()
+        let track_id = timeline
+            .tracks
+            .iter()
             .find(|t| t.find_clip(&self.clip_id).is_some())
             .map(|t| t.id.clone())
             .ok_or_else(|| format!("Clip {} not found", self.clip_id))?;
@@ -152,7 +158,8 @@ impl TrimClipCommand {
 
 impl Command for TrimClipCommand {
     fn execute(&mut self, timeline: &mut Timeline) -> Result<CommandResult, String> {
-        let clip = timeline.find_clip_mut(&self.clip_id)
+        let clip = timeline
+            .find_clip_mut(&self.clip_id)
             .ok_or_else(|| format!("Clip {} not found", self.clip_id))?;
 
         // Store old values for undo
@@ -177,7 +184,8 @@ impl Command for TrimClipCommand {
     }
 
     fn undo(&mut self, timeline: &mut Timeline) -> Result<CommandResult, String> {
-        let clip = timeline.find_clip_mut(&self.clip_id)
+        let clip = timeline
+            .find_clip_mut(&self.clip_id)
             .ok_or_else(|| format!("Clip {} not found", self.clip_id))?;
 
         clip.trim_start_ms = self.old_trim_start.ok_or("No old trim start")?;
@@ -222,14 +230,17 @@ impl MoveClipCommand {
 impl Command for MoveClipCommand {
     fn execute(&mut self, timeline: &mut Timeline) -> Result<CommandResult, String> {
         // Find the current track
-        let current_track_id = timeline.tracks.iter()
+        let current_track_id = timeline
+            .tracks
+            .iter()
             .find(|t| t.find_clip(&self.clip_id).is_some())
             .map(|t| t.id.clone())
             .ok_or_else(|| format!("Clip {} not found", self.clip_id))?;
 
         self.old_track_id = Some(current_track_id.clone());
 
-        let (_, clip) = timeline.find_clip(&self.clip_id)
+        let (_, clip) = timeline
+            .find_clip(&self.clip_id)
             .ok_or_else(|| format!("Clip {} not found", self.clip_id))?;
 
         self.old_start_ms = Some(clip.start_ms);
@@ -239,14 +250,16 @@ impl Command for MoveClipCommand {
 
         if target_track_id != &current_track_id {
             // Remove from current track, add to new track
-            let clip_data = timeline.remove_clip(&self.clip_id)
+            let clip_data = timeline
+                .remove_clip(&self.clip_id)
                 .ok_or("Failed to remove clip from source track")?;
             let mut moved_clip = clip_data;
             moved_clip.start_ms = self.new_start_ms;
             timeline.add_clip_to_track(target_track_id, moved_clip)?;
         } else {
             // Just update the start position on the same track
-            let clip = timeline.find_clip_mut(&self.clip_id)
+            let clip = timeline
+                .find_clip_mut(&self.clip_id)
                 .ok_or_else(|| format!("Clip {} not found", self.clip_id))?;
             clip.start_ms = self.new_start_ms;
         }
@@ -264,19 +277,23 @@ impl Command for MoveClipCommand {
         let old_start = self.old_start_ms.ok_or("No old start position")?;
         let old_track = self.old_track_id.as_ref().ok_or("No old track ID")?;
 
-        let current_track_id = timeline.tracks.iter()
+        let current_track_id = timeline
+            .tracks
+            .iter()
             .find(|t| t.find_clip(&self.clip_id).is_some())
             .map(|t| t.id.clone());
 
         if let Some(current_track) = current_track_id {
             if &current_track != old_track {
-                let clip_data = timeline.remove_clip(&self.clip_id)
+                let clip_data = timeline
+                    .remove_clip(&self.clip_id)
                     .ok_or("Failed to remove clip")?;
                 let mut moved_clip = clip_data;
                 moved_clip.start_ms = old_start;
                 timeline.add_clip_to_track(old_track, moved_clip)?;
             } else {
-                let clip = timeline.find_clip_mut(&self.clip_id)
+                let clip = timeline
+                    .find_clip_mut(&self.clip_id)
                     .ok_or_else(|| format!("Clip {} not found", self.clip_id))?;
                 clip.start_ms = old_start;
             }
@@ -323,7 +340,8 @@ impl SplitClipCommand {
 impl Command for SplitClipCommand {
     fn execute(&mut self, timeline: &mut Timeline) -> Result<CommandResult, String> {
         // Store the original clip and track for undo
-        let (track, clip) = timeline.find_clip(&self.clip_id)
+        let (track, clip) = timeline
+            .find_clip(&self.clip_id)
             .ok_or_else(|| format!("Clip {} not found", self.clip_id))?;
         self.original_clip = Some(clip.clone());
         self.original_track_id = Some(track.id.clone());
@@ -350,7 +368,9 @@ impl Command for SplitClipCommand {
 
         // Restore the original clip to the correct track
         let original = self.original_clip.take().ok_or("No original clip stored")?;
-        let track_id = self.original_track_id.take()
+        let track_id = self
+            .original_track_id
+            .take()
             .ok_or("No original track ID stored")?;
 
         timeline.add_clip_to_track(&track_id, original)?;
@@ -387,7 +407,8 @@ impl SetTrackVolumeCommand {
 
 impl Command for SetTrackVolumeCommand {
     fn execute(&mut self, timeline: &mut Timeline) -> Result<CommandResult, String> {
-        let track = timeline.find_track_mut(&self.track_id)
+        let track = timeline
+            .find_track_mut(&self.track_id)
             .ok_or_else(|| format!("Track {} not found", self.track_id))?;
 
         self.old_volume = Some(track.volume);
@@ -402,7 +423,8 @@ impl Command for SetTrackVolumeCommand {
 
     fn undo(&mut self, timeline: &mut Timeline) -> Result<CommandResult, String> {
         let old_volume = self.old_volume.ok_or("No old volume stored")?;
-        let track = timeline.find_track_mut(&self.track_id)
+        let track = timeline
+            .find_track_mut(&self.track_id)
             .ok_or_else(|| format!("Track {} not found", self.track_id))?;
 
         track.set_volume(old_volume);
@@ -437,7 +459,8 @@ impl ToggleTrackVisibilityCommand {
 
 impl Command for ToggleTrackVisibilityCommand {
     fn execute(&mut self, timeline: &mut Timeline) -> Result<CommandResult, String> {
-        let track = timeline.find_track_mut(&self.track_id)
+        let track = timeline
+            .find_track_mut(&self.track_id)
             .ok_or_else(|| format!("Track {} not found", self.track_id))?;
 
         self.old_visible = Some(track.visible);
@@ -452,7 +475,8 @@ impl Command for ToggleTrackVisibilityCommand {
 
     fn undo(&mut self, timeline: &mut Timeline) -> Result<CommandResult, String> {
         let old_visible = self.old_visible.ok_or("No old visibility stored")?;
-        let track = timeline.find_track_mut(&self.track_id)
+        let track = timeline
+            .find_track_mut(&self.track_id)
             .ok_or_else(|| format!("Track {} not found", self.track_id))?;
 
         track.visible = old_visible;
@@ -491,7 +515,8 @@ impl AddEffectCommand {
 impl Command for AddEffectCommand {
     fn execute(&mut self, timeline: &mut Timeline) -> Result<CommandResult, String> {
         let effect = self.effect.take().ok_or("No effect to add")?;
-        let clip = timeline.find_clip_mut(&self.clip_id)
+        let clip = timeline
+            .find_clip_mut(&self.clip_id)
             .ok_or_else(|| format!("Clip {} not found", self.clip_id))?;
         clip.add_effect(effect);
         Ok(CommandResult {
@@ -502,7 +527,8 @@ impl Command for AddEffectCommand {
     }
 
     fn undo(&mut self, timeline: &mut Timeline) -> Result<CommandResult, String> {
-        let clip = timeline.find_clip_mut(&self.clip_id)
+        let clip = timeline
+            .find_clip_mut(&self.clip_id)
             .ok_or_else(|| format!("Clip {} not found", self.clip_id))?;
         self.effect = clip.remove_effect(&self.effect_id);
         Ok(CommandResult {
@@ -537,11 +563,15 @@ impl RemoveEffectCommand {
 
 impl Command for RemoveEffectCommand {
     fn execute(&mut self, timeline: &mut Timeline) -> Result<CommandResult, String> {
-        let clip = timeline.find_clip_mut(&self.clip_id)
+        let clip = timeline
+            .find_clip_mut(&self.clip_id)
             .ok_or_else(|| format!("Clip {} not found", self.clip_id))?;
         self.removed_effect = clip.remove_effect(&self.effect_id);
         if self.removed_effect.is_none() {
-            return Err(format!("Effect {} not found on clip {}", self.effect_id, self.clip_id));
+            return Err(format!(
+                "Effect {} not found on clip {}",
+                self.effect_id, self.clip_id
+            ));
         }
         Ok(CommandResult {
             success: true,
@@ -552,7 +582,8 @@ impl Command for RemoveEffectCommand {
 
     fn undo(&mut self, timeline: &mut Timeline) -> Result<CommandResult, String> {
         let effect = self.removed_effect.take().ok_or("No effect to restore")?;
-        let clip = timeline.find_clip_mut(&self.clip_id)
+        let clip = timeline
+            .find_clip_mut(&self.clip_id)
             .ok_or_else(|| format!("Clip {} not found", self.clip_id))?;
         clip.add_effect(effect);
         Ok(CommandResult {
@@ -591,11 +622,14 @@ impl SetEffectParameterCommand {
 
 impl Command for SetEffectParameterCommand {
     fn execute(&mut self, timeline: &mut Timeline) -> Result<CommandResult, String> {
-        let clip = timeline.find_clip_mut(&self.clip_id)
+        let clip = timeline
+            .find_clip_mut(&self.clip_id)
             .ok_or_else(|| format!("Clip {} not found", self.clip_id))?;
 
         // Store the old value for undo
-        let effect = clip.effects.iter()
+        let effect = clip
+            .effects
+            .iter()
             .find(|e| e.id == self.effect_id)
             .ok_or_else(|| format!("Effect {} not found", self.effect_id))?;
         self.old_value = effect.get_parameter(&self.param_name);
@@ -611,7 +645,8 @@ impl Command for SetEffectParameterCommand {
 
     fn undo(&mut self, timeline: &mut Timeline) -> Result<CommandResult, String> {
         let old_value = self.old_value.ok_or("No old value stored")?;
-        let clip = timeline.find_clip_mut(&self.clip_id)
+        let clip = timeline
+            .find_clip_mut(&self.clip_id)
             .ok_or_else(|| format!("Clip {} not found", self.clip_id))?;
         clip.set_effect_parameter(&self.effect_id, &self.param_name, old_value)?;
         Ok(CommandResult {
@@ -658,7 +693,8 @@ impl AddTransitionCommand {
 impl Command for AddTransitionCommand {
     fn execute(&mut self, timeline: &mut Timeline) -> Result<CommandResult, String> {
         let transition = self.transition.take().ok_or("No transition to add")?;
-        let clip = timeline.find_clip_mut(&self.clip_id)
+        let clip = timeline
+            .find_clip_mut(&self.clip_id)
             .ok_or_else(|| format!("Clip {} not found", self.clip_id))?;
 
         match self.transition_type.as_str() {
@@ -681,7 +717,8 @@ impl Command for AddTransitionCommand {
     }
 
     fn undo(&mut self, timeline: &mut Timeline) -> Result<CommandResult, String> {
-        let clip = timeline.find_clip_mut(&self.clip_id)
+        let clip = timeline
+            .find_clip_mut(&self.clip_id)
             .ok_or_else(|| format!("Clip {} not found", self.clip_id))?;
 
         match self.transition_type.as_str() {
@@ -726,7 +763,8 @@ impl SetSpeedCurveCommand {
 
 impl Command for SetSpeedCurveCommand {
     fn execute(&mut self, timeline: &mut Timeline) -> Result<CommandResult, String> {
-        let clip = timeline.find_clip_mut(&self.clip_id)
+        let clip = timeline
+            .find_clip_mut(&self.clip_id)
             .ok_or_else(|| format!("Clip {} not found", self.clip_id))?;
 
         // Store old curve for undo
@@ -748,7 +786,8 @@ impl Command for SetSpeedCurveCommand {
 
     fn undo(&mut self, timeline: &mut Timeline) -> Result<CommandResult, String> {
         let old_curve = self.old_curve.take().ok_or("No old speed curve stored")?;
-        let clip = timeline.find_clip_mut(&self.clip_id)
+        let clip = timeline
+            .find_clip_mut(&self.clip_id)
             .ok_or_else(|| format!("Clip {} not found", self.clip_id))?;
 
         // Store the current curve for redo
@@ -792,12 +831,17 @@ impl AddKeyframeCommand {
 impl Command for AddKeyframeCommand {
     fn execute(&mut self, timeline: &mut Timeline) -> Result<CommandResult, String> {
         let keyframe = self.keyframe.take().ok_or("No keyframe to add")?;
-        let clip = timeline.find_clip_mut(&self.clip_id)
+        let clip = timeline
+            .find_clip_mut(&self.clip_id)
             .ok_or_else(|| format!("Clip {} not found", self.clip_id))?;
 
         // If a keyframe already exists at the same time, store it for undo
         if let Some(track) = clip.keyframe_track(&self.property) {
-            if let Some(existing) = track.keyframes.iter().find(|k| k.time_ms == keyframe.time_ms) {
+            if let Some(existing) = track
+                .keyframes
+                .iter()
+                .find(|k| k.time_ms == keyframe.time_ms)
+            {
                 self.keyframe = Some(existing.clone());
             } else {
                 self.keyframe = Some(keyframe.clone());
@@ -805,7 +849,8 @@ impl Command for AddKeyframeCommand {
         }
 
         // Re-borrow to add the keyframe
-        let clip = timeline.find_clip_mut(&self.clip_id)
+        let clip = timeline
+            .find_clip_mut(&self.clip_id)
             .ok_or_else(|| format!("Clip {} not found", self.clip_id))?;
         clip.add_keyframe(&self.property, keyframe)?;
 
@@ -817,7 +862,8 @@ impl Command for AddKeyframeCommand {
     }
 
     fn undo(&mut self, timeline: &mut Timeline) -> Result<CommandResult, String> {
-        let clip = timeline.find_clip_mut(&self.clip_id)
+        let clip = timeline
+            .find_clip_mut(&self.clip_id)
             .ok_or_else(|| format!("Clip {} not found", self.clip_id))?;
 
         // Remove the keyframe we added
@@ -860,7 +906,8 @@ impl RemoveKeyframeCommand {
 
 impl Command for RemoveKeyframeCommand {
     fn execute(&mut self, timeline: &mut Timeline) -> Result<CommandResult, String> {
-        let clip = timeline.find_clip_mut(&self.clip_id)
+        let clip = timeline
+            .find_clip_mut(&self.clip_id)
             .ok_or_else(|| format!("Clip {} not found", self.clip_id))?;
 
         // Find and store the keyframe before removing
@@ -871,11 +918,15 @@ impl Command for RemoveKeyframeCommand {
         }
 
         // Remove the keyframe
-        let clip = timeline.find_clip_mut(&self.clip_id)
+        let clip = timeline
+            .find_clip_mut(&self.clip_id)
             .ok_or_else(|| format!("Clip {} not found", self.clip_id))?;
         let removed = clip.remove_keyframe(&self.property, &self.keyframe_id)?;
         if !removed {
-            return Err(format!("Keyframe {} not found on clip {}", self.keyframe_id, self.clip_id));
+            return Err(format!(
+                "Keyframe {} not found on clip {}",
+                self.keyframe_id, self.clip_id
+            ));
         }
 
         Ok(CommandResult {
@@ -886,8 +937,12 @@ impl Command for RemoveKeyframeCommand {
     }
 
     fn undo(&mut self, timeline: &mut Timeline) -> Result<CommandResult, String> {
-        let keyframe = self.removed_keyframe.take().ok_or("No keyframe to restore")?;
-        let clip = timeline.find_clip_mut(&self.clip_id)
+        let keyframe = self
+            .removed_keyframe
+            .take()
+            .ok_or("No keyframe to restore")?;
+        let clip = timeline
+            .find_clip_mut(&self.clip_id)
             .ok_or_else(|| format!("Clip {} not found", self.clip_id))?;
 
         clip.add_keyframe(&self.property, keyframe)?;
@@ -938,7 +993,8 @@ impl UpdateKeyframeCommand {
 
 impl Command for UpdateKeyframeCommand {
     fn execute(&mut self, timeline: &mut Timeline) -> Result<CommandResult, String> {
-        let clip = timeline.find_clip_mut(&self.clip_id)
+        let clip = timeline
+            .find_clip_mut(&self.clip_id)
             .ok_or_else(|| format!("Clip {} not found", self.clip_id))?;
 
         // Store old values for undo
@@ -950,7 +1006,8 @@ impl Command for UpdateKeyframeCommand {
         }
 
         // Apply the update
-        let clip = timeline.find_clip_mut(&self.clip_id)
+        let clip = timeline
+            .find_clip_mut(&self.clip_id)
             .ok_or_else(|| format!("Clip {} not found", self.clip_id))?;
         let updated = clip.update_keyframe(
             &self.property,
@@ -973,7 +1030,8 @@ impl Command for UpdateKeyframeCommand {
         let old_value = self.old_value.ok_or("No old value stored")?;
         let old_easing = self.old_easing.ok_or("No old easing stored")?;
 
-        let clip = timeline.find_clip_mut(&self.clip_id)
+        let clip = timeline
+            .find_clip_mut(&self.clip_id)
             .ok_or_else(|| format!("Clip {} not found", self.clip_id))?;
         let updated = clip.update_keyframe(
             &self.property,
@@ -998,8 +1056,7 @@ impl Command for UpdateKeyframeCommand {
 }
 
 /// Command history manager for undo/redo
-#[derive(Debug)]
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct CommandHistory {
     undo_stack: Vec<Box<dyn Command>>,
     redo_stack: Vec<Box<dyn Command>>,
@@ -1016,7 +1073,11 @@ impl CommandHistory {
     }
 
     /// Execute a command and add it to the undo stack
-    pub fn execute(&mut self, mut command: Box<dyn Command>, timeline: &mut Timeline) -> Result<CommandResult, String> {
+    pub fn execute(
+        &mut self,
+        mut command: Box<dyn Command>,
+        timeline: &mut Timeline,
+    ) -> Result<CommandResult, String> {
         let result = command.execute(timeline)?;
 
         // Clear redo stack when a new command is executed
@@ -1057,6 +1118,14 @@ impl CommandHistory {
     /// Check if redo is available
     pub fn can_redo(&self) -> bool {
         !self.redo_stack.is_empty()
+    }
+
+    pub fn undo_stack_len(&self) -> usize {
+        self.undo_stack.len()
+    }
+
+    pub fn redo_stack_len(&self) -> usize {
+        self.redo_stack.len()
     }
 
     /// Clear all history

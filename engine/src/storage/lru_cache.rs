@@ -165,6 +165,9 @@ impl<V: Clone> LruCache<V> {
 
     /// Insert a value into the cache
     pub fn put(&mut self, key: &str, value: V, size_bytes: u64) {
+        if size_bytes > self.config.max_bytes {
+            return;
+        }
         // If key already exists, remove old entry first
         if self.entries.contains_key(key) {
             self.remove_entry(key);
@@ -201,7 +204,9 @@ impl<V: Clone> LruCache<V> {
         }
 
         // Update stats
-        self.stats.used_bytes.fetch_add(size_bytes, Ordering::Relaxed);
+        self.stats
+            .used_bytes
+            .fetch_add(size_bytes, Ordering::Relaxed);
         self.stats.entry_count.fetch_add(1, Ordering::Relaxed);
 
         let current = self.stats.used_bytes.load(Ordering::Relaxed);
@@ -269,7 +274,9 @@ impl<V: Clone> LruCache<V> {
         self.mru_key = None;
         self.lru_key = None;
 
-        self.stats.used_bytes.fetch_sub(total_bytes, Ordering::Relaxed);
+        self.stats
+            .used_bytes
+            .fetch_sub(total_bytes, Ordering::Relaxed);
         self.stats.entry_count.fetch_sub(count, Ordering::Relaxed);
     }
 
@@ -364,9 +371,14 @@ impl<V: Clone> LruCache<V> {
 
     /// Remove an entry and update the linked list
     fn remove_entry(&mut self, key: &str) -> Option<V> {
-        let node = self.entries.remove(key)?;
+        if !self.entries.contains_key(key) {
+            return None;
+        }
         self.unlink(key);
-        self.stats.used_bytes.fetch_sub(node.size, Ordering::Relaxed);
+        let node = self.entries.remove(key)?;
+        self.stats
+            .used_bytes
+            .fetch_sub(node.size, Ordering::Relaxed);
         self.stats.entry_count.fetch_sub(1, Ordering::Relaxed);
         Some(node.value)
     }
@@ -414,9 +426,22 @@ mod tests {
 
     #[test]
     fn test_lru_cache_miss() {
-        let mut cache = LruCache::with_budget_mb(100);
+        let mut cache = LruCache::<Vec<u8>>::with_budget_mb(100);
         let value = cache.get("nonexistent");
         assert!(value.is_none());
+    }
+
+    #[test]
+    fn oversized_entry_preserves_the_existing_cache_and_budget() {
+        let mut cache = LruCache::new(LruCacheConfig {
+            max_bytes: 10,
+            ..Default::default()
+        });
+        cache.put("existing", vec![1], 5);
+        cache.put("oversized", vec![2], 11);
+        assert_eq!(cache.get("existing"), Some(vec![1]));
+        assert!(cache.get("oversized").is_none());
+        assert!(cache.used_bytes() <= cache.max_bytes());
     }
 
     #[test]
@@ -488,7 +513,11 @@ mod tests {
         let _ = cache.get("a"); // hit
         let _ = cache.get("b"); // miss
         let ratio = cache.stats().hit_ratio();
-        assert!((ratio - 0.667).abs() < 0.1, "Hit ratio should be ~0.667, got {}", ratio);
+        assert!(
+            (ratio - 0.667).abs() < 0.1,
+            "Hit ratio should be ~0.667, got {}",
+            ratio
+        );
     }
 
     #[test]

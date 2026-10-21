@@ -76,13 +76,11 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                 width: 96,
                 height: 96,
                 decoration: BoxDecoration(
-                  borderRadius:
-                      BorderRadius.circular(AppTheme.radiusLarge),
+                  borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
                   boxShadow: AppTheme.primaryGlow(opacity: 0.5),
                 ),
                 child: ClipRRect(
-                  borderRadius:
-                      BorderRadius.circular(AppTheme.radiusLarge),
+                  borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
                   child: Image.asset(
                     'assets/icons/logo.png',
                     fit: BoxFit.cover,
@@ -145,7 +143,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                             decoration: BoxDecoration(
                               gradient: AppTheme.primaryGradient,
                               borderRadius: BorderRadius.circular(
-                                  AppTheme.radiusFull,
+                                AppTheme.radiusFull,
                               ),
                               boxShadow: AppTheme.primaryGlow(opacity: 0.6),
                             ),

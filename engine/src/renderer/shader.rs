@@ -56,7 +56,13 @@ impl ShaderManager {
     /// This is used in the MVP before GPU rendering is implemented and as
     /// a fallback for devices that don't support wgpu. The CPU path uses
     /// rayon for parallel processing of pixel rows.
-    pub fn apply_cpu_effect(data: &mut [u8], width: u32, height: u32, effect: &str, intensity: f32) {
+    pub fn apply_cpu_effect(
+        data: &mut [u8],
+        width: u32,
+        height: u32,
+        effect: &str,
+        intensity: f32,
+    ) {
         match effect {
             "brightness" => apply_brightness(data, intensity),
             "contrast" => apply_contrast(data, intensity),
@@ -119,7 +125,8 @@ fn apply_saturation(data: &mut [u8], intensity: f32) {
 
 fn apply_grayscale(data: &mut [u8], _intensity: f32) {
     for chunk in data.chunks_exact_mut(4) {
-        let gray = (0.299 * chunk[0] as f32 + 0.587 * chunk[1] as f32 + 0.114 * chunk[2] as f32) as u8;
+        let gray =
+            (0.299 * chunk[0] as f32 + 0.587 * chunk[1] as f32 + 0.114 * chunk[2] as f32) as u8;
         chunk[0] = gray;
         chunk[1] = gray;
         chunk[2] = gray;
@@ -558,13 +565,13 @@ mod tests {
     fn test_shader_manager_new() {
         let mgr = ShaderManager::new();
         let shaders = mgr.available_shaders();
-        assert!(shaders.contains(&"brightness"));
-        assert!(shaders.contains(&"contrast"));
-        assert!(shaders.contains(&"saturation"));
-        assert!(shaders.contains(&"blur"));
-        assert!(shaders.contains(&"vignette"));
-        assert!(shaders.contains(&"hue_rotate"));
-        assert!(shaders.contains(&"temperature"));
+        assert!(shaders.contains(&"brightness".to_string()));
+        assert!(shaders.contains(&"contrast".to_string()));
+        assert!(shaders.contains(&"saturation".to_string()));
+        assert!(shaders.contains(&"blur".to_string()));
+        assert!(shaders.contains(&"vignette".to_string()));
+        assert!(shaders.contains(&"hue_rotate".to_string()));
+        assert!(shaders.contains(&"temperature".to_string()));
     }
 
     #[test]
@@ -585,7 +592,7 @@ mod tests {
     #[test]
     fn test_cpu_brightness() {
         let mut data = vec![128u8; 400]; // 100 pixels RGBA (10x10)
-        apply_cpu_effect(&mut data, 10, 10, "brightness", 0.5);
+        ShaderManager::apply_cpu_effect(&mut data, 10, 10, "brightness", 0.5);
         // After brightness +0.5*255 = +127, 128+127 = 255
         assert_eq!(data[0], 255);
     }
@@ -593,7 +600,7 @@ mod tests {
     #[test]
     fn test_cpu_grayscale() {
         let mut data = vec![255u8, 0u8, 0u8, 255u8]; // Red pixel
-        apply_cpu_effect(&mut data, 1, 1, "grayscale", 1.0);
+        ShaderManager::apply_cpu_effect(&mut data, 1, 1, "grayscale", 1.0);
         let gray = (0.299 * 255.0) as u8;
         assert_eq!(data[0], gray);
         assert_eq!(data[1], gray);
@@ -602,7 +609,7 @@ mod tests {
     #[test]
     fn test_cpu_invert() {
         let mut data = vec![100u8, 150u8, 200u8, 255u8];
-        apply_cpu_effect(&mut data, 1, 1, "invert", 1.0);
+        ShaderManager::apply_cpu_effect(&mut data, 1, 1, "invert", 1.0);
         assert_eq!(data[0], 155);
         assert_eq!(data[1], 105);
         assert_eq!(data[2], 55);
@@ -612,8 +619,11 @@ mod tests {
     fn test_cpu_blur() {
         // 4x4 image: top-left white, rest black
         let mut data = vec![0u8; 4 * 4 * 4];
-        data[0] = 255; data[1] = 255; data[2] = 255; data[3] = 255; // pixel (0,0) white
-        apply_cpu_effect(&mut data, 4, 4, "blur", 1.0);
+        data[0] = 255;
+        data[1] = 255;
+        data[2] = 255;
+        data[3] = 255; // pixel (0,0) white
+        ShaderManager::apply_cpu_effect(&mut data, 4, 4, "blur", 1.0);
         // After blur, the white should have spread to neighbors
         assert!(data[4] > 0, "Pixel (1,0) should be non-zero after blur");
     }
@@ -621,12 +631,14 @@ mod tests {
     #[test]
     fn test_cpu_vignette() {
         let mut data = vec![255u8; 10 * 10 * 4]; // 10x10 white image
-        apply_cpu_effect(&mut data, 10, 10, "vignette", 1.0);
+        ShaderManager::apply_cpu_effect(&mut data, 10, 10, "vignette", 1.0);
         // Corner pixel should be darker than center
         let center_idx = (5 * 10 + 5) * 4; // center pixel
         let corner_idx = 0; // top-left corner
-        assert!(data[center_idx] > data[corner_idx],
-            "Center should be brighter than corners with vignette");
+        assert!(
+            data[center_idx] > data[corner_idx],
+            "Center should be brighter than corners with vignette"
+        );
     }
 
     #[test]
@@ -634,16 +646,27 @@ mod tests {
         // 3x3 image with a bright center pixel
         let mut data = vec![0u8; 3 * 3 * 4];
         let center = (1 * 3 + 1) * 4;
-        data[center] = 255; data[center + 1] = 255; data[center + 2] = 255; data[center + 3] = 255;
-        apply_cpu_effect(&mut data, 3, 3, "sharpen", 1.0);
+        data[center] = 255;
+        data[center + 1] = 255;
+        data[center + 2] = 255;
+        data[center + 3] = 255;
+        ShaderManager::apply_cpu_effect(&mut data, 3, 3, "sharpen", 1.0);
         // Sharpening should not crash and should modify the data
-        assert!(data[center] > 0, "Center pixel should remain non-zero after sharpen");
+        assert!(
+            data[center] > 0,
+            "Center pixel should remain non-zero after sharpen"
+        );
     }
 
     #[test]
     fn test_apply_cpu_effects_chain() {
         let mut data = vec![128u8; 400];
-        apply_cpu_effects(&mut data, 10, 10, &[("brightness", 0.2), ("contrast", 0.1)]);
+        ShaderManager::apply_cpu_effects(
+            &mut data,
+            10,
+            10,
+            &[("brightness", 0.2), ("contrast", 0.1)],
+        );
         // Should not panic and should modify the data
         assert_ne!(data[0], 128);
     }
@@ -651,15 +674,18 @@ mod tests {
     #[test]
     fn test_hue_rotate() {
         let mut data = vec![255u8, 0u8, 0u8, 255u8]; // Pure red
-        apply_cpu_effect(&mut data, 1, 1, "hue_rotate", 0.333); // ~120 degrees
-        // After 120° rotation, red should shift towards green
-        assert!(data[1] > 50, "Green channel should increase after hue rotation");
+        ShaderManager::apply_cpu_effect(&mut data, 1, 1, "hue_rotate", 0.333); // ~120 degrees
+                                                                               // After 120° rotation, red should shift towards green
+        assert!(
+            data[1] > 50,
+            "Green channel should increase after hue rotation"
+        );
     }
 
     #[test]
     fn test_temperature() {
         let mut data = vec![128u8, 128u8, 128u8, 255u8];
-        apply_cpu_effect(&mut data, 1, 1, "temperature", 1.0); // Warmer
+        ShaderManager::apply_cpu_effect(&mut data, 1, 1, "temperature", 1.0); // Warmer
         assert!(data[0] > 128, "Red should increase for warmer temperature");
         assert!(data[2] < 128, "Blue should decrease for warmer temperature");
     }

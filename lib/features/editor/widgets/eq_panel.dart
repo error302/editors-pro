@@ -14,14 +14,13 @@ import '../../../core/theme/app_theme.dart';
 /// and use narrow Q for surgical fixes. See
 /// persona/skills/dialogue-cleanup/SKILL.md.
 class EqPanel extends StatefulWidget {
-  final void Function(EqSettings settings) onChanged;
-  final EqSettings initialSettings;
-
-  EqPanel({
-    super.key,
+  const EqPanel({
     required this.onChanged,
+    super.key,
     EqSettings? initialSettings,
   }) : initialSettings = initialSettings ?? EqSettings.flat;
+  final void Function(EqSettings settings) onChanged;
+  final EqSettings initialSettings;
 
   @override
   State<EqPanel> createState() => _EqPanelState();
@@ -48,8 +47,10 @@ class _EqPanelState extends State<EqPanel> {
       children: [
         Row(
           children: [
-            Text('Equalizer',
-                style: Theme.of(context).textTheme.titleMedium),
+            Text(
+              'Equalizer',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
             const Spacer(),
             // Bypass switch
             Switch(
@@ -78,8 +79,10 @@ class _EqPanelState extends State<EqPanel> {
         ),
         const Divider(),
         // 8 parametric bands
-        Text('Parametric Bands',
-            style: Theme.of(context).textTheme.bodyMedium),
+        Text(
+          'Parametric Bands',
+          style: Theme.of(context).textTheme.bodyMedium,
+        ),
         const SizedBox(height: AppTheme.spacing8),
         ...List.generate(8, (i) {
           final band = _settings.bands[i];
@@ -108,9 +111,11 @@ class _EqPanelState extends State<EqPanel> {
         SizedBox(
           width: double.infinity,
           child: OutlinedButton.icon(
-            onPressed: () => _update(EqSettings.flat.copyWith(
-              enabled: _settings.enabled,
-            )),
+            onPressed: () => _update(
+              EqSettings.flat.copyWith(
+                enabled: _settings.enabled,
+              ),
+            ),
             icon: const Icon(Icons.refresh),
             label: const Text('Reset to flat'),
           ),
@@ -121,15 +126,14 @@ class _EqPanelState extends State<EqPanel> {
 }
 
 class _BandEditor extends StatelessWidget {
-  final int bandIndex;
-  final EqBand band;
-  final ValueChanged<EqBand> onChanged;
-
   const _BandEditor({
     required this.bandIndex,
     required this.band,
     required this.onChanged,
   });
+  final int bandIndex;
+  final EqBand band;
+  final ValueChanged<EqBand> onChanged;
 
   String _frequencyLabel(double freq) {
     if (freq >= 1000) return '${(freq / 1000).toStringAsFixed(1)} kHz';
@@ -147,8 +151,10 @@ class _BandEditor extends StatelessWidget {
             children: [
               SizedBox(
                 width: 50,
-                child: Text('Band $bandIndex',
-                    style: Theme.of(context).textTheme.bodySmall),
+                child: Text(
+                  'Band $bandIndex',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
               ),
               Expanded(
                 child: Text(
@@ -178,8 +184,10 @@ class _BandEditor extends StatelessWidget {
           ),
           if (band.enabled) ...[
             // Gain (-18 to +18 dB)
-            Text('Gain: ${band.gain.toStringAsFixed(1)} dB',
-                style: const TextStyle(fontSize: 11)),
+            Text(
+              'Gain: ${band.gain.toStringAsFixed(1)} dB',
+              style: const TextStyle(fontSize: 11),
+            ),
             Slider(
               value: band.gain,
               min: -18,
@@ -189,8 +197,10 @@ class _BandEditor extends StatelessWidget {
               onChanged: (v) => onChanged(band.copyWith(gain: v)),
             ),
             // Frequency (logarithmic-feeling, linear slider)
-            Text('Frequency: ${_frequencyLabel(band.frequency)}',
-                style: const TextStyle(fontSize: 11)),
+            Text(
+              'Frequency: ${_frequencyLabel(band.frequency)}',
+              style: const TextStyle(fontSize: 11),
+            ),
             Slider(
               value: band.frequency,
               min: 20,
@@ -200,8 +210,10 @@ class _BandEditor extends StatelessWidget {
               onChanged: (v) => onChanged(band.copyWith(frequency: v)),
             ),
             // Q (0.1 to 6.0)
-            Text('Q: ${band.q.toStringAsFixed(2)}',
-                style: const TextStyle(fontSize: 11)),
+            Text(
+              'Q: ${band.q.toStringAsFixed(2)}',
+              style: const TextStyle(fontSize: 11),
+            ),
             Slider(
               value: band.q,
               min: 0.1,
@@ -219,13 +231,6 @@ class _BandEditor extends StatelessWidget {
 }
 
 class _FilterRow extends StatelessWidget {
-  final String label;
-  final double frequency;
-  final double minHz;
-  final double maxHz;
-  final String unit;
-  final ValueChanged<double> onChanged;
-
   const _FilterRow({
     required this.label,
     required this.frequency,
@@ -234,6 +239,12 @@ class _FilterRow extends StatelessWidget {
     required this.unit,
     required this.onChanged,
   });
+  final String label;
+  final double frequency;
+  final double minHz;
+  final double maxHz;
+  final String unit;
+  final ValueChanged<double> onChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -268,20 +279,19 @@ class _FilterRow extends StatelessWidget {
 
 /// EQ settings — high-pass, 8 parametric bands, low-pass.
 class EqSettings {
+  const EqSettings({
+    required this.bands,
+    this.enabled = true,
+    this.highPassHz = 80,
+    this.lowPassHz = 20000,
+  });
   final bool enabled;
   final double highPassHz;
   final List<EqBand> bands;
   final double lowPassHz;
 
-  const EqSettings({
-    this.enabled = true,
-    this.highPassHz = 80,
-    required this.bands,
-    this.lowPassHz = 20000,
-  });
-
   /// Flat EQ — all bands at 0 dB, sensible default frequencies.
-  static final flat = EqSettings(
+  static const flat = EqSettings(
     enabled: true,
     highPassHz: 80,
     lowPassHz: 20000,
@@ -314,17 +324,16 @@ class EqSettings {
 
 /// A single parametric EQ band.
 class EqBand {
-  final double frequency;
-  final double gain;
-  final double q;
-  final bool enabled;
-
   const EqBand({
     required this.frequency,
     required this.gain,
     required this.q,
     this.enabled = false,
   });
+  final double frequency;
+  final double gain;
+  final double q;
+  final bool enabled;
 
   EqBand copyWith({
     double? frequency,

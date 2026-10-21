@@ -1,22 +1,18 @@
 import 'dart:async';
-import 'dart:developer' as developer;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/extensions/context_extensions.dart';
 import '../../../core/services/engine_service.dart';
 import '../../../core/theme/app_theme.dart';
-import '../../../core/extensions/context_extensions.dart';
 import '../../../data/models/project_model.dart';
 import '../../projects/providers/project_provider.dart';
 import '../providers/editor_provider.dart';
 import 'chroma_key_controls.dart';
 import 'color_grading_panel.dart';
-import 'speed_curve_editor.dart';
 import 'keyframe_graph_editor.dart';
 import 'transition_picker.dart';
-
-// Re-export GpuInfo for the GPU settings section
-import 'package:editors_pro/src/rust/api/bridge_api.dart' show GpuInfo;
 
 /// Inspector panel - Shows properties of the selected clip or track
 class InspectorPanel extends ConsumerWidget {
@@ -44,7 +40,9 @@ class InspectorPanel extends ConsumerWidget {
     }
 
     // If a track is selected (but no clip), show track properties
-    if (selectedClip == null && editorState.selectedTrackId != null && project != null) {
+    if (selectedClip == null &&
+        editorState.selectedTrackId != null &&
+        project != null) {
       for (final track in project.tracks) {
         if (track.id == editorState.selectedTrackId) {
           return _buildTrackInspector(context, ref, track);
@@ -70,7 +68,8 @@ class InspectorPanel extends ConsumerWidget {
               Text('Inspector', style: context.textTheme.titleMedium),
               const Spacer(),
               IconButton(
-                onPressed: () => ref.read(editorProvider.notifier).selectClip(null),
+                onPressed: () =>
+                    ref.read(editorProvider.notifier).selectClip(null),
                 icon: const Icon(Icons.close, size: 18),
               ),
             ],
@@ -81,7 +80,8 @@ class InspectorPanel extends ConsumerWidget {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             decoration: BoxDecoration(
-              color: _trackColor(selectedTrack?.trackType).withOpacity(0.15),
+              color:
+                  _trackColor(selectedTrack?.trackType).withValues(alpha: 0.15),
               borderRadius: BorderRadius.circular(4),
             ),
             child: Text(
@@ -94,16 +94,22 @@ class InspectorPanel extends ConsumerWidget {
           const SizedBox(height: 16),
 
           // Timing section
-          _SectionHeader(title: 'Timing'),
+          const _SectionHeader(title: 'Timing'),
           const SizedBox(height: 8),
-          _PropertyRow(label: 'Start', value: Duration(milliseconds: clip.startMs).formatted),
-          _PropertyRow(label: 'Duration', value: Duration(milliseconds: clip.durationMs).formatted),
+          _PropertyRow(
+            label: 'Start',
+            value: Duration(milliseconds: clip.startMs).formatted,
+          ),
+          _PropertyRow(
+            label: 'Duration',
+            value: Duration(milliseconds: clip.durationMs).formatted,
+          ),
           _PropertyRow(label: 'Trim Start', value: '${clip.trimStartMs}ms'),
           _PropertyRow(label: 'Trim End', value: '${clip.trimEndMs}ms'),
           const SizedBox(height: 16),
 
           // Speed section (enhanced with presets and curve editor link)
-          _SectionHeader(title: 'Speed'),
+          const _SectionHeader(title: 'Speed'),
           const SizedBox(height: 8),
           _SpeedSection(
             clipId: clip.id,
@@ -113,70 +119,84 @@ class InspectorPanel extends ConsumerWidget {
               ref.read(editorProvider.notifier).setClipSpeed(clip.id, value);
             },
             onOpenCurveEditor: () {
-              ref.read(editorProvider.notifier).setLeftPanelTab(LeftPanelTab.speed);
+              ref
+                  .read(editorProvider.notifier)
+                  .setLeftPanelTab(LeftPanelTab.speed);
             },
           ),
           const SizedBox(height: 16),
 
           // Opacity control
-          _SectionHeader(title: 'Opacity'),
+          const _SectionHeader(title: 'Opacity'),
           const SizedBox(height: 8),
           _OpacityControl(
             opacity: clip.opacity,
             onChanged: (value) {
-              ref.read(editorProvider.notifier).addKeyframe(clip.id, 'opacity', ref.read(editorProvider).currentTimeMs, value, 'Linear');
+              ref.read(editorProvider.notifier).addKeyframe(
+                    clip.id,
+                    'opacity',
+                    ref.read(editorProvider).currentTimeMs,
+                    value,
+                    'Linear',
+                  );
             },
           ),
           const SizedBox(height: 16),
 
           // Keyframe section
-          _SectionHeader(title: 'Keyframes'),
+          const _SectionHeader(title: 'Keyframes'),
           const SizedBox(height: 8),
           _KeyframeSection(
             clipId: clip.id,
             durationMs: clip.durationMs,
             onOpenGraphEditor: () {
-              ref.read(editorProvider.notifier).setLeftPanelTab(LeftPanelTab.keyframes);
+              ref
+                  .read(editorProvider.notifier)
+                  .setLeftPanelTab(LeftPanelTab.keyframes);
             },
           ),
           const SizedBox(height: 16),
 
           // Track volume (show for audio and video tracks)
           if (track != null) ...[
-            _SectionHeader(title: 'Track Volume'),
+            const _SectionHeader(title: 'Track Volume'),
             const SizedBox(height: 8),
             _VolumeControl(
               volume: track.volume,
               isMuted: !track.visible,
               onVolumeChanged: (value) {
-              ref.read(editorProvider.notifier).setTrackVolume(track.id, value);
+                ref
+                    .read(editorProvider.notifier)
+                    .setTrackVolume(track.id, value);
               },
               onMuteToggled: () {
-                ref.read(editorProvider.notifier).toggleTrackVisibility(track.id);
+                ref
+                    .read(editorProvider.notifier)
+                    .toggleTrackVisibility(track.id);
               },
             ),
             const SizedBox(height: 16),
 
             // Audio ducking (show for audio tracks)
             if (track.trackType == TrackType.audio) ...[
-              _SectionHeader(title: 'Audio Ducking'),
+              const _SectionHeader(title: 'Audio Ducking'),
               const SizedBox(height: 8),
               _DuckingControl(
                 enabled: false,
                 duckLevel: 0.3,
                 onEnabledChanged: (enabled) {
                   ref.read(editorProvider.notifier).setDucking(
-                    track.id,
-                    enabled: enabled,
-                    duckLevel: 0.3,
-                  );
+                        track.id,
+                        enabled: enabled,
+                        duckLevel: 0.3,
+                      );
                 },
                 onLevelChanged: (level) {
                   ref.read(editorProvider.notifier).setDucking(
-                    track.id,
-                    enabled: true,
-                    duckLevel: level,
-                  );
+                        track.id,
+                        enabled: true,
+                        duckLevel: level,
+                      );
                 },
               ),
               const SizedBox(height: 16),
@@ -184,13 +204,13 @@ class InspectorPanel extends ConsumerWidget {
           ],
 
           // Effects section
-          _SectionHeader(title: 'Effects'),
+          const _SectionHeader(title: 'Effects'),
           const SizedBox(height: 8),
           _EffectsSection(clipId: clip.id, initialEffects: clip.effects),
           const SizedBox(height: 16),
 
           // Color Grading section
-          _SectionHeader(
+          const _SectionHeader(
             title: 'Color Grading',
             icon: Icons.palette,
             iconColor: Colors.amber,
@@ -200,7 +220,7 @@ class InspectorPanel extends ConsumerWidget {
           const SizedBox(height: 16),
 
           // Crop & Transform section
-          _SectionHeader(
+          const _SectionHeader(
             title: 'Crop & Transform',
             icon: Icons.crop_rotate,
             iconColor: Colors.teal,
@@ -210,42 +230,44 @@ class InspectorPanel extends ConsumerWidget {
           const SizedBox(height: 16),
 
           // Chroma Key section (show when a ChromaKey effect is applied to the clip)
-          Builder(builder: (context) {
-            // Check if the clip has a ChromaKey effect
-            final chromaKeyEffects = clip.effects.where(
-              (e) => e.effectType == 'chroma_key' || e.name == 'Chroma Key',
-            );
-            if (chromaKeyEffects.isNotEmpty) {
-              final chromaKeyEffect = chromaKeyEffects.first;
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _SectionHeader(
-                    title: 'Chroma Key',
-                    icon: Icons.filter_vintage,
-                    iconColor: Colors.green,
-                  ),
-                  const SizedBox(height: 8),
-                  ChromaKeyControls(
-                    effectId: chromaKeyEffect.id,
-                    clipId: clip.id,
-                  ),
-                  const SizedBox(height: 16),
-                ],
+          Builder(
+            builder: (context) {
+              // Check if the clip has a ChromaKey effect
+              final chromaKeyEffects = clip.effects.where(
+                (e) => e.effectType == 'chroma_key' || e.name == 'Chroma Key',
               );
-            }
-            return const SizedBox.shrink();
-          }),
+              if (chromaKeyEffects.isNotEmpty) {
+                final chromaKeyEffect = chromaKeyEffects.first;
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const _SectionHeader(
+                      title: 'Chroma Key',
+                      icon: Icons.filter_vintage,
+                      iconColor: Colors.green,
+                    ),
+                    const SizedBox(height: 8),
+                    ChromaKeyControls(
+                      effectId: chromaKeyEffect.id,
+                      clipId: clip.id,
+                    ),
+                    const SizedBox(height: 16),
+                  ],
+                );
+              }
+              return const SizedBox.shrink();
+            },
+          ),
 
           // Transitions section
-          _SectionHeader(title: 'Transitions'),
+          const _SectionHeader(title: 'Transitions'),
           const SizedBox(height: 8),
           _TransitionsSection(clipId: clip.id),
 
           // Text properties section (show for text track clips)
           if (track?.trackType == TrackType.text) ...[
             const SizedBox(height: 16),
-            _SectionHeader(title: 'Text Properties'),
+            const _SectionHeader(title: 'Text Properties'),
             const SizedBox(height: 8),
             _TextPropertiesSection(
               clipId: clip.id,
@@ -258,7 +280,11 @@ class InspectorPanel extends ConsumerWidget {
   }
 
   /// Build inspector for a selected track (no clip selected)
-  Widget _buildTrackInspector(BuildContext context, WidgetRef ref, TrackModel track) {
+  Widget _buildTrackInspector(
+    BuildContext context,
+    WidgetRef ref,
+    TrackModel track,
+  ) {
     return Container(
       color: AppTheme.surface,
       child: ListView(
@@ -270,7 +296,8 @@ class InspectorPanel extends ConsumerWidget {
               Text('Track Inspector', style: context.textTheme.titleMedium),
               const Spacer(),
               IconButton(
-                onPressed: () => ref.read(editorProvider.notifier).selectTrack(null),
+                onPressed: () =>
+                    ref.read(editorProvider.notifier).selectTrack(null),
                 icon: const Icon(Icons.close, size: 18),
               ),
             ],
@@ -281,7 +308,7 @@ class InspectorPanel extends ConsumerWidget {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             decoration: BoxDecoration(
-              color: _trackColor(track.trackType).withOpacity(0.15),
+              color: _trackColor(track.trackType).withValues(alpha: 0.15),
               borderRadius: BorderRadius.circular(4),
             ),
             child: Text(
@@ -294,7 +321,7 @@ class InspectorPanel extends ConsumerWidget {
           const SizedBox(height: 16),
 
           // Track name
-          _SectionHeader(title: 'Name'),
+          const _SectionHeader(title: 'Name'),
           const SizedBox(height: 8),
           Text(track.name, style: context.textTheme.bodyMedium),
           const SizedBox(height: 16),
@@ -306,7 +333,7 @@ class InspectorPanel extends ConsumerWidget {
           const SizedBox(height: 16),
 
           // Volume control
-          _SectionHeader(title: 'Volume'),
+          const _SectionHeader(title: 'Volume'),
           const SizedBox(height: 8),
           _VolumeControl(
             volume: track.volume,
@@ -322,24 +349,24 @@ class InspectorPanel extends ConsumerWidget {
 
           // Audio ducking (for audio tracks)
           if (track.trackType == TrackType.audio) ...[
-            _SectionHeader(title: 'Audio Ducking'),
+            const _SectionHeader(title: 'Audio Ducking'),
             const SizedBox(height: 8),
             _DuckingControl(
               enabled: false,
               duckLevel: 0.3,
               onEnabledChanged: (enabled) {
                 ref.read(editorProvider.notifier).setDucking(
-                  track.id,
-                  enabled: enabled,
-                  duckLevel: 0.3,
-                );
+                      track.id,
+                      enabled: enabled,
+                      duckLevel: 0.3,
+                    );
               },
               onLevelChanged: (level) {
                 ref.read(editorProvider.notifier).setDucking(
-                  track.id,
-                  enabled: true,
-                  duckLevel: level,
-                );
+                      track.id,
+                      enabled: true,
+                      duckLevel: level,
+                    );
               },
             ),
           ],
@@ -360,7 +387,11 @@ class InspectorPanel extends ConsumerWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.touch_app, size: 48, color: AppTheme.textDisabled),
+                const Icon(
+                  Icons.touch_app,
+                  size: 48,
+                  color: AppTheme.textDisabled,
+                ),
                 const SizedBox(height: 16),
                 Text(
                   'Select a clip',
@@ -400,7 +431,7 @@ class InspectorPanel extends ConsumerWidget {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _SectionHeader(title: 'GPU Acceleration'),
+            const _SectionHeader(title: 'GPU Acceleration'),
             const SizedBox(height: 12),
 
             // GPU toggle switch
@@ -410,10 +441,12 @@ class InspectorPanel extends ConsumerWidget {
                 value: gpuAvailable && gpuEnabled,
                 onChanged: gpuAvailable
                     ? (value) {
-                        ref.read(editorProvider.notifier).toggleGpuAcceleration(value);
+                        ref
+                            .read(editorProvider.notifier)
+                            .toggleGpuAcceleration(value);
                       }
                     : null,
-                activeColor: AppTheme.success,
+                activeThumbColor: AppTheme.success,
                 materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
               ),
             ),
@@ -430,9 +463,7 @@ class InspectorPanel extends ConsumerWidget {
               ),
               _SettingsRow(
                 label: 'Backend',
-                value: gpuInfo.backend.isNotEmpty
-                    ? gpuInfo.backend
-                    : 'Unknown',
+                value: gpuInfo.backend.isNotEmpty ? gpuInfo.backend : 'Unknown',
               ),
               _SettingsRow(
                 label: 'VRAM',
@@ -440,7 +471,9 @@ class InspectorPanel extends ConsumerWidget {
               ),
               _SettingsRow(
                 label: 'HW Encoder',
-                value: gpuInfo.isHardwareEncoderAvailable ? 'Available' : 'Not available',
+                value: gpuInfo.isHardwareEncoderAvailable
+                    ? 'Available'
+                    : 'Not available',
               ),
               if (gpuInfo.supportedEffects.isNotEmpty)
                 _SettingsRow(
@@ -448,7 +481,7 @@ class InspectorPanel extends ConsumerWidget {
                   value: '${gpuInfo.supportedEffects.length} supported',
                 ),
             ] else ...[
-              _SettingsRow(
+              const _SettingsRow(
                 label: 'Status',
                 value: 'No GPU detected',
                 valueColor: AppTheme.textDisabled,
@@ -462,41 +495,55 @@ class InspectorPanel extends ConsumerWidget {
 
   Color _trackColor(TrackType? type) {
     switch (type) {
-      case TrackType.video: return AppTheme.videoTrackColor;
-      case TrackType.audio: return AppTheme.audioTrackColor;
-      case TrackType.text: return AppTheme.textTrackColor;
-      case TrackType.effect: return AppTheme.effectTrackColor;
-      default: return AppTheme.textSecondary;
+      case TrackType.video:
+        return AppTheme.videoTrackColor;
+      case TrackType.audio:
+        return AppTheme.audioTrackColor;
+      case TrackType.text:
+        return AppTheme.textTrackColor;
+      case TrackType.effect:
+        return AppTheme.effectTrackColor;
+      default:
+        return AppTheme.textSecondary;
     }
   }
 
   String _trackTypeName(TrackType? type) {
     switch (type) {
-      case TrackType.video: return 'VIDEO CLIP';
-      case TrackType.audio: return 'AUDIO CLIP';
-      case TrackType.text: return 'TEXT CLIP';
-      case TrackType.effect: return 'EFFECT';
-      default: return 'CLIP';
+      case TrackType.video:
+        return 'VIDEO CLIP';
+      case TrackType.audio:
+        return 'AUDIO CLIP';
+      case TrackType.text:
+        return 'TEXT CLIP';
+      case TrackType.effect:
+        return 'EFFECT';
+      default:
+        return 'CLIP';
     }
   }
 
   String _trackInspectorTypeName(TrackType? type) {
     switch (type) {
-      case TrackType.video: return 'VIDEO TRACK';
-      case TrackType.audio: return 'AUDIO TRACK';
-      case TrackType.text: return 'TEXT TRACK';
-      case TrackType.effect: return 'EFFECT TRACK';
-      default: return 'TRACK';
+      case TrackType.video:
+        return 'VIDEO TRACK';
+      case TrackType.audio:
+        return 'AUDIO TRACK';
+      case TrackType.text:
+        return 'TEXT TRACK';
+      case TrackType.effect:
+        return 'EFFECT TRACK';
+      default:
+        return 'TRACK';
     }
   }
 }
 
 class _SectionHeader extends StatelessWidget {
+  const _SectionHeader({required this.title, this.icon, this.iconColor});
   final String title;
   final IconData? icon;
   final Color? iconColor;
-
-  const _SectionHeader({required this.title, this.icon, this.iconColor});
 
   @override
   Widget build(BuildContext context) {
@@ -520,10 +567,9 @@ class _SectionHeader extends StatelessWidget {
 }
 
 class _PropertyRow extends StatelessWidget {
+  const _PropertyRow({required this.label, required this.value});
   final String label;
   final String value;
-
-  const _PropertyRow({required this.label, required this.value});
 
   @override
   Widget build(BuildContext context) {
@@ -563,17 +609,16 @@ class _PropertyRow extends StatelessWidget {
 /// or a custom child widget (e.g., a switch). Used in the GPU settings
 /// section of the inspector.
 class _SettingsRow extends StatelessWidget {
-  final String label;
-  final String? value;
-  final Color? valueColor;
-  final Widget? child;
-
   const _SettingsRow({
     required this.label,
     this.value,
     this.valueColor,
     this.child,
   });
+  final String label;
+  final String? value;
+  final Color? valueColor;
+  final Widget? child;
 
   @override
   Widget build(BuildContext context) {
@@ -612,51 +657,11 @@ class _SettingsRow extends StatelessWidget {
   }
 }
 
-class _SpeedControl extends StatelessWidget {
-  final double speed;
-  final ValueChanged<double> onChanged;
-
-  const _SpeedControl({required this.speed, required this.onChanged});
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text('${speed.toStringAsFixed(1)}x', style: context.textTheme.titleSmall),
-            Wrap(
-              spacing: 6,
-              children: [0.25, 0.5, 1.0, 1.5, 2.0, 4.0].map((s) {
-                final isSelected = (speed - s).abs() < 0.01;
-                return ChoiceChip(
-                  label: Text('${s}x', style: const TextStyle(fontSize: 10)),
-                  selected: isSelected,
-                  onSelected: (_) => onChanged(s),
-                  visualDensity: VisualDensity.compact,
-                );
-              }).toList(),
-            ),
-          ],
-        ),
-        Slider(
-          value: speed,
-          min: 0.1,
-          max: 8.0,
-          onChanged: onChanged,
-        ),
-      ],
-    );
-  }
-}
-
 class _OpacityControl extends StatelessWidget {
+  const _OpacityControl({required this.opacity, required this.onChanged});
   final double opacity;
   final ValueChanged<double> onChanged;
 
-  const _OpacityControl({required this.opacity, required this.onChanged});
-
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -664,7 +669,10 @@ class _OpacityControl extends StatelessWidget {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text('${(opacity * 100).round()}%', style: context.textTheme.titleSmall),
+            Text(
+              '${(opacity * 100).round()}%',
+              style: context.textTheme.titleSmall,
+            ),
           ],
         ),
         Slider(
@@ -680,17 +688,16 @@ class _OpacityControl extends StatelessWidget {
 
 /// Volume control widget with mute toggle
 class _VolumeControl extends StatelessWidget {
-  final double volume;
-  final bool isMuted;
-  final ValueChanged<double> onVolumeChanged;
-  final VoidCallback onMuteToggled;
-
   const _VolumeControl({
     required this.volume,
     required this.isMuted,
     required this.onVolumeChanged,
     required this.onMuteToggled,
   });
+  final double volume;
+  final bool isMuted;
+  final ValueChanged<double> onVolumeChanged;
+  final VoidCallback onMuteToggled;
 
   @override
   Widget build(BuildContext context) {
@@ -739,17 +746,16 @@ class _VolumeControl extends StatelessWidget {
 
 /// Ducking control widget
 class _DuckingControl extends StatelessWidget {
-  final bool enabled;
-  final double duckLevel;
-  final ValueChanged<bool> onEnabledChanged;
-  final ValueChanged<double> onLevelChanged;
-
   const _DuckingControl({
     required this.enabled,
     required this.duckLevel,
     required this.onEnabledChanged,
     required this.onLevelChanged,
   });
+  final bool enabled;
+  final double duckLevel;
+  final ValueChanged<bool> onEnabledChanged;
+  final ValueChanged<double> onLevelChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -761,7 +767,7 @@ class _DuckingControl extends StatelessWidget {
             Switch(
               value: enabled,
               onChanged: onEnabledChanged,
-              activeColor: AppTheme.primary,
+              activeThumbColor: AppTheme.primary,
               materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
             ),
             const SizedBox(width: 8),
@@ -779,7 +785,11 @@ class _DuckingControl extends StatelessWidget {
           const SizedBox(height: 8),
           Row(
             children: [
-              const Icon(Icons.volume_down, size: 16, color: AppTheme.textDisabled),
+              const Icon(
+                Icons.volume_down,
+                size: 16,
+                color: AppTheme.textDisabled,
+              ),
               Expanded(
                 child: Slider(
                   value: duckLevel,
@@ -789,13 +799,18 @@ class _DuckingControl extends StatelessWidget {
                   onChanged: onLevelChanged,
                 ),
               ),
-              const Icon(Icons.volume_up, size: 16, color: AppTheme.textDisabled),
+              const Icon(
+                Icons.volume_up,
+                size: 16,
+                color: AppTheme.textDisabled,
+              ),
               const SizedBox(width: 8),
               SizedBox(
                 width: 40,
                 child: Text(
                   '${(duckLevel * 100).round()}%',
-                  style: context.textTheme.labelSmall?.copyWith(fontFamily: 'monospace'),
+                  style: context.textTheme.labelSmall
+                      ?.copyWith(fontFamily: 'monospace'),
                   textAlign: TextAlign.right,
                 ),
               ),
@@ -809,10 +824,9 @@ class _DuckingControl extends StatelessWidget {
 
 /// Effects section — shows applied effects with parameter sliders
 class _EffectsSection extends ConsumerStatefulWidget {
+  const _EffectsSection({required this.clipId, required this.initialEffects});
   final String clipId;
   final List<EffectModel> initialEffects;
-
-  const _EffectsSection({required this.clipId, required this.initialEffects});
 
   @override
   ConsumerState<_EffectsSection> createState() => _EffectsSectionState();
@@ -846,19 +860,27 @@ class _EffectsSectionState extends ConsumerState<_EffectsSection> {
       final effects = await api.getClipEffects(clipId: clipId);
       if (mounted && widget.clipId == clipId && effects.isNotEmpty) {
         setState(() {
-          _effects = effects.map((e) => <String, dynamic>{
-            'id': e.id,
-            'name': e.name,
-            'effect_type': e.effectType,
-            'enabled': e.enabled,
-            'parameters': e.parameters.map((p) => <String, dynamic>{
-              'name': p.name,
-              'display_name': p.displayName,
-              'value': p.value,
-              'min_value': p.minValue,
-              'max_value': p.maxValue,
-            }).toList(),
-          }).toList();
+          _effects = effects
+              .map(
+                (e) => <String, dynamic>{
+                  'id': e.id,
+                  'name': e.name,
+                  'effect_type': e.effectType,
+                  'enabled': e.enabled,
+                  'parameters': e.parameters
+                      .map(
+                        (p) => <String, dynamic>{
+                          'name': p.name,
+                          'display_name': p.displayName,
+                          'value': p.value,
+                          'min_value': p.minValue,
+                          'max_value': p.maxValue,
+                        },
+                      )
+                      .toList(),
+                },
+              )
+              .toList();
         });
       }
     } catch (e) {
@@ -868,20 +890,28 @@ class _EffectsSectionState extends ConsumerState<_EffectsSection> {
   }
 
   List<Map<String, dynamic>> _effectsFromModels(List<EffectModel> effects) =>
-      effects.map((effect) => <String, dynamic>{
-        'id': effect.id,
-        'name': effect.name,
-        'effect_type': effect.effectType,
-        'enabled': effect.enabled,
-        'parameters': effect.parameters.map((parameter) => <String, dynamic>{
-          'name': parameter.name,
-          'display_name': parameter.displayName,
-          'value': parameter.value,
-          'min_value': parameter.minValue,
-          'max_value': parameter.maxValue,
-          'step': parameter.step,
-        }).toList(),
-      }).toList();
+      effects
+          .map(
+            (effect) => <String, dynamic>{
+              'id': effect.id,
+              'name': effect.name,
+              'effect_type': effect.effectType,
+              'enabled': effect.enabled,
+              'parameters': effect.parameters
+                  .map(
+                    (parameter) => <String, dynamic>{
+                      'name': parameter.name,
+                      'display_name': parameter.displayName,
+                      'value': parameter.value,
+                      'min_value': parameter.minValue,
+                      'max_value': parameter.maxValue,
+                      'step': parameter.step,
+                    },
+                  )
+                  .toList(),
+            },
+          )
+          .toList();
 
   @override
   Widget build(BuildContext context) {
@@ -896,7 +926,7 @@ class _EffectsSectionState extends ConsumerState<_EffectsSection> {
             padding: const EdgeInsets.symmetric(vertical: AppTheme.spacing24),
             child: Column(
               children: [
-                Icon(
+                const Icon(
                   Icons.auto_fix_high_outlined,
                   size: 48,
                   color: AppTheme.textDisabled,
@@ -923,42 +953,49 @@ class _EffectsSectionState extends ConsumerState<_EffectsSection> {
         ],
 
         // Applied effects list
-        ..._effects.map((effect) => _AppliedEffectCard(
-          effect: effect,
-          onParameterChanged: (paramName, value) {
-            final effectId = effect['id'] as String? ?? '';
-            ref.read(editorProvider.notifier).setEffectParameter(
-              effectId, paramName, value,
-            );
-          },
-          onToggleEnabled: () async {
-            final effectId = effect['id'] as String? ?? '';
-            setState(() {
-              effect['enabled'] = !(effect['enabled'] as bool? ?? true);
-            });
-            await ref.read(editorProvider.notifier).toggleEffect(effectId);
-            await _updateEffectsFromTimeline();
-          },
-          onRemove: () async {
-            final effectId = effect['id'] as String? ?? '';
-            setState(() {
-              _effects.removeWhere((item) => item['id'] == effectId);
-            });
-            await ref.read(editorProvider.notifier).removeEffect(effectId);
-            await _updateEffectsFromTimeline();
-          },
-        )),
+        ..._effects.map(
+          (effect) => _AppliedEffectCard(
+            effect: effect,
+            onParameterChanged: (paramName, value) async {
+              final effectId = effect['id'] as String? ?? '';
+              await ref.read(editorProvider.notifier).setEffectParameter(
+                    effectId,
+                    paramName,
+                    value,
+                  );
+            },
+            onToggleEnabled: () async {
+              final effectId = effect['id'] as String? ?? '';
+              setState(() {
+                effect['enabled'] = !(effect['enabled'] as bool? ?? true);
+              });
+              await ref.read(editorProvider.notifier).toggleEffect(effectId);
+              await _updateEffectsFromTimeline();
+            },
+            onRemove: () async {
+              final effectId = effect['id'] as String? ?? '';
+              setState(() {
+                _effects.removeWhere((item) => item['id'] == effectId);
+              });
+              await ref.read(editorProvider.notifier).removeEffect(effectId);
+              await _updateEffectsFromTimeline();
+            },
+          ),
+        ),
 
         const SizedBox(height: 8),
 
         // Add Effect button
         OutlinedButton.icon(
           onPressed: () {
-            ref.read(editorProvider.notifier).setLeftPanelTab(LeftPanelTab.effects);
+            ref
+                .read(editorProvider.notifier)
+                .setLeftPanelTab(LeftPanelTab.effects);
           },
           icon: const Icon(Icons.add, size: 16),
           label: const Text('Add Effect'),
-          style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(36)),
+          style:
+              OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(36)),
         ),
       ],
     );
@@ -967,17 +1004,16 @@ class _EffectsSectionState extends ConsumerState<_EffectsSection> {
 
 /// Card showing an applied effect with its parameter sliders
 class _AppliedEffectCard extends StatelessWidget {
-  final Map<String, dynamic> effect;
-  final void Function(String paramName, double value) onParameterChanged;
-  final VoidCallback onToggleEnabled;
-  final VoidCallback onRemove;
-
   const _AppliedEffectCard({
     required this.effect,
     required this.onParameterChanged,
     required this.onToggleEnabled,
     required this.onRemove,
   });
+  final Map<String, dynamic> effect;
+  final void Function(String paramName, double value) onParameterChanged;
+  final VoidCallback onToggleEnabled;
+  final VoidCallback onRemove;
 
   @override
   Widget build(BuildContext context) {
@@ -986,7 +1022,9 @@ class _AppliedEffectCard extends StatelessWidget {
     final enabled = effect['enabled'] as bool? ?? true;
     final parameters = effect['parameters'] as List<dynamic>? ?? [];
     final effectId = effect['id'] as String? ?? '';
-    final isChromaKey = effectType == 'chroma_key' || effectType == 'ChromaKey' || name == 'Chroma Key';
+    final isChromaKey = effectType == 'chroma_key' ||
+        effectType == 'ChromaKey' ||
+        name == 'Chroma Key';
 
     return Card(
       key: ValueKey('effect-$effectId'),
@@ -1010,7 +1048,9 @@ class _AppliedEffectCard extends StatelessWidget {
                   child: Text(
                     name,
                     style: context.textTheme.bodyMedium?.copyWith(
-                      color: enabled ? AppTheme.textPrimary : AppTheme.textDisabled,
+                      color: enabled
+                          ? AppTheme.textPrimary
+                          : AppTheme.textDisabled,
                     ),
                   ),
                 ),
@@ -1020,10 +1060,13 @@ class _AppliedEffectCard extends StatelessWidget {
                   icon: Icon(
                     enabled ? Icons.visibility : Icons.visibility_off,
                     size: 16,
-                    color: enabled ? AppTheme.textSecondary : AppTheme.textDisabled,
+                    color: enabled
+                        ? AppTheme.textSecondary
+                        : AppTheme.textDisabled,
                   ),
                   padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
+                  constraints:
+                      const BoxConstraints(minWidth: 24, minHeight: 24),
                 ),
                 // Remove
                 IconButton(
@@ -1031,10 +1074,11 @@ class _AppliedEffectCard extends StatelessWidget {
                   icon: Icon(
                     Icons.delete_outline,
                     size: 16,
-                    color: AppTheme.error.withOpacity(0.7),
+                    color: AppTheme.error.withValues(alpha: 0.7),
                   ),
                   padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
+                  constraints:
+                      const BoxConstraints(minWidth: 24, minHeight: 24),
                 ),
               ],
             ),
@@ -1044,15 +1088,17 @@ class _AppliedEffectCard extends StatelessWidget {
               const SizedBox(height: 4),
               if (isChromaKey) ...[
                 // Use dedicated ChromaKey controls widget
-                Consumer(builder: (context, ref, _) {
-                  // Find the clip ID from the editor state
-                  final editorState = ref.watch(editorProvider);
-                  final clipId = editorState.selectedClipId ?? '';
-                  return ChromaKeyControls(
-                    effectId: effectId,
-                    clipId: clipId,
-                  );
-                }),
+                Consumer(
+                  builder: (context, ref, _) {
+                    // Find the clip ID from the editor state
+                    final editorState = ref.watch(editorProvider);
+                    final clipId = editorState.selectedClipId ?? '';
+                    return ChromaKeyControls(
+                      effectId: effectId,
+                      clipId: clipId,
+                    );
+                  },
+                ),
               ] else ...[
                 ...parameters.map((param) {
                   final p = param as Map<dynamic, dynamic>;
@@ -1083,13 +1129,6 @@ class _AppliedEffectCard extends StatelessWidget {
 
 /// Single parameter slider for an effect
 class _EffectParameterSlider extends StatelessWidget {
-  final String name;
-  final double value;
-  final double min;
-  final double max;
-  final double step;
-  final ValueChanged<double> onChanged;
-
   const _EffectParameterSlider({
     required this.name,
     required this.value,
@@ -1098,6 +1137,12 @@ class _EffectParameterSlider extends StatelessWidget {
     required this.step,
     required this.onChanged,
   });
+  final String name;
+  final double value;
+  final double min;
+  final double max;
+  final double step;
+  final ValueChanged<double> onChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -1151,9 +1196,8 @@ class _EffectParameterSlider extends StatelessWidget {
 
 /// Transitions section — shows applied transitions and add button
 class _TransitionsSection extends ConsumerWidget {
-  final String clipId;
-
   const _TransitionsSection({required this.clipId});
+  final String clipId;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -1175,7 +1219,8 @@ class _TransitionsSection extends ConsumerWidget {
           },
           icon: const Icon(Icons.swap_horiz, size: 16),
           label: const Text('Add Transition'),
-          style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(36)),
+          style:
+              OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(36)),
         ),
       ],
     );
@@ -1221,7 +1266,7 @@ class _TransitionsSection extends ConsumerWidget {
             ),
             const Divider(height: 1),
             // Transition picker content
-            Expanded(
+            const Expanded(
               child: TransitionPicker(),
             ),
           ],
@@ -1235,19 +1280,20 @@ class _TransitionsSection extends ConsumerWidget {
 /// slider, color picker, animation dropdown, and position X/Y fields when a
 /// text clip is selected.
 class _TextPropertiesSection extends ConsumerStatefulWidget {
-  final String clipId;
-  final String assetId;
-
   const _TextPropertiesSection({
     required this.clipId,
     required this.assetId,
   });
+  final String clipId;
+  final String assetId;
 
   @override
-  ConsumerState<_TextPropertiesSection> createState() => _TextPropertiesSectionState();
+  ConsumerState<_TextPropertiesSection> createState() =>
+      _TextPropertiesSectionState();
 }
 
-class _TextPropertiesSectionState extends ConsumerState<_TextPropertiesSection> {
+class _TextPropertiesSectionState
+    extends ConsumerState<_TextPropertiesSection> {
   late TextEditingController _textController;
   String _selectedFont = 'Inter';
   double _fontSize = 36.0;
@@ -1263,11 +1309,20 @@ class _TextPropertiesSectionState extends ConsumerState<_TextPropertiesSection> 
     {'name': 'Open Sans', 'family': 'Open Sans', 'style': 'Regular'},
     {'name': 'Lato', 'family': 'Lato', 'style': 'Regular'},
     {'name': 'Montserrat', 'family': 'Montserrat', 'style': 'Regular'},
-    {'name': 'Playfair Display', 'family': 'Playfair Display', 'style': 'Regular'},
+    {
+      'name': 'Playfair Display',
+      'family': 'Playfair Display',
+      'style': 'Regular',
+    },
   ];
 
   static const List<String> _animations = [
-    'None', 'Fade In', 'Fade Out', 'Typewriter', 'Slide In', 'Pop In',
+    'None',
+    'Fade In',
+    'Fade Out',
+    'Typewriter',
+    'Slide In',
+    'Pop In',
   ];
 
   static const List<Map<String, String>> _presetColors = [
@@ -1304,11 +1359,13 @@ class _TextPropertiesSectionState extends ConsumerState<_TextPropertiesSection> 
       if (mounted && fonts.isNotEmpty) {
         setState(() {
           _availableFonts = fonts
-              .map((f) => {
-                    'name': f.name,
-                    'family': f.family,
-                    'style': f.style,
-                  })
+              .map(
+                (f) => {
+                  'name': f.name,
+                  'family': f.family,
+                  'style': f.style,
+                },
+              )
               .toList();
           if (_availableFonts.isNotEmpty) {
             _selectedFont = _availableFonts.first['family']!;
@@ -1392,7 +1449,11 @@ class _TextPropertiesSectionState extends ConsumerState<_TextPropertiesSection> 
                   child: DropdownButton<String>(
                     value: _selectedFont,
                     isExpanded: true,
-                    icon: const Icon(Icons.arrow_drop_down, size: 16, color: AppTheme.textSecondary),
+                    icon: const Icon(
+                      Icons.arrow_drop_down,
+                      size: 16,
+                      color: AppTheme.textSecondary,
+                    ),
                     style: context.textTheme.bodySmall,
                     dropdownColor: AppTheme.surfaceVariant,
                     items: _availableFonts.map((font) {
@@ -1400,7 +1461,10 @@ class _TextPropertiesSectionState extends ConsumerState<_TextPropertiesSection> 
                         value: font['family'],
                         child: Text(
                           font['name']!,
-                          style: const TextStyle(color: AppTheme.textPrimary, fontSize: 12),
+                          style: const TextStyle(
+                            color: AppTheme.textPrimary,
+                            fontSize: 12,
+                          ),
                         ),
                       );
                     }).toList(),
@@ -1478,7 +1542,9 @@ class _TextPropertiesSectionState extends ConsumerState<_TextPropertiesSection> 
                         color: _parseHexColor(hex),
                         borderRadius: BorderRadius.circular(3),
                         border: Border.all(
-                          color: isSelected ? AppTheme.primary : const Color(0xFF2A2A3E),
+                          color: isSelected
+                              ? AppTheme.primary
+                              : const Color(0xFF2A2A3E),
                           width: isSelected ? 2 : 1,
                         ),
                       ),
@@ -1509,7 +1575,11 @@ class _TextPropertiesSectionState extends ConsumerState<_TextPropertiesSection> 
                   child: DropdownButton<String>(
                     value: _selectedAnimation,
                     isExpanded: true,
-                    icon: const Icon(Icons.animation, size: 14, color: AppTheme.textSecondary),
+                    icon: const Icon(
+                      Icons.animation,
+                      size: 14,
+                      color: AppTheme.textSecondary,
+                    ),
                     style: context.textTheme.bodySmall,
                     dropdownColor: AppTheme.surfaceVariant,
                     items: _animations.map((anim) {
@@ -1517,7 +1587,10 @@ class _TextPropertiesSectionState extends ConsumerState<_TextPropertiesSection> 
                         value: anim,
                         child: Text(
                           anim,
-                          style: const TextStyle(color: AppTheme.textPrimary, fontSize: 12),
+                          style: const TextStyle(
+                            color: AppTheme.textPrimary,
+                            fontSize: 12,
+                          ),
                         ),
                       );
                     }).toList(),
@@ -1604,12 +1677,6 @@ class _TextPropertiesSectionState extends ConsumerState<_TextPropertiesSection> 
 
 /// Speed section — shows current speed, presets, and link to curve editor
 class _SpeedSection extends ConsumerStatefulWidget {
-  final String clipId;
-  final double speed;
-  final int durationMs;
-  final ValueChanged<double> onSpeedChanged;
-  final VoidCallback onOpenCurveEditor;
-
   const _SpeedSection({
     required this.clipId,
     required this.speed,
@@ -1617,6 +1684,11 @@ class _SpeedSection extends ConsumerStatefulWidget {
     required this.onSpeedChanged,
     required this.onOpenCurveEditor,
   });
+  final String clipId;
+  final double speed;
+  final int durationMs;
+  final ValueChanged<double> onSpeedChanged;
+  final VoidCallback onOpenCurveEditor;
 
   @override
   ConsumerState<_SpeedSection> createState() => _SpeedSectionState();
@@ -1701,7 +1773,10 @@ class _SpeedSectionState extends ConsumerState<_SpeedSection> {
           child: OutlinedButton.icon(
             onPressed: widget.onOpenCurveEditor,
             icon: const Icon(Icons.show_chart, size: 14),
-            label: const Text('Speed Curve Editor', style: TextStyle(fontSize: 11)),
+            label: const Text(
+              'Speed Curve Editor',
+              style: TextStyle(fontSize: 11),
+            ),
             style: OutlinedButton.styleFrom(
               foregroundColor: AppTheme.primary,
               side: const BorderSide(color: Color(0xFF2A2A3E)),
@@ -1711,123 +1786,27 @@ class _SpeedSectionState extends ConsumerState<_SpeedSection> {
         ),
 
         const SizedBox(height: 6),
-
-        // Freeze Frame button
-        SizedBox(
-          width: double.infinity,
-          child: OutlinedButton.icon(
-            onPressed: () => _showFreezeFrameDialog(context),
-            icon: const Icon(Icons.ac_unit, size: 14),
-            label: const Text('Freeze Frame', style: TextStyle(fontSize: 11)),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: Colors.cyan,
-              side: const BorderSide(color: Color(0xFF2A2A3E)),
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            ),
-          ),
-        ),
       ],
     );
   }
 
   /// Show a dialog explaining the Freeze Frame feature and optionally
   /// perform the split + speed change.
-  void _showFreezeFrameDialog(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (dialogContext) {
-        return AlertDialog(
-          backgroundColor: AppTheme.surfaceVariant,
-          title: Row(
-            children: [
-              const Icon(Icons.ac_unit, color: Colors.cyan, size: 20),
-              const SizedBox(width: 8),
-              const Text('Freeze Frame', style: TextStyle(fontSize: 16)),
-            ],
-          ),
-          content: const Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Freeze Frame creates a still image from the current '
-                'playhead position.',
-                style: TextStyle(fontSize: 13),
-              ),
-              SizedBox(height: 12),
-              Text(
-                'How it works:',
-                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
-              ),
-              SizedBox(height: 4),
-              Text(
-                '1. The clip is split at the playhead\n'
-                '2. The second half gets a very high speed value\n'
-                '   (effectively freezing on that frame)\n'
-                '3. Adjust the resulting clip duration as needed',
-                style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () {
-                Navigator.of(dialogContext).pop();
-                _applyFreezeFrame();
-              },
-              style: FilledButton.styleFrom(
-                backgroundColor: Colors.cyan,
-                foregroundColor: Colors.black,
-              ),
-              child: const Text('Apply'),
-            ),
-          ],
-        );
-      },
-    );
-  }
 
   /// Apply freeze frame: split at playhead and set the second clip's
   /// speed to a very high value.
-  void _applyFreezeFrame() async {
-    final editorState = ref.read(editorProvider);
-    final clipId = editorState.selectedClipId;
-    if (clipId == null) return;
-
-    try {
-      // Split the clip at the current playhead position.
-      final api = EngineService.instance.api;
-      final result = await api.splitClip(
-        clipId: clipId,
-        timeMs: BigInt.from(editorState.currentTimeMs),
-      );
-
-      // The second clip from the split is the frozen portion.
-      // Set its speed to a very high value to effectively freeze.
-      final frozenClipId = result.$2.id;
-      ref.read(editorProvider.notifier).setClipSpeed(frozenClipId, 100.0);
-    } catch (e) {
-      // Fall back to just logging the error
-      developer.log('Freeze Frame failed: $e', name: 'InspectorPanel');
-    }
-  }
 }
 
 /// Keyframe section — shows keyframe indicators and graph editor link
 class _KeyframeSection extends ConsumerStatefulWidget {
-  final String clipId;
-  final int durationMs;
-  final VoidCallback onOpenGraphEditor;
-
   const _KeyframeSection({
     required this.clipId,
     required this.durationMs,
     required this.onOpenGraphEditor,
   });
+  final String clipId;
+  final int durationMs;
+  final VoidCallback onOpenGraphEditor;
 
   @override
   ConsumerState<_KeyframeSection> createState() => _KeyframeSectionState();
@@ -1842,12 +1821,16 @@ class _KeyframeSectionState extends ConsumerState<_KeyframeSection> {
     'position_x': _KeyframePropertyConfig(label: 'Pos X', color: Colors.blue),
     'position_y': _KeyframePropertyConfig(label: 'Pos Y', color: Colors.green),
     'scale': _KeyframePropertyConfig(label: 'Scale', color: Colors.orange),
-    'rotation': _KeyframePropertyConfig(label: 'Rotation', color: Colors.purple),
+    'rotation':
+        _KeyframePropertyConfig(label: 'Rotation', color: Colors.purple),
     'opacity': _KeyframePropertyConfig(label: 'Opacity', color: Colors.red),
   };
 
   static const List<String> _easingTypes = [
-    'linear', 'ease_in', 'ease_out', 'ease_in_out',
+    'linear',
+    'ease_in',
+    'ease_out',
+    'ease_in_out',
   ];
 
   @override
@@ -1863,18 +1846,22 @@ class _KeyframeSectionState extends ConsumerState<_KeyframeSection> {
     if (!EngineService.instance.isInitialized) return;
     try {
       final api = EngineService.instance.api;
-      final Map<String, List<KeyframePoint>> loaded = {};
+      final loaded = <String, List<KeyframePoint>>{};
       for (final prop in _propertyConfigs.keys) {
         final keyframes = await api.getKeyframes(
           clipId: widget.clipId,
           property: prop,
         );
-        loaded[prop] = keyframes.map((k) => KeyframePoint(
-          id: k.id,
-          timeMs: k.timeMs,
-          value: k.value,
-          easingName: k.easingName,
-        )).toList();
+        loaded[prop] = keyframes
+            .map(
+              (k) => KeyframePoint(
+                id: k.id,
+                timeMs: k.timeMs,
+                value: k.value,
+                easingName: k.easingName,
+              ),
+            )
+            .toList();
       }
       if (mounted) {
         setState(() {
@@ -1915,7 +1902,10 @@ class _KeyframeSectionState extends ConsumerState<_KeyframeSection> {
                     isDense: true,
                     isExpanded: true,
                     dropdownColor: AppTheme.surfaceVariant,
-                    style: const TextStyle(color: AppTheme.textPrimary, fontSize: 11),
+                    style: const TextStyle(
+                      color: AppTheme.textPrimary,
+                      fontSize: 11,
+                    ),
                     items: _propertyConfigs.entries.map((entry) {
                       return DropdownMenuItem(
                         value: entry.key,
@@ -1957,11 +1947,13 @@ class _KeyframeSectionState extends ConsumerState<_KeyframeSection> {
               child: OutlinedButton.icon(
                 onPressed: _addKeyframeAtPlayhead,
                 icon: const Icon(Icons.add_circle_outline, size: 14),
-                label: const Text('Add Keyframe', style: TextStyle(fontSize: 11)),
+                label:
+                    const Text('Add Keyframe', style: TextStyle(fontSize: 11)),
                 style: OutlinedButton.styleFrom(
                   foregroundColor: AppTheme.primary,
                   side: const BorderSide(color: Color(0xFF2A2A3E)),
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 ),
               ),
             ),
@@ -1971,7 +1963,9 @@ class _KeyframeSectionState extends ConsumerState<_KeyframeSection> {
               icon: Icon(
                 Icons.remove_circle_outline,
                 size: 18,
-                color: _selectedKeyframeId != null ? Colors.redAccent : AppTheme.textDisabled,
+                color: _selectedKeyframeId != null
+                    ? Colors.redAccent
+                    : AppTheme.textDisabled,
               ),
               padding: EdgeInsets.zero,
               constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
@@ -1999,12 +1993,17 @@ class _KeyframeSectionState extends ConsumerState<_KeyframeSection> {
                     setState(() => _selectedKeyframeId = kf.id);
                   },
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
                     decoration: BoxDecoration(
-                      color: isSelected ? AppTheme.primary.withOpacity(0.15) : Colors.transparent,
+                      color: isSelected
+                          ? AppTheme.primary.withValues(alpha: 0.15)
+                          : Colors.transparent,
                       borderRadius: BorderRadius.circular(4),
                       border: isSelected
-                          ? Border.all(color: AppTheme.primary.withOpacity(0.3))
+                          ? Border.all(
+                              color: AppTheme.primary.withValues(alpha: 0.3),
+                            )
                           : null,
                     ),
                     child: Row(
@@ -2020,7 +2019,9 @@ class _KeyframeSectionState extends ConsumerState<_KeyframeSection> {
                         Text(
                           '${(kf.timeMs / 1000.0).toStringAsFixed(2)}s',
                           style: TextStyle(
-                            color: isSelected ? AppTheme.textPrimary : AppTheme.textSecondary,
+                            color: isSelected
+                                ? AppTheme.textPrimary
+                                : AppTheme.textSecondary,
                             fontSize: 10,
                             fontFamily: 'monospace',
                           ),
@@ -2039,7 +2040,10 @@ class _KeyframeSectionState extends ConsumerState<_KeyframeSection> {
                         ),
                         // Easing indicator
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 4,
+                            vertical: 1,
+                          ),
                           decoration: BoxDecoration(
                             color: AppTheme.surfaceVariant,
                             borderRadius: BorderRadius.circular(3),
@@ -2095,11 +2099,15 @@ class _KeyframeSectionState extends ConsumerState<_KeyframeSection> {
                       isDense: true,
                       isExpanded: true,
                       dropdownColor: AppTheme.surfaceVariant,
-                      style: const TextStyle(color: AppTheme.textPrimary, fontSize: 10),
+                      style: const TextStyle(
+                        color: AppTheme.textPrimary,
+                        fontSize: 10,
+                      ),
                       items: _easingTypes.map((easing) {
                         return DropdownMenuItem(
                           value: easing,
-                          child: Text(easing.replaceAll('_', ' ').toUpperCase()),
+                          child:
+                              Text(easing.replaceAll('_', ' ').toUpperCase()),
                         );
                       }).toList(),
                       onChanged: (value) {
@@ -2123,7 +2131,8 @@ class _KeyframeSectionState extends ConsumerState<_KeyframeSection> {
           child: OutlinedButton.icon(
             onPressed: widget.onOpenGraphEditor,
             icon: const Icon(Icons.timeline, size: 14),
-            label: const Text('Open Graph Editor', style: TextStyle(fontSize: 11)),
+            label:
+                const Text('Open Graph Editor', style: TextStyle(fontSize: 11)),
             style: OutlinedButton.styleFrom(
               foregroundColor: AppTheme.primary,
               side: const BorderSide(color: Color(0xFF2A2A3E)),
@@ -2146,23 +2155,26 @@ class _KeyframeSectionState extends ConsumerState<_KeyframeSection> {
     final newId = 'kf_${DateTime.now().millisecondsSinceEpoch}';
 
     setState(() {
-      _keyframeData[_selectedProperty]!.add(KeyframePoint(
-        id: newId,
-        timeMs: timeMs,
-        value: 0.0,
-        easingName: 'linear',
-      ));
-      _keyframeData[_selectedProperty]!.sort((a, b) => a.timeMs.compareTo(b.timeMs));
+      _keyframeData[_selectedProperty]!.add(
+        KeyframePoint(
+          id: newId,
+          timeMs: timeMs,
+          value: 0.0,
+          easingName: 'linear',
+        ),
+      );
+      _keyframeData[_selectedProperty]!
+          .sort((a, b) => a.timeMs.compareTo(b.timeMs));
       _selectedKeyframeId = newId;
     });
 
     ref.read(editorProvider.notifier).addKeyframe(
-      widget.clipId,
-      _selectedProperty,
-      timeMs,
-      0.0,
-      'linear',
-    );
+          widget.clipId,
+          _selectedProperty,
+          timeMs,
+          0.0,
+          'linear',
+        );
   }
 
   void _deleteSelectedKeyframe() {
@@ -2170,17 +2182,18 @@ class _KeyframeSectionState extends ConsumerState<_KeyframeSection> {
     final keyframes = _keyframeData[_selectedProperty];
     if (keyframes == null) return;
 
-    final toRemove = keyframes.where((kf) => kf.id == _selectedKeyframeId).firstOrNull;
+    final toRemove =
+        keyframes.where((kf) => kf.id == _selectedKeyframeId).firstOrNull;
     if (toRemove != null) {
       setState(() {
         keyframes.remove(toRemove);
         _selectedKeyframeId = null;
       });
       ref.read(editorProvider.notifier).removeKeyframe(
-        widget.clipId,
-        _selectedProperty,
-        toRemove.id,
-      );
+            widget.clipId,
+            _selectedProperty,
+            toRemove.id,
+          );
     }
   }
 
@@ -2197,24 +2210,23 @@ class _KeyframeSectionState extends ConsumerState<_KeyframeSection> {
     });
 
     ref.read(editorProvider.notifier).updateKeyframe(
-      widget.clipId,
-      _selectedProperty,
-      _selectedKeyframeId!,
-      value: keyframes[idx].value,
-      easing: easingName,
-    );
+          widget.clipId,
+          _selectedProperty,
+          _selectedKeyframeId!,
+          value: keyframes[idx].value,
+          easing: easingName,
+        );
   }
 }
 
 /// Configuration for a keyframe property in the inspector
 class _KeyframePropertyConfig {
-  final String label;
-  final Color color;
-
   const _KeyframePropertyConfig({
     required this.label,
     required this.color,
   });
+  final String label;
+  final Color color;
 }
 
 // ─── Color Grading Section ──────────────────────────────────────────────
@@ -2232,12 +2244,12 @@ class _KeyframePropertyConfig {
 /// the master adjustment and "Temperature" for the color tint of each
 /// wheel. The effect IDs are cached so we only add them once.
 class _ColorGradingSection extends ConsumerStatefulWidget {
+  const _ColorGradingSection({required this.clipId});
   final String clipId;
 
-  const _ColorGradingSection({required this.clipId});
-
   @override
-  ConsumerState<_ColorGradingSection> createState() => _ColorGradingSectionState();
+  ConsumerState<_ColorGradingSection> createState() =>
+      _ColorGradingSectionState();
 }
 
 class _ColorGradingSectionState extends ConsumerState<_ColorGradingSection> {
@@ -2333,10 +2345,7 @@ class _ColorGradingSectionState extends ConsumerState<_ColorGradingSection> {
     if (effectId == null) {
       // Try preferred name first (e.g. "color_lift").
       var id = await ref.read(editorProvider.notifier).addEffect(preferredName);
-      if (id == null) {
-        // Fallback to a known filter type.
-        id = await ref.read(editorProvider.notifier).addEffect(fallbackName);
-      }
+      id ??= await ref.read(editorProvider.notifier).addEffect(fallbackName);
       if (id != null) {
         effectIdSetter(id);
         effectId = id;
@@ -2350,11 +2359,11 @@ class _ColorGradingSectionState extends ConsumerState<_ColorGradingSection> {
         // so we don't need try/catch here. If a parameter name doesn't
         // exist on the effect type (e.g. "lift_r" on a Brightness
         // effect), the engine will log an error but won't crash.
-        ref.read(editorProvider.notifier).setEffectParameter(
-          effectId,
-          entry.key,
-          entry.value,
-        );
+        await ref.read(editorProvider.notifier).setEffectParameter(
+              effectId,
+              entry.key,
+              entry.value,
+            );
       }
     }
   }
@@ -2368,12 +2377,12 @@ class _ColorGradingSectionState extends ConsumerState<_ColorGradingSection> {
 /// Each operation applies a keyframe at the current playhead time so
 /// the transform can be animated over time.
 class _CropTransformSection extends ConsumerStatefulWidget {
+  const _CropTransformSection({required this.clipId});
   final String clipId;
 
-  const _CropTransformSection({required this.clipId});
-
   @override
-  ConsumerState<_CropTransformSection> createState() => _CropTransformSectionState();
+  ConsumerState<_CropTransformSection> createState() =>
+      _CropTransformSectionState();
 }
 
 class _CropTransformSectionState extends ConsumerState<_CropTransformSection> {
@@ -2450,7 +2459,8 @@ class _CropTransformSectionState extends ConsumerState<_CropTransformSection> {
           child: OutlinedButton.icon(
             onPressed: _resetTransform,
             icon: const Icon(Icons.refresh, size: 14),
-            label: const Text('Reset Transform', style: TextStyle(fontSize: 11)),
+            label:
+                const Text('Reset Transform', style: TextStyle(fontSize: 11)),
             style: OutlinedButton.styleFrom(
               foregroundColor: AppTheme.textSecondary,
               side: const BorderSide(color: Color(0xFF2A2A3E)),
@@ -2466,48 +2476,48 @@ class _CropTransformSectionState extends ConsumerState<_CropTransformSection> {
     setState(() => _rotation -= 90);
     final timeMs = ref.read(editorProvider).currentTimeMs;
     ref.read(editorProvider.notifier).addKeyframe(
-      widget.clipId,
-      'rotation',
-      timeMs,
-      _rotation,
-      'linear',
-    );
+          widget.clipId,
+          'rotation',
+          timeMs,
+          _rotation,
+          'linear',
+        );
   }
 
   void _rotateRight() {
     setState(() => _rotation += 90);
     final timeMs = ref.read(editorProvider).currentTimeMs;
     ref.read(editorProvider.notifier).addKeyframe(
-      widget.clipId,
-      'rotation',
-      timeMs,
-      _rotation,
-      'linear',
-    );
+          widget.clipId,
+          'rotation',
+          timeMs,
+          _rotation,
+          'linear',
+        );
   }
 
   void _flipHorizontal() {
     setState(() => _scaleX *= -1);
     final timeMs = ref.read(editorProvider).currentTimeMs;
     ref.read(editorProvider.notifier).addKeyframe(
-      widget.clipId,
-      'scale_x',
-      timeMs,
-      _scaleX,
-      'linear',
-    );
+          widget.clipId,
+          'scale_x',
+          timeMs,
+          _scaleX,
+          'linear',
+        );
   }
 
   void _flipVertical() {
     setState(() => _scaleY *= -1);
     final timeMs = ref.read(editorProvider).currentTimeMs;
     ref.read(editorProvider.notifier).addKeyframe(
-      widget.clipId,
-      'scale_y',
-      timeMs,
-      _scaleY,
-      'linear',
-    );
+          widget.clipId,
+          'scale_y',
+          timeMs,
+          _scaleY,
+          'linear',
+        );
   }
 
   void _resetTransform() {
@@ -2518,42 +2528,41 @@ class _CropTransformSectionState extends ConsumerState<_CropTransformSection> {
     });
     final timeMs = ref.read(editorProvider).currentTimeMs;
     ref.read(editorProvider.notifier).addKeyframe(
-      widget.clipId,
-      'rotation',
-      timeMs,
-      0.0,
-      'linear',
-    );
+          widget.clipId,
+          'rotation',
+          timeMs,
+          0.0,
+          'linear',
+        );
     ref.read(editorProvider.notifier).addKeyframe(
-      widget.clipId,
-      'scale_x',
-      timeMs,
-      1.0,
-      'linear',
-    );
+          widget.clipId,
+          'scale_x',
+          timeMs,
+          1.0,
+          'linear',
+        );
     ref.read(editorProvider.notifier).addKeyframe(
-      widget.clipId,
-      'scale_y',
-      timeMs,
-      1.0,
-      'linear',
-    );
+          widget.clipId,
+          'scale_y',
+          timeMs,
+          1.0,
+          'linear',
+        );
   }
 }
 
 /// A small button used in the Crop & Transform section.
 class _TransformButton extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-  final double rotation;
-
   const _TransformButton({
     required this.icon,
     required this.label,
     required this.onTap,
     this.rotation = 0,
   });
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  final double rotation;
 
   @override
   Widget build(BuildContext context) {

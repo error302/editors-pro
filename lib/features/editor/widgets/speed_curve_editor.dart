@@ -6,12 +6,6 @@ import '../providers/editor_provider.dart';
 
 /// Speed segment data
 class SpeedSegmentData {
-  final int startMs;
-  final int endMs;
-  final double startSpeed;
-  final double endSpeed;
-  final String easingName;
-
   const SpeedSegmentData({
     required this.startMs,
     required this.endMs,
@@ -19,6 +13,11 @@ class SpeedSegmentData {
     required this.endSpeed,
     required this.easingName,
   });
+  final int startMs;
+  final int endMs;
+  final double startSpeed;
+  final double endSpeed;
+  final String easingName;
 
   SpeedSegmentData copyWith({
     int? startMs,
@@ -39,14 +38,13 @@ class SpeedSegmentData {
 
 /// Speed curve editor widget
 class SpeedCurveEditor extends ConsumerStatefulWidget {
-  final String clipId;
-  final int clipDurationMs;
-
   const SpeedCurveEditor({
-    super.key,
     required this.clipId,
     required this.clipDurationMs,
+    super.key,
   });
+  final String clipId;
+  final int clipDurationMs;
 
   @override
   ConsumerState<SpeedCurveEditor> createState() => _SpeedCurveEditorState();
@@ -61,7 +59,11 @@ class _SpeedCurveEditorState extends ConsumerState<SpeedCurveEditor> {
 
   static const List<double> _speedPresets = [0.25, 0.5, 1.0, 2.0, 4.0];
   static const List<String> _easingTypes = [
-    'linear', 'ease_in', 'ease_out', 'ease_in_out', 'cubic_bezier'
+    'linear',
+    'ease_in',
+    'ease_out',
+    'ease_in_out',
+    'cubic_bezier',
   ];
 
   // Phase E.17: CapCut-style named velocity ramp presets.
@@ -122,13 +124,15 @@ class _SpeedCurveEditorState extends ConsumerState<SpeedCurveEditor> {
   @override
   void initState() {
     super.initState();
-    _segments.add(SpeedSegmentData(
-      startMs: 0,
-      endMs: widget.clipDurationMs,
-      startSpeed: 1.0,
-      endSpeed: 1.0,
-      easingName: 'linear',
-    ));
+    _segments.add(
+      SpeedSegmentData(
+        startMs: 0,
+        endMs: widget.clipDurationMs,
+        startSpeed: 1.0,
+        endSpeed: 1.0,
+        easingName: 'linear',
+      ),
+    );
   }
 
   @override
@@ -206,7 +210,7 @@ class _SpeedCurveEditorState extends ConsumerState<SpeedCurveEditor> {
                 ),
                 selectedColor: AppTheme.primary,
                 backgroundColor: AppTheme.surfaceVariant,
-                side: BorderSide(color: const Color(0xFF2A2A3E)),
+                side: const BorderSide(color: Color(0xFF2A2A3E)),
                 visualDensity: VisualDensity.compact,
               );
             }).toList(),
@@ -239,7 +243,7 @@ class _SpeedCurveEditorState extends ConsumerState<SpeedCurveEditor> {
                   fontSize: 11,
                 ),
                 backgroundColor: AppTheme.surfaceVariant,
-                side: BorderSide(color: const Color(0xFF2A2A3E)),
+                side: const BorderSide(color: Color(0xFF2A2A3E)),
                 visualDensity: VisualDensity.compact,
               );
             }).toList(),
@@ -267,11 +271,15 @@ class _SpeedCurveEditorState extends ConsumerState<SpeedCurveEditor> {
                       isDense: true,
                       isExpanded: true,
                       dropdownColor: AppTheme.surfaceVariant,
-                      style: const TextStyle(color: AppTheme.textPrimary, fontSize: 12),
+                      style: const TextStyle(
+                        color: AppTheme.textPrimary,
+                        fontSize: 12,
+                      ),
                       items: _easingTypes.map((easing) {
                         return DropdownMenuItem(
                           value: easing,
-                          child: Text(easing.replaceAll('_', ' ').toUpperCase()),
+                          child:
+                              Text(easing.replaceAll('_', ' ').toUpperCase()),
                         );
                       }).toList(),
                       onChanged: (value) {
@@ -349,13 +357,15 @@ class _SpeedCurveEditorState extends ConsumerState<SpeedCurveEditor> {
     setState(() {
       _currentSpeed = speed;
       _segments.clear();
-      _segments.add(SpeedSegmentData(
-        startMs: 0,
-        endMs: widget.clipDurationMs,
-        startSpeed: speed,
-        endSpeed: speed,
-        easingName: _selectedEasing,
-      ));
+      _segments.add(
+        SpeedSegmentData(
+          startMs: 0,
+          endMs: widget.clipDurationMs,
+          startSpeed: speed,
+          endSpeed: speed,
+          easingName: _selectedEasing,
+        ),
+      );
     });
     _applyCurve();
   }
@@ -371,23 +381,26 @@ class _SpeedCurveEditorState extends ConsumerState<SpeedCurveEditor> {
       _segments.clear();
       final segCount = preset.segments.length;
       final segDuration = widget.clipDurationMs ~/ segCount;
-      for (int i = 0; i < segCount; i++) {
+      for (var i = 0; i < segCount; i++) {
         final (startSpeed, endSpeed, easing) = preset.segments[i];
-        _segments.add(SpeedSegmentData(
-          startMs: i * segDuration,
-          endMs: (i == segCount - 1)
-              ? widget.clipDurationMs
-              : (i + 1) * segDuration,
-          startSpeed: startSpeed,
-          endSpeed: endSpeed,
-          easingName: easing,
-        ));
+        _segments.add(
+          SpeedSegmentData(
+            startMs: i * segDuration,
+            endMs: (i == segCount - 1)
+                ? widget.clipDurationMs
+                : (i + 1) * segDuration,
+            startSpeed: startSpeed,
+            endSpeed: endSpeed,
+            easingName: easing,
+          ),
+        );
       }
       // Set the current speed to the average of the preset's segment
       // speeds so the speed preset chips reflect the applied state.
       final avgSpeed = preset.segments
-          .map((s) => (s.$1 + s.$2) / 2)
-          .reduce((a, b) => a + b) / segCount;
+              .map((s) => (s.$1 + s.$2) / 2)
+              .reduce((a, b) => a + b) /
+          segCount;
       _currentSpeed = avgSpeed;
     });
     _applyCurve();
@@ -420,13 +433,15 @@ class _SpeedCurveEditorState extends ConsumerState<SpeedCurveEditor> {
   void _resetToUniform() {
     setState(() {
       _segments.clear();
-      _segments.add(SpeedSegmentData(
-        startMs: 0,
-        endMs: widget.clipDurationMs,
-        startSpeed: _currentSpeed,
-        endSpeed: _currentSpeed,
-        easingName: 'linear',
-      ));
+      _segments.add(
+        SpeedSegmentData(
+          startMs: 0,
+          endMs: widget.clipDurationMs,
+          startSpeed: _currentSpeed,
+          endSpeed: _currentSpeed,
+          easingName: 'linear',
+        ),
+      );
     });
     _applyCurve();
   }
@@ -435,22 +450,26 @@ class _SpeedCurveEditorState extends ConsumerState<SpeedCurveEditor> {
     // Find the closest segment endpoint to the touch position
     final box = context.findRenderObject() as RenderBox;
     final localPos = details.localPosition;
-    final canvasTop = 12.0 + 28.0; // padding + header height
-    final canvasHeight = 120.0;
+    const canvasTop = 12.0 + 28.0; // padding + header height
+    const canvasHeight = 120.0;
     final canvasWidth = box.size.width - 24; // minus horizontal padding
 
     // Check each segment's endpoints
-    double closestDist = 30.0; // threshold in pixels
+    var closestDist = 30.0; // threshold in pixels
     _draggingSegmentIndex = null;
 
     for (var i = 0; i < _segments.length; i++) {
       final seg = _segments[i];
 
       // Start point
-      final startX = (seg.startMs / (widget.clipDurationMs > 0 ? widget.clipDurationMs : 1)) * canvasWidth;
-      final startSpeedY = canvasHeight - (seg.startSpeed / 8.0).clamp(0.0, 1.0) * canvasHeight;
+      final startX = (seg.startMs /
+              (widget.clipDurationMs > 0 ? widget.clipDurationMs : 1)) *
+          canvasWidth;
+      final startSpeedY =
+          canvasHeight - (seg.startSpeed / 8.0).clamp(0.0, 1.0) * canvasHeight;
       final startDist = math.sqrt(
-        math.pow(localPos.dx - startX, 2) + math.pow(localPos.dy - canvasTop - startSpeedY, 2),
+        math.pow(localPos.dx - startX, 2) +
+            math.pow(localPos.dy - canvasTop - startSpeedY, 2),
       );
       if (startDist < closestDist) {
         closestDist = startDist;
@@ -459,10 +478,14 @@ class _SpeedCurveEditorState extends ConsumerState<SpeedCurveEditor> {
       }
 
       // End point
-      final endX = (seg.endMs / (widget.clipDurationMs > 0 ? widget.clipDurationMs : 1)) * canvasWidth;
-      final endSpeedY = canvasHeight - (seg.endSpeed / 8.0).clamp(0.0, 1.0) * canvasHeight;
+      final endX = (seg.endMs /
+              (widget.clipDurationMs > 0 ? widget.clipDurationMs : 1)) *
+          canvasWidth;
+      final endSpeedY =
+          canvasHeight - (seg.endSpeed / 8.0).clamp(0.0, 1.0) * canvasHeight;
       final endDist = math.sqrt(
-        math.pow(localPos.dx - endX, 2) + math.pow(localPos.dy - canvasTop - endSpeedY, 2),
+        math.pow(localPos.dx - endX, 2) +
+            math.pow(localPos.dy - canvasTop - endSpeedY, 2),
       );
       if (endDist < closestDist) {
         closestDist = endDist;
@@ -476,13 +499,14 @@ class _SpeedCurveEditorState extends ConsumerState<SpeedCurveEditor> {
     if (_draggingSegmentIndex == null) return;
     final box = context.findRenderObject() as RenderBox;
     final canvasWidth = box.size.width - 24;
-    final canvasHeight = 120.0;
+    const canvasHeight = 120.0;
 
     final seg = _segments[_draggingSegmentIndex!];
 
     // Convert delta to speed change
     final speedDelta = -details.delta.dy / canvasHeight * 8.0;
-    final timeDelta = (details.delta.dx / canvasWidth * widget.clipDurationMs).round();
+    final timeDelta =
+        (details.delta.dx / canvasWidth * widget.clipDurationMs).round();
 
     setState(() {
       if (_draggingStart) {
@@ -494,7 +518,8 @@ class _SpeedCurveEditorState extends ConsumerState<SpeedCurveEditor> {
         );
       } else {
         final newSpeed = (seg.endSpeed + speedDelta).clamp(0.1, 8.0);
-        final newTime = (seg.endMs + timeDelta).clamp(seg.startMs + 100, widget.clipDurationMs);
+        final newTime = (seg.endMs + timeDelta)
+            .clamp(seg.startMs + 100, widget.clipDurationMs);
         _segments[_draggingSegmentIndex!] = seg.copyWith(
           endSpeed: newSpeed,
           endMs: newTime,
@@ -509,28 +534,31 @@ class _SpeedCurveEditorState extends ConsumerState<SpeedCurveEditor> {
   }
 
   void _applyCurve() {
-    ref.read(editorProvider.notifier).setClipSpeed(widget.clipId, _currentSpeed);
+    ref
+        .read(editorProvider.notifier)
+        .setClipSpeed(widget.clipId, _currentSpeed);
     // Also update speed curve segments
-    ref.read(editorProvider.notifier).setClipSpeedCurve(widget.clipId, _segments);
+    ref
+        .read(editorProvider.notifier)
+        .setClipSpeedCurve(widget.clipId, _segments);
   }
 }
 
 /// Custom painter for the speed curve visualization
 class _SpeedCurvePainter extends CustomPainter {
-  final List<SpeedSegmentData> segments;
-  final int durationMs;
-  final double currentSpeed;
-
   _SpeedCurvePainter({
     required this.segments,
     required this.durationMs,
     required this.currentSpeed,
   });
+  final List<SpeedSegmentData> segments;
+  final int durationMs;
+  final double currentSpeed;
 
   @override
   void paint(Canvas canvas, Size size) {
     final gridPaint = Paint()
-      ..color = const Color(0xFF2A2A3E).withOpacity(0.5)
+      ..color = const Color(0xFF2A2A3E).withValues(alpha: 0.5)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1;
 
@@ -547,15 +575,15 @@ class _SpeedCurvePainter extends CustomPainter {
     // Draw 1x reference line
     final oneXy = size.height * 0.5; // Middle = 1x (assuming max 2x view)
     final refPaint = Paint()
-      ..color = AppTheme.textDisabled.withOpacity(0.6)
+      ..color = AppTheme.textDisabled.withValues(alpha: 0.6)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1;
     canvas.drawLine(Offset(0, oneXy), Offset(size.width, oneXy), refPaint);
 
     // Draw '1x' label
-    final textSpan = TextSpan(
+    const textSpan = TextSpan(
       text: '1x',
-      style: const TextStyle(color: AppTheme.textDisabled, fontSize: 9),
+      style: TextStyle(color: AppTheme.textDisabled, fontSize: 9),
     );
     final tp = TextPainter(text: textSpan, textDirection: TextDirection.ltr);
     tp.layout();
@@ -571,19 +599,19 @@ class _SpeedCurvePainter extends CustomPainter {
       ..strokeCap = StrokeCap.round;
 
     final fillPaint = Paint()
-      ..color = AppTheme.primary.withOpacity(0.1)
+      ..color = AppTheme.primary.withValues(alpha: 0.1)
       ..style = PaintingStyle.fill;
 
     final path = Path();
     final fillPath = Path();
-    final steps = 100;
+    const steps = 100;
 
     for (var i = 0; i <= steps; i++) {
       final t = i / steps;
       final timeMs = (t * durationMs).round();
 
       // Find speed at this time
-      double speed = 1.0;
+      var speed = 1.0;
       for (final seg in segments) {
         if (timeMs >= seg.startMs && timeMs <= seg.endMs) {
           final segT = (seg.endMs - seg.startMs) > 0
@@ -624,13 +652,14 @@ class _SpeedCurvePainter extends CustomPainter {
       ]) {
         final t = entry.timeMs / durationMs;
         final x = t * size.width;
-        final y = size.height - (entry.speed / 8.0).clamp(0.0, 1.0) * size.height;
+        final y =
+            size.height - (entry.speed / 8.0).clamp(0.0, 1.0) * size.height;
 
         // Outer glow
         canvas.drawCircle(
           Offset(x, y),
           6,
-          Paint()..color = AppTheme.primary.withOpacity(0.3),
+          Paint()..color = AppTheme.primary.withValues(alpha: 0.3),
         );
         // Filled circle
         canvas.drawCircle(
@@ -661,7 +690,10 @@ class _SpeedCurvePainter extends CustomPainter {
           ),
           textDirection: TextDirection.ltr,
         )..layout();
-        labelTp.paint(canvas, Offset(size.width - labelTp.width - 2, y - labelTp.height / 2));
+        labelTp.paint(
+          canvas,
+          Offset(size.width - labelTp.width - 2, y - labelTp.height / 2),
+        );
       }
     }
   }
@@ -685,7 +717,9 @@ class _SpeedCurvePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _SpeedCurvePainter oldDelegate) =>
-      segments != oldDelegate.segments || durationMs != oldDelegate.durationMs || currentSpeed != oldDelegate.currentSpeed;
+      segments != oldDelegate.segments ||
+      durationMs != oldDelegate.durationMs ||
+      currentSpeed != oldDelegate.currentSpeed;
 }
 
 /// Phase E.17: a named velocity ramp preset (CapCut-style).
@@ -695,13 +729,12 @@ class _SpeedCurvePainter extends CustomPainter {
 /// segments divide the clip evenly — e.g., a 3-segment preset on a
 /// 10-second clip gets segments of [0-3.33s, 3.33-6.67s, 6.67-10s].
 class _VelocityPreset {
-  final String name;
-  final IconData icon;
-  final List<(double, double, String)> segments;
-
   const _VelocityPreset({
     required this.name,
     required this.icon,
     required this.segments,
   });
+  final String name;
+  final IconData icon;
+  final List<(double, double, String)> segments;
 }

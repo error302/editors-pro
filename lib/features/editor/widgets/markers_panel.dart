@@ -15,18 +15,18 @@ import '../../../core/theme/app_theme.dart';
 /// spots, chapter boundaries, and notes as they cut. Amateurs skip
 /// markers and lose track of everything.
 class MarkersPanel extends StatefulWidget {
-  final List<Marker> markers;
-  final void Function(MarkerType type, MarkerColor color, String note) onAddMarker;
-  final void Function(String markerId) onDeleteMarker;
-  final void Function(String markerId) onJumpToMarker;
-
   const MarkersPanel({
-    super.key,
     required this.markers,
     required this.onAddMarker,
     required this.onDeleteMarker,
     required this.onJumpToMarker,
+    super.key,
   });
+  final List<Marker> markers;
+  final void Function(MarkerType type, MarkerColor color, String note)
+      onAddMarker;
+  final void Function(String markerId) onDeleteMarker;
+  final void Function(String markerId) onJumpToMarker;
 
   @override
   State<MarkersPanel> createState() => _MarkersPanelState();
@@ -52,10 +52,12 @@ class _MarkersPanelState extends State<MarkersPanel> {
           children: [
             Text('Markers', style: Theme.of(context).textTheme.titleMedium),
             const Spacer(),
-            Text('${widget.markers.length}',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: AppTheme.textSecondary,
-                    )),
+            Text(
+              '${widget.markers.length}',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: AppTheme.textSecondary,
+                  ),
+            ),
           ],
         ),
         const SizedBox(height: AppTheme.spacing8),
@@ -91,9 +93,8 @@ class _MarkersPanelState extends State<MarkersPanel> {
                   color: c.color,
                   shape: BoxShape.circle,
                   border: Border.all(
-                    color: _selectedColor == c
-                        ? Colors.white
-                        : Colors.transparent,
+                    color:
+                        _selectedColor == c ? Colors.white : Colors.transparent,
                     width: 2,
                   ),
                 ),
@@ -122,7 +123,7 @@ class _MarkersPanelState extends State<MarkersPanel> {
         // Existing markers
         Expanded(
           child: widget.markers.isEmpty
-              ? Center(
+              ? const Center(
                   child: Text(
                     'No markers yet. Add one at the playhead.',
                     style: TextStyle(color: AppTheme.textSecondary),
@@ -134,7 +135,8 @@ class _MarkersPanelState extends State<MarkersPanel> {
                     final m = widget.markers[i];
                     return ListTile(
                       leading: Container(
-                        width: 12, height: 12,
+                        width: 12,
+                        height: 12,
                         decoration: BoxDecoration(
                           color: m.color.color,
                           shape: BoxShape.circle,
@@ -183,12 +185,6 @@ class _MarkersPanelState extends State<MarkersPanel> {
 }
 
 class Marker {
-  final String id;
-  final int timeMs;
-  final MarkerType type;
-  final MarkerColor color;
-  final String note;
-
   Marker({
     required this.id,
     required this.timeMs,
@@ -196,6 +192,11 @@ class Marker {
     required this.color,
     this.note = '',
   });
+  final String id;
+  final int timeMs;
+  final MarkerType type;
+  final MarkerColor color;
+  final String note;
 }
 
 enum MarkerType {
@@ -207,8 +208,8 @@ enum MarkerType {
   audio('Audio'),
   vfx('VFX');
 
-  final String label;
   const MarkerType(this.label);
+  final String label;
 }
 
 enum MarkerColor {
@@ -221,6 +222,6 @@ enum MarkerColor {
   pink(Colors.pink),
   white(Colors.white);
 
-  final Color color;
   const MarkerColor(this.color);
+  final Color color;
 }

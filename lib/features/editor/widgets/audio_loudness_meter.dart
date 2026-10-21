@@ -20,14 +20,13 @@ import '../../../core/theme/app_theme.dart';
 /// The pro move is to mix to the target LUFS and verify true-peak. See
 /// persona/skills/loudness-target/SKILL.md.
 class AudioLoudnessMeter extends StatefulWidget {
-  final LoudnessReading reading;
-  final LoudnessTarget target;
-
   const AudioLoudnessMeter({
-    super.key,
     required this.reading,
+    super.key,
     this.target = LoudnessTarget.ebuR128,
   });
+  final LoudnessReading reading;
+  final LoudnessTarget target;
 
   @override
   State<AudioLoudnessMeter> createState() => _AudioLoudnessMeterState();
@@ -41,8 +40,10 @@ class _AudioLoudnessMeterState extends State<AudioLoudnessMeter> {
       children: [
         Row(
           children: [
-            Text('Loudness Meter',
-                style: Theme.of(context).textTheme.titleMedium),
+            Text(
+              'Loudness Meter',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
             const Spacer(),
             // Target picker
             DropdownButton<LoudnessTarget>(
@@ -133,15 +134,6 @@ class _AudioLoudnessMeterState extends State<AudioLoudnessMeter> {
 }
 
 class _LoudnessDisplay extends StatelessWidget {
-  final String label;
-  final double value;
-  final String unit;
-  final double target;
-  final double tolerance;
-  final bool isPrimary;
-  final bool ceiling;
-  final bool isCompliance;
-
   const _LoudnessDisplay({
     required this.label,
     required this.value,
@@ -152,12 +144,19 @@ class _LoudnessDisplay extends StatelessWidget {
     this.ceiling = false,
     this.isCompliance = false,
   });
+  final String label;
+  final double value;
+  final String unit;
+  final double target;
+  final double tolerance;
+  final bool isPrimary;
+  final bool ceiling;
+  final bool isCompliance;
 
   @override
   Widget build(BuildContext context) {
-    final isCompliant = ceiling
-        ? value <= target
-        : (value - target).abs() <= tolerance + 0.5;
+    final isCompliant =
+        ceiling ? value <= target : (value - target).abs() <= tolerance + 0.5;
 
     final color = isCompliant ? Colors.green : Colors.red;
 
@@ -207,7 +206,7 @@ class _LoudnessDisplay extends StatelessWidget {
             ceiling
                 ? 'ceiling: ${target.toStringAsFixed(1)} $unit'
                 : 'target: ${target.toStringAsFixed(1)} $unit (±${tolerance.toStringAsFixed(1)})',
-            style: TextStyle(
+            style: const TextStyle(
               color: AppTheme.textSecondary,
               fontSize: 10,
             ),
@@ -219,15 +218,15 @@ class _LoudnessDisplay extends StatelessWidget {
 }
 
 class _ComplianceBadge extends StatelessWidget {
+  const _ComplianceBadge({required this.reading, required this.target});
   final LoudnessReading reading;
   final LoudnessTarget target;
 
-  const _ComplianceBadge({required this.reading, required this.target});
-
   @override
   Widget build(BuildContext context) {
-    final loudnessOk = (reading.integratedLufs - target.integratedTarget).abs() <=
-        target.integratedTolerance + 0.5;
+    final loudnessOk =
+        (reading.integratedLufs - target.integratedTarget).abs() <=
+            target.integratedTolerance + 0.5;
     final truePeakOk = reading.truePeakDbtp <= target.truePeakCeiling;
     final allOk = loudnessOk && truePeakOk;
 
@@ -236,7 +235,8 @@ class _ComplianceBadge extends StatelessWidget {
       decoration: BoxDecoration(
         color: (allOk ? Colors.green : Colors.red).withValues(alpha: 0.1),
         border: Border.all(
-            color: (allOk ? Colors.green : Colors.red).withValues(alpha: 0.5)),
+          color: (allOk ? Colors.green : Colors.red).withValues(alpha: 0.5),
+        ),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Row(
@@ -284,17 +284,16 @@ class _ComplianceBadge extends StatelessWidget {
 
 /// Real-time loudness reading (from analysis/loudness.rs).
 class LoudnessReading {
-  final double integratedLufs;
-  final double shortTermLufs;
-  final double momentaryLufs;
-  final double truePeakDbtp;
-
   const LoudnessReading({
     required this.integratedLufs,
     required this.shortTermLufs,
     required this.momentaryLufs,
     required this.truePeakDbtp,
   });
+  final double integratedLufs;
+  final double shortTermLufs;
+  final double momentaryLufs;
+  final double truePeakDbtp;
 
   static const silent = LoudnessReading(
     integratedLufs: -70.0,
@@ -316,15 +315,14 @@ enum LoudnessTarget {
   tiktok('TikTok', -18.0, 1.0, -1.0),
   podcast('Apple Podcasts', -16.0, 1.0, -1.0);
 
-  final String label;
-  final double integratedTarget;
-  final double integratedTolerance;
-  final double truePeakCeiling;
-
   const LoudnessTarget(
     this.label,
     this.integratedTarget,
     this.integratedTolerance,
     this.truePeakCeiling,
   );
+  final String label;
+  final double integratedTarget;
+  final double integratedTolerance;
+  final double truePeakCeiling;
 }

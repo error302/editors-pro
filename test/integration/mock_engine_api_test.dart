@@ -1,6 +1,5 @@
-import 'package:flutter_test/flutter_test.dart';
-
 import 'package:editors_pro/src/rust/api/bridge_api.dart';
+import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('EditorsProEngineApi no-op mode', () {
@@ -14,7 +13,8 @@ void main() {
       expect(api.isEngineAvailable, isFalse);
     });
 
-    test('fails bridge calls explicitly when the native engine is absent', () async {
+    test('fails bridge calls explicitly when the native engine is absent',
+        () async {
       await expectLater(
         api.initialize(),
         throwsA(isA<UnimplementedError>()),

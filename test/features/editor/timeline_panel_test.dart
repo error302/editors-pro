@@ -1,13 +1,12 @@
-import 'package:flutter/material.dart';
-import 'package:flutter_test/flutter_test.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-
 import 'package:editors_pro/core/services/engine_service.dart';
 import 'package:editors_pro/core/services/project_repository.dart';
 import 'package:editors_pro/data/models/project_model.dart';
 import 'package:editors_pro/features/editor/providers/editor_provider.dart';
 import 'package:editors_pro/features/editor/widgets/timeline_panel.dart';
 import 'package:editors_pro/features/projects/providers/project_provider.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -85,7 +84,7 @@ void main() {
     });
 
     testWidgets('shows track headers when project has tracks', (tester) async {
-      final project = ProjectModel(
+      const project = ProjectModel(
         id: 'p1',
         name: 'Test Project',
         createdAt: 0,
@@ -94,8 +93,18 @@ void main() {
         height: 1080,
         fps: 30.0,
         tracks: [
-          TrackModel(id: 'v1', name: 'Video 1', trackType: TrackType.video, orderIndex: 0),
-          TrackModel(id: 'a1', name: 'Audio 1', trackType: TrackType.audio, orderIndex: 1),
+          TrackModel(
+            id: 'v1',
+            name: 'Video 1',
+            trackType: TrackType.video,
+            orderIndex: 0,
+          ),
+          TrackModel(
+            id: 'a1',
+            name: 'Audio 1',
+            trackType: TrackType.audio,
+            orderIndex: 1,
+          ),
         ],
       );
 
@@ -107,7 +116,7 @@ void main() {
     });
 
     testWidgets('shows track type icons', (tester) async {
-      final project = ProjectModel(
+      const project = ProjectModel(
         id: 'p1',
         name: 'Test',
         createdAt: 0,
@@ -116,10 +125,30 @@ void main() {
         height: 1080,
         fps: 30.0,
         tracks: [
-          TrackModel(id: 'v1', name: 'Video 1', trackType: TrackType.video, orderIndex: 0),
-          TrackModel(id: 'a1', name: 'Audio 1', trackType: TrackType.audio, orderIndex: 1),
-          TrackModel(id: 't1', name: 'Text 1', trackType: TrackType.text, orderIndex: 2),
-          TrackModel(id: 'e1', name: 'Effect 1', trackType: TrackType.effect, orderIndex: 3),
+          TrackModel(
+            id: 'v1',
+            name: 'Video 1',
+            trackType: TrackType.video,
+            orderIndex: 0,
+          ),
+          TrackModel(
+            id: 'a1',
+            name: 'Audio 1',
+            trackType: TrackType.audio,
+            orderIndex: 1,
+          ),
+          TrackModel(
+            id: 't1',
+            name: 'Text 1',
+            trackType: TrackType.text,
+            orderIndex: 2,
+          ),
+          TrackModel(
+            id: 'e1',
+            name: 'Effect 1',
+            trackType: TrackType.effect,
+            orderIndex: 3,
+          ),
         ],
       );
 
@@ -133,8 +162,7 @@ void main() {
       ]) {
         expect(
           find.byWidgetPredicate(
-            (widget) =>
-                widget is Semantics && widget.properties.label == label,
+            (widget) => widget is Semantics && widget.properties.label == label,
           ),
           findsOneWidget,
         );
@@ -142,7 +170,7 @@ void main() {
     });
 
     testWidgets('shows clips on tracks', (tester) async {
-      final project = ProjectModel(
+      const project = ProjectModel(
         id: 'p1',
         name: 'Test',
         createdAt: 0,
@@ -179,7 +207,7 @@ void main() {
     });
 
     testWidgets('shows audio volume icon for audio tracks', (tester) async {
-      final project = ProjectModel(
+      const project = ProjectModel(
         id: 'p1',
         name: 'Test',
         createdAt: 0,
@@ -204,7 +232,7 @@ void main() {
     });
 
     testWidgets('shows muted icon for hidden audio tracks', (tester) async {
-      final project = ProjectModel(
+      const project = ProjectModel(
         id: 'p1',
         name: 'Test',
         createdAt: 0,
@@ -229,7 +257,7 @@ void main() {
     });
 
     testWidgets('shows locked icon for locked tracks', (tester) async {
-      final project = ProjectModel(
+      const project = ProjectModel(
         id: 'p1',
         name: 'Test',
         createdAt: 0,
@@ -285,21 +313,24 @@ void main() {
 /// A [EditorNotifier] that starts with a given state and does not access
 /// the Rust engine.
 class _TestEditorNotifier extends EditorNotifier {
-  _TestEditorNotifier(Ref ref, EditorState initialState) : super(ref) {
+  _TestEditorNotifier(super.ref, EditorState initialState) {
     state = initialState;
   }
 
   @override
   Future<void> initialize() async {}
 
+  @override
   void togglePlayback() {
     state = state.copyWith(isPlaying: !state.isPlaying);
   }
 
+  @override
   void seekTo(int timeMs) {
     state = state.copyWith(currentTimeMs: timeMs);
   }
 
+  @override
   void selectClip(String? clipId) {
     state = state.copyWith(
       selectedClipId: clipId,
@@ -307,15 +338,21 @@ class _TestEditorNotifier extends EditorNotifier {
     );
   }
 
+  @override
   void selectTrack(String? trackId) {
-    state = state.copyWith(selectedTrackId: trackId, showInspector: trackId != null);
+    state = state.copyWith(
+      selectedTrackId: trackId,
+      showInspector: trackId != null,
+    );
   }
 
+  @override
   void zoomIn() {
     final newZoom = (state.zoomLevel * 1.2).clamp(0.1, 10.0);
     state = state.copyWith(zoomLevel: double.parse(newZoom.toStringAsFixed(3)));
   }
 
+  @override
   void zoomOut() {
     final newZoom = (state.zoomLevel / 1.2).clamp(0.1, 10.0);
     state = state.copyWith(zoomLevel: double.parse(newZoom.toStringAsFixed(3)));

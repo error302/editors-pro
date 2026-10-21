@@ -38,14 +38,15 @@
 //! the next N frames and pushes them via a `flutter_rust_bridge::StreamSink`
 //! so the Flutter side can render them without round-trips.
 
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::thread;
 
 use crossbeam_channel::{bounded, Receiver, Sender};
 use once_cell::sync::Lazy;
 
-use crate::decoder::{FrameData, VideoInfo};
 use crate::decoder::hardware::HardwareDecoder;
+use crate::decoder::{FrameData, VideoInfo};
 
 /// A request from the Flutter side to the decode worker.
 pub enum DecodeRequest {
@@ -96,6 +97,7 @@ pub struct DecodeWorker {
 }
 
 struct WorkerHandle {
+    stopped: AtomicBool,
     /// JoinHandle for the worker thread. Joined on drop.
     join: Option<thread::JoinHandle<()>>,
 }
@@ -134,6 +136,7 @@ impl DecodeWorker {
         Self {
             tx,
             _handle: Arc::new(WorkerHandle {
+                stopped: AtomicBool::new(false),
                 join: Some(join),
             }),
         }
@@ -148,7 +151,10 @@ impl DecodeWorker {
 
         while let Ok(req) = rx.recv() {
             match req {
-                DecodeRequest::Open { file_path, response } => {
+                DecodeRequest::Open {
+                    file_path,
+                    response,
+                } => {
                     let result = decoder.open(&file_path).map(|_| DecodeResponse::Ok);
                     let resp = match result {
                         Ok(r) => r,
@@ -188,6 +194,9 @@ impl DecodeWorker {
     /// Blocks the calling thread until the worker has finished opening
     /// the file. Returns `Err` if the worker has shut down.
     pub fn open(&self, file_path: &str) -> Result<(), String> {
+        if self._handle.stopped.load(Ordering::Acquire) {
+            return Err("Decode worker is shut down".to_string());
+        }
         let (resp_tx, resp_rx) = crossbeam_channel::bounded(1);
         self.tx
             .send(DecodeRequest::Open {
@@ -195,7 +204,10 @@ impl DecodeWorker {
                 response: resp_tx,
             })
             .map_err(|_| "decode worker channel closed".to_string())?;
-        match resp_rx.recv().map_err(|_| "decode worker dropped response".to_string())? {
+        match resp_rx
+            .recv_timeout(std::time::Duration::from_secs(30))
+            .map_err(|_| "decode worker dropped response".to_string())?
+        {
             DecodeResponse::Ok => Ok(()),
             DecodeResponse::Error(e) => Err(e),
             _ => Err("unexpected response type for Open".to_string()),
@@ -207,6 +219,9 @@ impl DecodeWorker {
     /// Returns `Ok(None)` if the worker decoded successfully but produced
     /// no frame (e.g., end of stream).
     pub fn seek(&self, time_ms: u64) -> Result<Option<FrameData>, String> {
+        if self._handle.stopped.load(Ordering::Acquire) {
+            return Err("Decode worker is shut down".to_string());
+        }
         let (resp_tx, resp_rx) = crossbeam_channel::bounded(1);
         self.tx
             .send(DecodeRequest::Seek {
@@ -214,7 +229,10 @@ impl DecodeWorker {
                 response: resp_tx,
             })
             .map_err(|_| "decode worker channel closed".to_string())?;
-        match resp_rx.recv().map_err(|_| "decode worker dropped response".to_string())? {
+        match resp_rx
+            .recv_timeout(std::time::Duration::from_secs(30))
+            .map_err(|_| "decode worker dropped response".to_string())?
+        {
             DecodeResponse::Frame(f) => Ok(f),
             DecodeResponse::Error(e) => Err(e),
             _ => Err("unexpected response type for Seek".to_string()),
@@ -223,13 +241,17 @@ impl DecodeWorker {
 
     /// Send a `Close` request.
     pub fn close(&self) -> Result<(), String> {
+        if self._handle.stopped.load(Ordering::Acquire) {
+            return Err("Decode worker is shut down".to_string());
+        }
         let (resp_tx, resp_rx) = crossbeam_channel::bounded(1);
         self.tx
-            .send(DecodeRequest::Close {
-                response: resp_tx,
-            })
+            .send(DecodeRequest::Close { response: resp_tx })
             .map_err(|_| "decode worker channel closed".to_string())?;
-        match resp_rx.recv().map_err(|_| "decode worker dropped response".to_string())? {
+        match resp_rx
+            .recv_timeout(std::time::Duration::from_secs(30))
+            .map_err(|_| "decode worker dropped response".to_string())?
+        {
             DecodeResponse::Ok => Ok(()),
             DecodeResponse::Error(e) => Err(e),
             _ => Err("unexpected response type for Close".to_string()),
@@ -238,13 +260,17 @@ impl DecodeWorker {
 
     /// Send a `GetInfo` request.
     pub fn get_info(&self) -> Result<Option<VideoInfo>, String> {
+        if self._handle.stopped.load(Ordering::Acquire) {
+            return Err("Decode worker is shut down".to_string());
+        }
         let (resp_tx, resp_rx) = crossbeam_channel::bounded(1);
         self.tx
-            .send(DecodeRequest::GetInfo {
-                response: resp_tx,
-            })
+            .send(DecodeRequest::GetInfo { response: resp_tx })
             .map_err(|_| "decode worker channel closed".to_string())?;
-        match resp_rx.recv().map_err(|_| "decode worker dropped response".to_string())? {
+        match resp_rx
+            .recv_timeout(std::time::Duration::from_secs(30))
+            .map_err(|_| "decode worker dropped response".to_string())?
+        {
             DecodeResponse::Info(i) => Ok(i),
             DecodeResponse::Error(e) => Err(e),
             _ => Err("unexpected response type for GetInfo".to_string()),
@@ -254,7 +280,9 @@ impl DecodeWorker {
     /// Shut down the worker thread. After this, no more requests can
     /// be sent on this handle.
     pub fn shutdown(&self) {
-        let _ = self.tx.send(DecodeRequest::Shutdown);
+        if !self._handle.stopped.swap(true, Ordering::AcqRel) {
+            let _ = self.tx.send(DecodeRequest::Shutdown);
+        }
     }
 }
 
@@ -285,6 +313,9 @@ mod tests {
         // After shutdown, sending a request should fail.
         let result = worker.open("/dev/null");
         assert!(result.is_err(), "expected error after shutdown");
+        assert!(worker.seek(0).is_err());
+        assert!(worker.close().is_err());
+        assert!(worker.get_info().is_err());
     }
 
     #[test]

@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:developer' as developer;
 
 /// Real-time performance monitoring provider for the editor.
 ///
@@ -70,8 +69,6 @@ class PerformanceMonitor {
 
   final List<double> _exportSpeeds = [];
   static const int _maxExportSamples = 10;
-  int _exportedFrames = 0;
-  Duration _exportElapsedTime = Duration.zero;
 
   // ─── Throughput ─────────────────────────────────────────────────
 
@@ -274,8 +271,7 @@ class PerformanceMonitor {
 
   /// Whether memory is under pressure
   bool get isMemoryPressure =>
-      _memoryPressureLevel == 'warning' ||
-      _memoryPressureLevel == 'critical';
+      _memoryPressureLevel == 'warning' || _memoryPressureLevel == 'critical';
 
   // ─── Snapshot ────────────────────────────────────────────────────
 
@@ -335,8 +331,6 @@ class PerformanceMonitor {
     _pooledBufferCount = 0;
     _bufferPoolHits = 0;
     _bufferPoolMisses = 0;
-    _exportedFrames = 0;
-    _exportElapsedTime = Duration.zero;
     _itemsPerSecond = 0.0;
     _bytesPerSecond = 0.0;
   }
@@ -369,6 +363,36 @@ class PerformanceMonitor {
 
 /// Immutable snapshot of performance metrics at a point in time
 class PerformanceSnapshot {
+  const PerformanceSnapshot({
+    required this.timestamp,
+    required this.averageFps,
+    required this.targetFps,
+    required this.droppedFrames,
+    required this.totalFrames,
+    required this.dropRate,
+    required this.averageFrameDuration,
+    required this.p95FrameDuration,
+    required this.averageDecodeDuration,
+    required this.averageRenderDuration,
+    required this.cacheHitRate,
+    required this.cacheHits,
+    required this.cacheMisses,
+    required this.cacheEvictions,
+    required this.cachedFrameCount,
+    required this.bufferPoolHitRate,
+    required this.pooledBufferCount,
+    required this.memoryRssMb,
+    required this.memoryPeakMb,
+    required this.memoryAvailableMb,
+    required this.memoryPressureLevel,
+    required this.gpuAvailable,
+    required this.gpuAdapterName,
+    required this.gpuBackendName,
+    required this.averageExportSpeed,
+    required this.itemsPerSecond,
+    required this.bytesPerSecondMb,
+    required this.isOnBudget,
+  });
   final DateTime timestamp;
 
   // Frame timing
@@ -413,37 +437,6 @@ class PerformanceSnapshot {
 
   // Overall
   final bool isOnBudget;
-
-  const PerformanceSnapshot({
-    required this.timestamp,
-    required this.averageFps,
-    required this.targetFps,
-    required this.droppedFrames,
-    required this.totalFrames,
-    required this.dropRate,
-    required this.averageFrameDuration,
-    required this.p95FrameDuration,
-    required this.averageDecodeDuration,
-    required this.averageRenderDuration,
-    required this.cacheHitRate,
-    required this.cacheHits,
-    required this.cacheMisses,
-    required this.cacheEvictions,
-    required this.cachedFrameCount,
-    required this.bufferPoolHitRate,
-    required this.pooledBufferCount,
-    required this.memoryRssMb,
-    required this.memoryPeakMb,
-    required this.memoryAvailableMb,
-    required this.memoryPressureLevel,
-    required this.gpuAvailable,
-    required this.gpuAdapterName,
-    required this.gpuBackendName,
-    required this.averageExportSpeed,
-    required this.itemsPerSecond,
-    required this.bytesPerSecondMb,
-    required this.isOnBudget,
-  });
 
   /// Get a color-coded FPS status
   String get fpsStatus {

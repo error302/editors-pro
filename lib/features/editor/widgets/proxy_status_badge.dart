@@ -45,10 +45,10 @@ class ProxyStatusBadge extends ConsumerWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.15),
+        color: color.withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(10),
         border: Border.all(
-          color: color.withOpacity(0.3),
+          color: color.withValues(alpha: 0.3),
           width: 1,
         ),
       ),
@@ -79,7 +79,7 @@ class ProxyStatusBadge extends ConsumerWidget {
             style: TextStyle(
               fontSize: 9,
               fontWeight: FontWeight.w500,
-              color: color.withOpacity(0.8),
+              color: color.withValues(alpha: 0.8),
             ),
           ),
         ],
@@ -90,9 +90,8 @@ class ProxyStatusBadge extends ConsumerWidget {
 
 /// Animated badge shown while proxy is being generated.
 class _ProxyGeneratingBadge extends StatefulWidget {
-  final String quality;
-
   const _ProxyGeneratingBadge({required this.quality});
+  final String quality;
 
   @override
   State<_ProxyGeneratingBadge> createState() => _ProxyGeneratingBadgeState();
@@ -119,7 +118,7 @@ class _ProxyGeneratingBadgeState extends State<_ProxyGeneratingBadge>
 
   @override
   Widget build(BuildContext context) {
-    final color = AppTheme.warning;
+    const color = AppTheme.warning;
 
     return AnimatedBuilder(
       animation: _controller,
@@ -133,17 +132,17 @@ class _ProxyGeneratingBadgeState extends State<_ProxyGeneratingBadge>
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
         decoration: BoxDecoration(
-          color: color.withOpacity(0.15),
+          color: color.withValues(alpha: 0.15),
           borderRadius: BorderRadius.circular(10),
           border: Border.all(
-            color: color.withOpacity(0.3),
+            color: color.withValues(alpha: 0.3),
             width: 1,
           ),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            SizedBox(
+            const SizedBox(
               width: 10,
               height: 10,
               child: CircularProgressIndicator(
@@ -152,7 +151,7 @@ class _ProxyGeneratingBadgeState extends State<_ProxyGeneratingBadge>
               ),
             ),
             const SizedBox(width: 4),
-            Text(
+            const Text(
               'PROXY',
               style: TextStyle(
                 fontSize: 10,
@@ -167,7 +166,7 @@ class _ProxyGeneratingBadgeState extends State<_ProxyGeneratingBadge>
               style: TextStyle(
                 fontSize: 9,
                 fontWeight: FontWeight.w500,
-                color: color.withOpacity(0.8),
+                color: color.withValues(alpha: 0.8),
               ),
             ),
           ],
@@ -206,28 +205,29 @@ class ProxyResolutionBadge extends ConsumerWidget {
       activeInfo.originalWidth,
       activeInfo.originalHeight,
     );
-    final proxyLabel = activeInfo.proxyWidth != null && activeInfo.proxyHeight != null
-        ? ProxyInfoData.resolutionLabel(
-            activeInfo.proxyWidth!,
-            activeInfo.proxyHeight!,
-          )
-        : proxyState.quality;
+    final proxyLabel =
+        activeInfo.proxyWidth != null && activeInfo.proxyHeight != null
+            ? ProxyInfoData.resolutionLabel(
+                activeInfo.proxyWidth!,
+                activeInfo.proxyHeight!,
+              )
+            : proxyState.quality;
 
-    final color = AppTheme.warning;
+    const color = AppTheme.warning;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.12),
+        color: color.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(10),
         border: Border.all(
-          color: color.withOpacity(0.25),
+          color: color.withValues(alpha: 0.25),
           width: 1,
         ),
       ),
       child: Text(
         '$origLabel→$proxyLabel',
-        style: TextStyle(
+        style: const TextStyle(
           fontSize: 10,
           fontWeight: FontWeight.w600,
           color: color,

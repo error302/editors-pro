@@ -138,15 +138,21 @@ fn set_and_get_property() {
     clip.set_property("text", serde_json::json!("Hello World"));
     clip.set_property("font_size", serde_json::json!(24));
 
-    assert_eq!(clip.get_property("text").unwrap(), &serde_json::json!("Hello World"));
-    assert_eq!(clip.get_property("font_size").unwrap(), &serde_json::json!(24));
+    assert_eq!(
+        clip.get_property("text").unwrap(),
+        &serde_json::json!("Hello World")
+    );
+    assert_eq!(
+        clip.get_property("font_size").unwrap(),
+        &serde_json::json!(24)
+    );
     assert!(clip.get_property("nonexistent").is_none());
 }
 
 #[test]
 fn add_and_remove_effect() {
     let mut clip = Clip::new("a", 0, 1000);
-    let effect = Effect::new("brightness", crate::effects::EffectType::Brightness);
+    let effect = crate::effects::filters::FilterType::Brightness.to_effect();
     let effect_id = effect.id.clone();
 
     clip.add_effect(effect);
@@ -166,9 +172,9 @@ fn remove_effect_not_found() {
 #[test]
 fn enabled_effects_filters_disabled() {
     let mut clip = Clip::new("a", 0, 1000);
-    let mut e1 = Effect::new("brightness", crate::effects::EffectType::Brightness);
+    let mut e1 = crate::effects::filters::FilterType::Brightness.to_effect();
     e1.enabled = true;
-    let mut e2 = Effect::new("contrast", crate::effects::EffectType::Contrast);
+    let mut e2 = crate::effects::filters::FilterType::Contrast.to_effect();
     e2.enabled = false;
 
     clip.add_effect(e1);
@@ -176,19 +182,20 @@ fn enabled_effects_filters_disabled() {
 
     let enabled = clip.enabled_effects();
     assert_eq!(enabled.len(), 1);
-    assert_eq!(enabled[0].effect_type, crate::effects::EffectType::Brightness);
+    assert_eq!(enabled[0].effect_type, crate::effects::EffectType::Filter);
 }
 
 #[test]
 fn set_effect_parameter() {
     let mut clip = Clip::new("a", 0, 1000);
-    let effect = Effect::new("brightness", crate::effects::EffectType::Brightness);
+    let effect = crate::effects::filters::FilterType::Brightness.to_effect();
     let effect_id = effect.id.clone();
 
     clip.add_effect(effect);
     // Try to set the first parameter
     if let Some(param) = clip.effects[0].parameters.first() {
-        let result = clip.set_effect_parameter(&effect_id, &param.name, 0.75);
+        let name = param.name.clone();
+        let result = clip.set_effect_parameter(&effect_id, &name, 0.75);
         assert!(result.is_ok());
     }
 }
@@ -246,7 +253,10 @@ fn clip_serialization_roundtrip() {
     assert_eq!(parsed.asset_id, "asset-1");
     assert_eq!(parsed.start_ms, 500);
     assert_eq!(parsed.duration_ms, 3000);
-    assert_eq!(parsed.get_property("label").unwrap(), &serde_json::json!("My Clip"));
+    assert_eq!(
+        parsed.get_property("label").unwrap(),
+        &serde_json::json!("My Clip")
+    );
 }
 
 #[test]
@@ -264,12 +274,8 @@ fn text_properties_default_text() {
 #[test]
 fn transition_in_out() {
     let mut clip = Clip::new("a", 0, 1000);
-    let transition = crate::effects::Transition {
-        id: "t1".into(),
-        transition_type: crate::effects::TransitionType::CrossDissolve,
-        duration_ms: 500,
-        alignment: crate::effects::TransitionAlignment::Center,
-    };
+    let transition =
+        crate::effects::Transition::new(crate::effects::TransitionType::Dissolve, 500, "a", "b");
 
     clip.set_transition_in(transition.clone());
     assert!(clip.transition_in.is_some());

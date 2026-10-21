@@ -103,12 +103,12 @@ class RustLib {
       ffi.DynamicLibrary? dylib;
       try {
         dylib = _loadNativeLibrary();
-        final dispatchPtr = dylib.lookupFunction<
-            _DispatchNative,
-            _DispatchDart>('editors_pro_dispatch');
-        final freePtr = dylib.lookupFunction<
-            _FreeStringNative,
-            _FreeStringDart>('editors_pro_free_string');
+        final dispatchPtr =
+            dylib.lookupFunction<_DispatchNative, _DispatchDart>(
+                'editors_pro_dispatch');
+        final freePtr =
+            dylib.lookupFunction<_FreeStringNative, _FreeStringDart>(
+                'editors_pro_free_string');
         inst._dylib = dylib;
         inst._dispatch = dispatchPtr;
         inst._freeString = freePtr;

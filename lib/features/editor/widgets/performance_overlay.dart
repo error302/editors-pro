@@ -62,10 +62,10 @@ class _PerformanceOverlayWidgetState extends State<PerformanceOverlayWidget> {
       child: Container(
         padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(
-          color: Colors.black.withOpacity(0.8),
+          color: Colors.black.withValues(alpha: 0.8),
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
-            color: _statusColor(snapshot).withOpacity(0.5),
+            color: _statusColor(snapshot).withValues(alpha: 0.5),
             width: 1,
           ),
         ),
@@ -106,7 +106,9 @@ class _PerformanceOverlayWidgetState extends State<PerformanceOverlayWidget> {
         const SizedBox(width: 12),
         Text(
           'DROP: ${(s.dropRate * 100).toStringAsFixed(1)}%',
-          style: _metricStyle(color: s.dropRate < 0.05 ? Colors.green : Colors.orange),
+          style: _metricStyle(
+            color: s.dropRate < 0.05 ? Colors.green : Colors.orange,
+          ),
         ),
       ],
     );
@@ -227,9 +229,8 @@ class _PerformanceOverlayWidgetState extends State<PerformanceOverlayWidget> {
 
 /// A toggle button for the performance overlay
 class PerformanceOverlayToggle extends StatefulWidget {
+  const PerformanceOverlayToggle({required this.child, super.key});
   final Widget child;
-
-  const PerformanceOverlayToggle({super.key, required this.child});
 
   @override
   State<PerformanceOverlayToggle> createState() =>

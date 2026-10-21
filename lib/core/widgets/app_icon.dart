@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+
 import '../theme/app_theme.dart';
-import '../constants/app_icons.dart';
 
 /// Reusable SVG icon widget with consistent sizing and coloring.
 ///
@@ -9,11 +9,6 @@ import '../constants/app_icons.dart';
 ///   AppIcon(AppIcons.play, size: 20, color: AppTheme.primary)
 ///   AppIcon(AppIcons.undo)  // defaults: 20px, textSecondary
 class AppIcon extends StatelessWidget {
-  final String icon;
-  final double? size;
-  final Color? color;
-  final VoidCallback? onTap;
-
   const AppIcon(
     this.icon, {
     super.key,
@@ -21,6 +16,10 @@ class AppIcon extends StatelessWidget {
     this.color,
     this.onTap,
   });
+  final String icon;
+  final double? size;
+  final Color? color;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -51,22 +50,21 @@ class AppIcon extends StatelessWidget {
 
 /// Toolbar icon button using SVG icons — for the editor toolbar.
 class SvgToolbarButton extends StatelessWidget {
-  final String icon;
-  final String? tooltip;
-  final VoidCallback? onPressed;
-  final Color? color;
-  final double iconSize;
-  final bool isActive;
-
   const SvgToolbarButton({
-    super.key,
     required this.icon,
+    super.key,
     this.tooltip,
     this.onPressed,
     this.color,
     this.iconSize = 18,
     this.isActive = false,
   });
+  final String icon;
+  final String? tooltip;
+  final VoidCallback? onPressed;
+  final Color? color;
+  final double iconSize;
+  final bool isActive;
 
   @override
   Widget build(BuildContext context) {
@@ -82,7 +80,7 @@ class SvgToolbarButton extends StatelessWidget {
             height: 36,
             decoration: BoxDecoration(
               color: isActive
-                  ? AppTheme.primary.withOpacity(0.15)
+                  ? AppTheme.primary.withValues(alpha: 0.15)
                   : Colors.transparent,
               borderRadius: BorderRadius.circular(6),
             ),
@@ -92,7 +90,8 @@ class SvgToolbarButton extends StatelessWidget {
                 width: iconSize,
                 height: iconSize,
                 colorFilter: ColorFilter.mode(
-                  color ?? (isActive ? AppTheme.primary : AppTheme.textSecondary),
+                  color ??
+                      (isActive ? AppTheme.primary : AppTheme.textSecondary),
                   BlendMode.srcIn,
                 ),
               ),

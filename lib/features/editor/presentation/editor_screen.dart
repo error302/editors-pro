@@ -1,17 +1,8 @@
 import 'dart:async';
-import 'dart:convert' show base64Decode, base64Encode;
+import 'dart:convert' show base64Encode;
 import 'dart:developer' as developer;
 import 'dart:typed_data' show ByteData, Endian, Uint8List;
 
-import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:file_picker/file_picker.dart';
-import 'package:image_picker/image_picker.dart';
-import 'package:uuid/uuid.dart';
-
-import '../../../core/theme/app_theme.dart';
-import '../../../core/extensions/context_extensions.dart';
-import '../../../core/services/engine_service.dart';
 // Phase F.3 + F.4 + F.5: top-level FFI wrappers
 import 'package:editors_pro/src/rust/api/bridge_api.dart'
     show
@@ -20,52 +11,50 @@ import 'package:editors_pro/src/rust/api/bridge_api.dart'
         markersAdd,
         markersGet,
         markersRemove,
-        analyzeLoudness,
         setTrackPan,
         getTrackPan,
         setTrackSolo,
         getTrackSolo,
         setTrackEqSettings,
-        getTrackEqSettings,
         setAudioSamples,
         getCurrentLoudness,
         setActiveLut,
         clearActiveLut;
+import 'package:file_picker/file_picker.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker/image_picker.dart';
+
+import '../../../core/extensions/context_extensions.dart';
+import '../../../core/services/engine_service.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../data/models/project_model.dart';
 import '../../projects/providers/project_provider.dart';
 import '../providers/editor_provider.dart';
-import '../providers/engine_bridge_provider.dart';
 import '../services/media_library_service.dart';
-import '../widgets/preview_viewport.dart';
-import '../widgets/timeline_panel.dart';
-import '../widgets/editor_toolbar.dart';
-import '../widgets/inspector_panel.dart';
-import '../widgets/effect_catalog.dart';
-import '../widgets/transition_picker.dart';
-import '../widgets/text_panel.dart';
-import '../widgets/speed_curve_editor.dart';
+import '../widgets/audio_loudness_meter.dart';
 // Phase F.2: pro videographer widgets
 import '../widgets/audio_mixer_panel.dart';
 import '../widgets/color_scopes_panel.dart';
-import '../widgets/markers_panel.dart';
-import '../widgets/lut_browser.dart';
+import '../widgets/editor_toolbar.dart';
+import '../widgets/effect_catalog.dart';
 import '../widgets/eq_panel.dart';
-import '../widgets/audio_loudness_meter.dart';
-import '../widgets/safe_zones_overlay.dart';
-import '../widgets/keyframe_graph_editor.dart';
 import '../widgets/gpu_status_badge.dart';
-import '../widgets/proxy_status_badge.dart';
-import '../widgets/audio_mixer_panel.dart';
-import '../widgets/video_scopes.dart';
-import '../widgets/markers_panel.dart';
+import '../widgets/inspector_panel.dart';
+import '../widgets/keyframe_graph_editor.dart';
 import '../widgets/lut_browser.dart';
-import '../widgets/audio_eq_panel.dart';
+import '../widgets/markers_panel.dart';
+import '../widgets/preview_viewport.dart';
+import '../widgets/proxy_status_badge.dart';
+import '../widgets/safe_zones_overlay.dart';
+import '../widgets/speed_curve_editor.dart';
+import '../widgets/text_panel.dart';
+import '../widgets/timeline_panel.dart';
 
 /// Main editor screen - the core editing experience
 class EditorScreen extends ConsumerStatefulWidget {
+  const EditorScreen({required this.projectId, super.key});
   final String projectId;
-
-  const EditorScreen({super.key, required this.projectId});
 
   @override
   ConsumerState<EditorScreen> createState() => _EditorScreenState();
@@ -78,7 +67,6 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
   /// Phase F.2: in-memory timeline markers. In a full integration these
   /// would be persisted via the engine's `effects/markers.rs` module.
   /// For now, scoped to the screen lifetime.
-  List<Marker> _markers = const [];
 
   /// Phase F.5: the currently-loaded LUT (parsed JSON from lutLoadCubeContent).
   /// When non-null, the LUT is applied in the engine's get_frame via setActiveLut.
@@ -89,7 +77,6 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
 
   /// Phase F.3: current EQ settings JSON (stored when the user changes the
   /// EQ panel; applied to audio samples on playback).
-  Map<String, dynamic>? _eqSettings;
 
   /// Phase F.6: cached Future for mixer tracks. Avoids re-fetching on every
   /// widget rebuild. Set to null to invalidate (e.g., when tracks change).
@@ -160,21 +147,21 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
                       if (editorState.isImporting)
                         Positioned.fill(
                           child: Container(
-                            color: Colors.black.withOpacity(0.5),
-                            child: Center(
+                            color: Colors.black.withValues(alpha: 0.5),
+                            child: const Center(
                               child: Card(
                                 color: AppTheme.surface,
                                 child: Padding(
-                                  padding:
-                                      const EdgeInsets.all(AppTheme.spacing24),
+                                  padding: EdgeInsets.all(AppTheme.spacing24),
                                   child: Column(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
-                                      const CircularProgressIndicator(
+                                      CircularProgressIndicator(
                                         color: AppTheme.primary,
                                       ),
-                                      const SizedBox(
-                                          height: AppTheme.spacing16),
+                                      SizedBox(
+                                        height: AppTheme.spacing16,
+                                      ),
                                       Text(
                                         'Importing media…',
                                         style: TextStyle(
@@ -229,42 +216,50 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
         color: AppTheme.surface,
         border: Border(bottom: BorderSide(color: AppTheme.border)),
       ),
-      child: Row(children: [
-        const SizedBox(width: 16),
-        const Icon(Icons.crop_landscape,
-            size: 16, color: AppTheme.textSecondary),
-        const SizedBox(width: 8),
-        const Expanded(
-            child: Text('Viewer',
-                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600))),
-        if (!compact) ...[
-          const GpuStatusBadge(),
-          const SizedBox(width: 8),
-          const ProxyStatusBadge(),
-          const SizedBox(width: 8),
-        ],
-        IconButton(
-          tooltip: 'Safe zones: ${state.safeZoneMode.name}',
-          isSelected: state.showSafeZones,
-          onPressed: () =>
-              ref.read(editorProvider.notifier).cycleSafeZoneMode(),
-          icon: const Icon(Icons.crop_free, size: 19),
-        ),
-        IconButton(
-          tooltip: 'Audio meters',
-          isSelected: state.showAudioMeterBridge,
-          onPressed: () =>
-              ref.read(editorProvider.notifier).toggleAudioMeterBridge(),
-          icon: const Icon(Icons.graphic_eq, size: 19),
-        ),
-        if (compact)
-          IconButton(
-            tooltip: 'Inspector',
-            onPressed: () => _showInspectorBottomSheet(context),
-            icon: const Icon(Icons.tune, size: 19),
+      child: Row(
+        children: [
+          const SizedBox(width: 16),
+          const Icon(
+            Icons.crop_landscape,
+            size: 16,
+            color: AppTheme.textSecondary,
           ),
-        const SizedBox(width: 4),
-      ]),
+          const SizedBox(width: 8),
+          const Expanded(
+            child: Text(
+              'Viewer',
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+            ),
+          ),
+          if (!compact) ...[
+            const GpuStatusBadge(),
+            const SizedBox(width: 8),
+            const ProxyStatusBadge(),
+            const SizedBox(width: 8),
+          ],
+          IconButton(
+            tooltip: 'Safe zones: ${state.safeZoneMode.name}',
+            isSelected: state.showSafeZones,
+            onPressed: () =>
+                ref.read(editorProvider.notifier).cycleSafeZoneMode(),
+            icon: const Icon(Icons.crop_free, size: 19),
+          ),
+          IconButton(
+            tooltip: 'Audio meters',
+            isSelected: state.showAudioMeterBridge,
+            onPressed: () =>
+                ref.read(editorProvider.notifier).toggleAudioMeterBridge(),
+            icon: const Icon(Icons.graphic_eq, size: 19),
+          ),
+          if (compact)
+            IconButton(
+              tooltip: 'Inspector',
+              onPressed: () => _showInspectorBottomSheet(context),
+              icon: const Icon(Icons.tune, size: 19),
+            ),
+          const SizedBox(width: 4),
+        ],
+      ),
     );
   }
 
@@ -278,26 +273,39 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
       builder: (context) => FractionallySizedBox(
         heightFactor: 0.8,
         child: Consumer(
-            builder: (context, ref, _) => Column(children: [
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 0, 8, 8),
-                    child: Row(children: [
-                      const Expanded(
-                          child: Text('Editing tools',
-                              style: TextStyle(fontWeight: FontWeight.w600))),
-                      IconButton(
-                          tooltip: 'Close tools',
-                          onPressed: () => Navigator.pop(context),
-                          icon: const Icon(Icons.close)),
-                    ]),
+          builder: (context, ref, _) => Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 8, 8),
+                child: Row(
+                  children: [
+                    const Expanded(
+                      child: Text(
+                        'Editing tools',
+                        style: TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: 'Close tools',
+                      onPressed: () => Navigator.pop(context),
+                      icon: const Icon(Icons.close),
+                    ),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: SizedBox(
+                  width: double.infinity,
+                  child: _buildLeftPanel(
+                    context,
+                    ref.watch(editorProvider),
+                    isTablet: true,
                   ),
-                  Expanded(
-                      child: SizedBox(
-                          width: double.infinity,
-                          child: _buildLeftPanel(
-                              context, ref.watch(editorProvider),
-                              isTablet: true))),
-                ])),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -382,8 +390,10 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
                           return Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text('Media bin',
-                                  style: context.textTheme.titleMedium),
+                              Text(
+                                'Media bin',
+                                style: context.textTheme.titleMedium,
+                              ),
                               const SizedBox(height: 2),
                               Text(
                                 '$count item${count == 1 ? '' : 's'}',
@@ -453,14 +463,14 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
       decoration: BoxDecoration(
         color: AppTheme.surface,
         border: Border(
-          top: BorderSide(color: AppTheme.border.withOpacity(0.5)),
-          bottom: BorderSide(color: AppTheme.border.withOpacity(0.5)),
+          top: BorderSide(color: AppTheme.border.withValues(alpha: 0.5)),
+          bottom: BorderSide(color: AppTheme.border.withValues(alpha: 0.5)),
         ),
       ),
       child: Row(
         children: [
           // Label
-          Text(
+          const Text(
             'LOUDNESS',
             style: TextStyle(
               fontSize: 9,
@@ -582,8 +592,11 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
     );
   }
 
-  Widget _buildLeftPanel(BuildContext context, EditorState state,
-      {bool isTablet = false}) {
+  Widget _buildLeftPanel(
+    BuildContext context,
+    EditorState state, {
+    bool isTablet = false,
+  }) {
     return Container(
       // Phase E.19: tablets get a wider left panel (320 vs 240) so
       // media thumbnails and effect names don't truncate.
@@ -747,8 +760,10 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
           return const Center(child: CircularProgressIndicator());
         }
         if (snapshot.hasError) {
-          developer.log('Mixer track load failed: ${snapshot.error}',
-              name: 'MixerPanel');
+          developer.log(
+            'Mixer track load failed: ${snapshot.error}',
+            name: 'MixerPanel',
+          );
         }
         return AudioMixerPanel(
           tracks: tracks,
@@ -782,8 +797,10 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
                 trackId: trackId,
               )
                   .catchError((e) {
-                developer.log('toggleTrackVisibility failed: $e',
-                    name: 'MixerPanel');
+                developer.log(
+                  'toggleTrackVisibility failed: $e',
+                  name: 'MixerPanel',
+                );
               }),
             );
           },
@@ -816,15 +833,17 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
           timeline.tracks.where((t) => t.trackType == 'audio').toList();
       // Fetch pan + solo for each track in parallel.
       final futures = audioTracks.map((t) async {
-        double pan = 0.0;
-        bool solo = false;
+        var pan = 0.0;
+        var solo = false;
         try {
           pan = await getTrackPan(trackId: t.id);
           solo = await getTrackSolo(trackId: t.id);
         } catch (e) {
           // Fall back to defaults if the FFI call fails.
-          developer.log('getTrackPan/Solo failed for ${t.id}: $e',
-              name: 'MixerPanel');
+          developer.log(
+            'getTrackPan/Solo failed for ${t.id}: $e',
+            name: 'MixerPanel',
+          );
         }
         return MixerTrack(
           id: t.id,
@@ -865,7 +884,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
   /// upgrade to per-frame scope update via StreamSink when codegen runs.
   Future<void> _refreshScopes(BuildContext context, EditorState state) async {
     if (!EngineService.instance.isInitialized) {
-      if (!mounted) return;
+      if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Engine not initialized — open a project first.'),
@@ -880,7 +899,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
         timeMs: BigInt.from(state.currentTimeMs),
       );
       if (frameBytes.isEmpty) {
-        if (!mounted) return;
+        if (!context.mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('No frame available at the current playhead.'),
@@ -899,7 +918,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
 
       // Parse into the ScopesData DTO
       final scopes = _parseScopesResult(result);
-      if (!mounted) return;
+      if (!context.mounted) return;
 
       // Show the scopes in a dialog (the panel widget itself is stateless
       // and doesn't hold the scopes; in a future iteration, hoist scopes
@@ -907,7 +926,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
       _showScopesDialog(context, scopes);
     } catch (e) {
       developer.log('_refreshScopes failed: $e', name: 'ScopesPanel');
-      if (!mounted) return;
+      if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Scopes refresh failed: $e'),
@@ -1218,12 +1237,14 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
       'high_pass_hz': settings.highPassHz,
       'low_pass_hz': settings.lowPassHz,
       'bands': settings.bands
-          .map((b) => {
-                'frequency': b.frequency,
-                'gain_db': b.gain,
-                'q': b.q,
-                'enabled': b.enabled,
-              })
+          .map(
+            (b) => {
+              'frequency': b.frequency,
+              'gain_db': b.gain,
+              'q': b.q,
+              'enabled': b.enabled,
+            },
+          )
           .toList(),
     };
   }
@@ -1259,7 +1280,6 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
       );
 
       // Store for later application
-      _eqSettings = settingsJson;
 
       // Phase F.4: if a clip is selected, also apply immediately to the
       // audio cache so the user hears the change on the next scrub.
@@ -1275,8 +1295,9 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
           await _applyEqToSelectedClip(settings, state);
         } catch (e) {
           developer.log(
-              'Immediate EQ apply failed (per-track settings still persisted): $e',
-              name: 'EqPanel');
+            'Immediate EQ apply failed (per-track settings still persisted): $e',
+            name: 'EqPanel',
+          );
         }
       }
     } catch (e) {
@@ -1291,7 +1312,9 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
   /// Uses TrackInfo.clips (now parsed) to find the asset_id, fetches
   /// samples, applies EQ, writes back via setAudioSamples.
   Future<void> _applyEqToSelectedClip(
-      EqSettings settings, EditorState state) async {
+    EqSettings settings,
+    EditorState state,
+  ) async {
     final timeline = await EngineService.instance.api.getTimelineState();
     if (timeline == null || state.selectedClipId == null) return;
 
@@ -1310,8 +1333,9 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
       }
       if (assetId != null) break;
     }
-    if (assetId == null || clipStartMs == null || clipDurationMs == null)
+    if (assetId == null || clipStartMs == null || clipDurationMs == null) {
       return;
+    }
 
     try {
       final samples = await EngineService.instance.api.getAudioSamples(
@@ -1322,7 +1346,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
       if (samples.isEmpty) return;
 
       final sampleBytes = Uint8List(samples.length * 4);
-      for (int i = 0; i < samples.length; i++) {
+      for (var i = 0; i < samples.length; i++) {
         final byteData = ByteData.view(sampleBytes.buffer, i * 4, 4);
         byteData.setFloat32(0, samples[i], Endian.little);
       }
@@ -1342,8 +1366,10 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
         channels: 2,
       );
 
-      developer.log('EQ immediate-apply succeeded for asset $assetId',
-          name: 'EqPanel');
+      developer.log(
+        'EQ immediate-apply succeeded for asset $assetId',
+        name: 'EqPanel',
+      );
     } catch (e) {
       developer.log('_applyEqToSelectedClip failed: $e', name: 'EqPanel');
       rethrow;
@@ -1379,8 +1405,11 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.add_circle_outline,
-                  size: 48, color: AppTheme.textDisabled),
+              const Icon(
+                Icons.add_circle_outline,
+                size: 48,
+                color: AppTheme.textDisabled,
+              ),
               const SizedBox(height: 16),
               Text(
                 'Import Media',
@@ -1465,7 +1494,8 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
             icon: const Icon(Icons.add, size: 16),
             label: const Text('Import Audio'),
             style: OutlinedButton.styleFrom(
-                minimumSize: const Size.fromHeight(36)),
+              minimumSize: const Size.fromHeight(36),
+            ),
           ),
         ),
 
@@ -1478,8 +1508,11 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.music_note,
-                        size: 48, color: AppTheme.textDisabled),
+                    const Icon(
+                      Icons.music_note,
+                      size: 48,
+                      color: AppTheme.textDisabled,
+                    ),
                     const SizedBox(height: 16),
                     Text(
                       'No Audio Files',
@@ -1512,7 +1545,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
                       width: 48,
                       height: 32,
                       decoration: BoxDecoration(
-                        color: AppTheme.audioTrackColor.withOpacity(0.2),
+                        color: AppTheme.audioTrackColor.withValues(alpha: 0.2),
                         borderRadius: BorderRadius.circular(4),
                       ),
                       child: const Icon(
@@ -1558,7 +1591,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
     // Find the selected clip to get clipId and duration
     final project = ref.read(currentProjectProvider);
     String? clipId;
-    int clipDurationMs = 5000; // default
+    var clipDurationMs = 5000; // default
 
     if (state.selectedClipId != null && project != null) {
       for (final track in project.tracks) {
@@ -1613,7 +1646,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
     // Find the selected clip to get clipId and duration
     final project = ref.read(currentProjectProvider);
     String? clipId;
-    int clipDurationMs = 5000; // default
+    var clipDurationMs = 5000; // default
 
     if (state.selectedClipId != null && project != null) {
       for (final track in project.tracks) {
@@ -1635,8 +1668,11 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.timeline,
-                  size: 48, color: AppTheme.textDisabled),
+              const Icon(
+                Icons.timeline,
+                size: 48,
+                color: AppTheme.textDisabled,
+              ),
               const SizedBox(height: 16),
               Text(
                 'Select a Clip',
@@ -1760,52 +1796,6 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
   }
 
   /// Add a text overlay to the text track.
-  Future<void> _addTextToTimeline(String text, double fontSize) async {
-    final project = ref.read(currentProjectProvider);
-    if (project == null) return;
-
-    // Find the text track
-    final textTrack =
-        project.tracks.where((t) => t.trackType == TrackType.text).firstOrNull;
-
-    if (textTrack == null) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('No text track found')),
-        );
-      }
-      return;
-    }
-
-    // Calculate the start position
-    final lastClipEnd = textTrack.clips.isEmpty
-        ? 0
-        : textTrack.clips
-            .map((c) => c.startMs + c.durationMs)
-            .reduce((a, b) => a > b ? a : b);
-
-    // Create a placeholder text clip (5 seconds default duration)
-    const defaultDurationMs = 5000;
-    final clipId = const Uuid().v4();
-    final clip = ClipModel(
-      id: clipId,
-      assetId: 'text_$clipId',
-      startMs: lastClipEnd,
-      durationMs: defaultDurationMs,
-    );
-
-    // Update the Flutter model immediately for responsiveness
-    ref.read(projectProvider.notifier).addClipToTrack(textTrack.id, clip);
-
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Added "$text" to ${textTrack.name}'),
-          duration: const Duration(seconds: 1),
-        ),
-      );
-    }
-  }
 
   /// Open Android's gallery-style picker for photos and videos.
   Future<void> _importMedia() async {
@@ -1954,6 +1944,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
       if (!mounted) return;
       final projectSaved = importedCount == 0 ||
           await ref.read(projectProvider.notifier).saveCurrentProject();
+      if (!mounted) return;
       final messages = <String>[];
       if (timelineAddedCount > 0) {
         messages.add(
@@ -2020,17 +2011,16 @@ class _PickedMedia {
 }
 
 class _TabButton extends StatelessWidget {
-  final String label;
-  final IconData icon;
-  final bool selected;
-  final VoidCallback onTap;
-
   const _TabButton({
     required this.label,
     required this.icon,
     required this.selected,
     required this.onTap,
   });
+  final String label;
+  final IconData icon;
+  final bool selected;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -2073,13 +2063,12 @@ class _TabButton extends StatelessWidget {
 }
 
 class _MediaAssetItem extends StatelessWidget {
-  final MediaAssetModel asset;
-  final VoidCallback onAddToTimeline;
-
   const _MediaAssetItem({
     required this.asset,
     required this.onAddToTimeline,
   });
+  final MediaAssetModel asset;
+  final VoidCallback onAddToTimeline;
 
   @override
   Widget build(BuildContext context) {
@@ -2103,10 +2092,10 @@ class _MediaAssetItem extends StatelessWidget {
                 height: 48,
                 decoration: BoxDecoration(
                   color: isVideo
-                      ? AppTheme.videoTrackColor.withOpacity(0.15)
+                      ? AppTheme.videoTrackColor.withValues(alpha: 0.15)
                       : isAudio
-                          ? AppTheme.audioTrackColor.withOpacity(0.15)
-                          : AppTheme.primary.withOpacity(0.15),
+                          ? AppTheme.audioTrackColor.withValues(alpha: 0.15)
+                          : AppTheme.primary.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: Stack(
@@ -2131,7 +2120,9 @@ class _MediaAssetItem extends StatelessWidget {
                         right: 4,
                         child: Container(
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 4, vertical: 1),
+                            horizontal: 4,
+                            vertical: 1,
+                          ),
                           decoration: BoxDecoration(
                             color: Colors.black87,
                             borderRadius: BorderRadius.circular(3),
@@ -2183,10 +2174,10 @@ class _MediaAssetItem extends StatelessWidget {
                 width: 32,
                 height: 32,
                 decoration: BoxDecoration(
-                  color: AppTheme.primary.withOpacity(0.15),
+                  color: AppTheme.primary.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(6),
                 ),
-                child: Icon(Icons.add, size: 18, color: AppTheme.primary),
+                child: const Icon(Icons.add, size: 18, color: AppTheme.primary),
               ),
             ],
           ),
@@ -2196,8 +2187,9 @@ class _MediaAssetItem extends StatelessWidget {
   }
 
   String _formatBytes(int bytes) {
-    if (bytes >= 1073741824)
+    if (bytes >= 1073741824) {
       return '${(bytes / 1073741824).toStringAsFixed(1)} GB';
+    }
     if (bytes >= 1048576) return '${(bytes / 1048576).toStringAsFixed(1)} MB';
     if (bytes >= 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
     return '$bytes B';
@@ -2212,10 +2204,9 @@ class _MediaAssetItem extends StatelessWidget {
 /// Renders integrated LUFS, true-peak, target, and a compliance indicator
 /// in a single line.
 class _CompactLoudnessBar extends StatelessWidget {
+  const _CompactLoudnessBar({required this.reading, required this.target});
   final LoudnessReading reading;
   final LoudnessTarget target;
-
-  const _CompactLoudnessBar({required this.reading, required this.target});
 
   @override
   Widget build(BuildContext context) {
@@ -2229,15 +2220,15 @@ class _CompactLoudnessBar extends StatelessWidget {
       children: [
         _Metric(
           label: 'I',
-          value: '${reading.integratedLufs.toStringAsFixed(1)}',
+          value: reading.integratedLufs.toStringAsFixed(1),
           unit: 'LUFS',
-          target: '${target.integratedTarget.toStringAsFixed(0)}',
+          target: target.integratedTarget.toStringAsFixed(0),
           ok: loudnessOk,
         ),
         const SizedBox(width: AppTheme.spacing12),
         _Metric(
           label: 'S',
-          value: '${reading.shortTermLufs.toStringAsFixed(1)}',
+          value: reading.shortTermLufs.toStringAsFixed(1),
           unit: 'LUFS',
           target: '',
           ok: true,
@@ -2245,7 +2236,7 @@ class _CompactLoudnessBar extends StatelessWidget {
         const SizedBox(width: AppTheme.spacing12),
         _Metric(
           label: 'M',
-          value: '${reading.momentaryLufs.toStringAsFixed(1)}',
+          value: reading.momentaryLufs.toStringAsFixed(1),
           unit: 'LUFS',
           target: '',
           ok: true,
@@ -2253,7 +2244,7 @@ class _CompactLoudnessBar extends StatelessWidget {
         const SizedBox(width: AppTheme.spacing12),
         _Metric(
           label: 'TP',
-          value: '${reading.truePeakDbtp.toStringAsFixed(1)}',
+          value: reading.truePeakDbtp.toStringAsFixed(1),
           unit: 'dBTP',
           target: '≤ ${target.truePeakCeiling.toStringAsFixed(0)}',
           ok: truePeakOk,
@@ -2263,9 +2254,10 @@ class _CompactLoudnessBar extends StatelessWidget {
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
           decoration: BoxDecoration(
-            color: (allOk ? Colors.green : Colors.red).withOpacity(0.15),
+            color: (allOk ? Colors.green : Colors.red).withValues(alpha: 0.15),
             border: Border.all(
-                color: (allOk ? Colors.green : Colors.red).withOpacity(0.5)),
+              color: (allOk ? Colors.green : Colors.red).withValues(alpha: 0.5),
+            ),
             borderRadius: BorderRadius.circular(8),
           ),
           child: Row(
@@ -2288,7 +2280,7 @@ class _CompactLoudnessBar extends StatelessWidget {
               const SizedBox(width: 6),
               Text(
                 target.label,
-                style: TextStyle(
+                style: const TextStyle(
                   fontSize: 9,
                   color: AppTheme.textSecondary,
                 ),
@@ -2302,12 +2294,6 @@ class _CompactLoudnessBar extends StatelessWidget {
 }
 
 class _Metric extends StatelessWidget {
-  final String label;
-  final String value;
-  final String unit;
-  final String target;
-  final bool ok;
-
   const _Metric({
     required this.label,
     required this.value,
@@ -2315,6 +2301,11 @@ class _Metric extends StatelessWidget {
     required this.target,
     required this.ok,
   });
+  final String label;
+  final String value;
+  final String unit;
+  final String target;
+  final bool ok;
 
   @override
   Widget build(BuildContext context) {
@@ -2326,7 +2317,7 @@ class _Metric extends StatelessWidget {
       children: [
         Text(
           label,
-          style: TextStyle(
+          style: const TextStyle(
             fontSize: 9,
             color: AppTheme.textSecondary,
             fontWeight: FontWeight.bold,
@@ -2354,7 +2345,7 @@ class _Metric extends StatelessWidget {
           const SizedBox(width: 4),
           Text(
             '($target)',
-            style: TextStyle(
+            style: const TextStyle(
               fontSize: 9,
               color: AppTheme.textSecondary,
             ),
@@ -2367,37 +2358,6 @@ class _Metric extends StatelessWidget {
 
 /// Phase F.2: small badge showing the current safe-zone mode, displayed
 /// at the top-right of the preview viewport.
-class _SafeZoneBadge extends StatelessWidget {
-  final SafeZoneMode mode;
-
-  const _SafeZoneBadge({required this.mode});
-
-  @override
-  Widget build(BuildContext context) {
-    final (label, color) = switch (mode) {
-      SafeZoneMode.broadcast => ('SAFE:BC', Colors.blue),
-      SafeZoneMode.social => ('SAFE:SO', Colors.purple),
-      SafeZoneMode.composition => ('SAFE:3RDS', Colors.orange),
-      SafeZoneMode.off => ('', Colors.grey),
-    };
-    if (mode == SafeZoneMode.off) return const SizedBox.shrink();
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.85),
-        borderRadius: BorderRadius.circular(4),
-      ),
-      child: Text(
-        label,
-        style: const TextStyle(
-          fontSize: 9,
-          fontWeight: FontWeight.bold,
-          color: Colors.white,
-        ),
-      ),
-    );
-  }
-}
 
 // ─── Phase F.3: Live loudness polling widgets ──────────────────────────
 
@@ -2411,13 +2371,12 @@ class _SafeZoneBadge extends StatelessWidget {
 /// video: 1-second poll interval, upgrade to real-time streaming loudness
 /// when the audio pipeline supports per-frame LUFS output.
 class _LiveLoudnessBuilder extends StatefulWidget {
-  final LoudnessTarget target;
-  final Widget Function(BuildContext context, LoudnessReading reading) builder;
-
   const _LiveLoudnessBuilder({
     required this.target,
     required this.builder,
   });
+  final LoudnessTarget target;
+  final Widget Function(BuildContext context, LoudnessReading reading) builder;
 
   @override
   State<_LiveLoudnessBuilder> createState() => _LiveLoudnessBuilderState();
@@ -2465,8 +2424,10 @@ class _LiveLoudnessBuilderState extends State<_LiveLoudnessBuilder> {
         setState(() => _reading = reading);
       }
     } catch (e) {
-      developer.log('_LiveLoudnessBuilder refresh failed: $e',
-          name: 'LoudnessMeter');
+      developer.log(
+        '_LiveLoudnessBuilder refresh failed: $e',
+        name: 'LoudnessMeter',
+      );
     }
   }
 
@@ -2527,8 +2488,10 @@ class _LoudnessMeterDialogState extends State<_LoudnessMeterDialog> {
         setState(() => _reading = reading);
       }
     } catch (e) {
-      developer.log('_LoudnessMeterDialog refresh failed: $e',
-          name: 'LoudnessMeter');
+      developer.log(
+        '_LoudnessMeterDialog refresh failed: $e',
+        name: 'LoudnessMeter',
+      );
     }
   }
 
@@ -2545,9 +2508,10 @@ class _LoudnessMeterDialogState extends State<_LoudnessMeterDialog> {
             children: [
               Row(
                 children: [
-                  const Text('Loudness Meter',
-                      style:
-                          TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  const Text(
+                    'Loudness Meter',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
                   const Spacer(),
                   IconButton(
                     icon: const Icon(Icons.close, size: 18),

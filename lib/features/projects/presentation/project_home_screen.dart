@@ -233,22 +233,30 @@ class _ProjectHomeScreenState extends ConsumerState<ProjectHomeScreen>
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(24),
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            const Icon(Icons.folder_off_outlined,
-                size: 40, color: AppTheme.textSecondary),
-            const SizedBox(height: 16),
-            const Text('Projects could not be loaded'),
-            const SizedBox(height: 8),
-            const Text('Your saved edits have not been removed.',
-                textAlign: TextAlign.center),
-            const SizedBox(height: 16),
-            OutlinedButton.icon(
-              onPressed: () =>
-                  ref.read(projectProvider.notifier).loadProjects(),
-              icon: const Icon(Icons.refresh),
-              label: const Text('Try again'),
-            ),
-          ]),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(
+                Icons.folder_off_outlined,
+                size: 40,
+                color: AppTheme.textSecondary,
+              ),
+              const SizedBox(height: 16),
+              const Text('Projects could not be loaded'),
+              const SizedBox(height: 8),
+              const Text(
+                'Your saved edits have not been removed.',
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 16),
+              OutlinedButton.icon(
+                onPressed: () =>
+                    ref.read(projectProvider.notifier).loadProjects(),
+                icon: const Icon(Icons.refresh),
+                label: const Text('Try again'),
+              ),
+            ],
+          ),
         ),
       );
     }
@@ -258,8 +266,10 @@ class _ProjectHomeScreenState extends ConsumerState<ProjectHomeScreen>
     }
 
     final projects = state.recentProjects
-        .where((project) =>
-            project.name.toLowerCase().contains(_query.toLowerCase()))
+        .where(
+          (project) =>
+              project.name.toLowerCase().contains(_query.toLowerCase()),
+        )
         .toList();
     if (projects.isEmpty) {
       return const Center(child: Text('No projects match your search'));
@@ -329,7 +339,7 @@ class _ProjectHomeScreenState extends ConsumerState<ProjectHomeScreen>
                 borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
               ),
               alignment: Alignment.center,
-              child: AppIcon(
+              child: const AppIcon(
                 AppIcons.film,
                 size: 36,
                 color: AppTheme.textSecondary,
@@ -387,7 +397,7 @@ class _ProjectHomeScreenState extends ConsumerState<ProjectHomeScreen>
   // ─── Templates Tab ────────────────────────────────────────────
   Widget _buildTemplates(BuildContext context) {
     final templates = <_TemplateData>[
-      _TemplateData(
+      const _TemplateData(
         name: 'Social Vertical',
         icon: AppIcons.phone,
         aspectRatio: '9:16',
@@ -397,7 +407,7 @@ class _ProjectHomeScreenState extends ConsumerState<ProjectHomeScreen>
         gradient: AppTheme.accentGradient,
         color: AppTheme.accent,
       ),
-      _TemplateData(
+      const _TemplateData(
         name: 'Social Square',
         icon: AppIcons.crop,
         aspectRatio: '1:1',
@@ -407,7 +417,7 @@ class _ProjectHomeScreenState extends ConsumerState<ProjectHomeScreen>
         gradient: AppTheme.secondaryGradient,
         color: AppTheme.secondary,
       ),
-      _TemplateData(
+      const _TemplateData(
         name: 'YouTube',
         icon: AppIcons.monitor,
         aspectRatio: '16:9',
@@ -417,14 +427,14 @@ class _ProjectHomeScreenState extends ConsumerState<ProjectHomeScreen>
         gradient: AppTheme.primaryGradient,
         color: AppTheme.primary,
       ),
-      _TemplateData(
+      const _TemplateData(
         name: 'Cinematic',
         icon: AppIcons.film,
         aspectRatio: '21:9',
         dimensions: '2560 × 1080',
         width: 2560,
         height: 1080,
-        gradient: const LinearGradient(
+        gradient: LinearGradient(
           colors: [Color(0xFFFFB84D), Color(0xFFFF7E5F)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
@@ -604,7 +614,9 @@ class _ProjectHomeScreenState extends ConsumerState<ProjectHomeScreen>
             ),
             Padding(
               padding: const EdgeInsets.symmetric(
-                  horizontal: AppTheme.spacing16, vertical: AppTheme.spacing4),
+                horizontal: AppTheme.spacing16,
+                vertical: AppTheme.spacing4,
+              ),
               child: Align(
                 alignment: Alignment.centerLeft,
                 child: Text(
@@ -678,9 +690,11 @@ class _ProjectHomeScreenState extends ConsumerState<ProjectHomeScreen>
               },
             ),
             ListTile(
-              leading: Icon(Icons.delete_outline, color: AppTheme.error),
-              title: Text('Delete project',
-                  style: TextStyle(color: AppTheme.error)),
+              leading: const Icon(Icons.delete_outline, color: AppTheme.error),
+              title: const Text(
+                'Delete project',
+                style: TextStyle(color: AppTheme.error),
+              ),
               subtitle: const Text(
                 'Permanently remove the project and its media references',
               ),
@@ -724,15 +738,14 @@ class _ProjectHomeScreenState extends ConsumerState<ProjectHomeScreen>
 
 // ─── Project Card ────────────────────────────────────────────────
 class _ProjectCard extends StatelessWidget {
-  final ProjectModel project;
-  final VoidCallback onTap;
-  final VoidCallback onMore;
-
   const _ProjectCard({
     required this.project,
     required this.onTap,
     required this.onMore,
   });
+  final ProjectModel project;
+  final VoidCallback onTap;
+  final VoidCallback onMore;
 
   @override
   Widget build(BuildContext context) {
@@ -756,13 +769,13 @@ class _ProjectCard extends StatelessWidget {
                   AspectRatio(
                     aspectRatio: 16 / 9,
                     child: Container(
-                      decoration: BoxDecoration(
+                      decoration: const BoxDecoration(
                         color: AppTheme.surfaceVariant,
-                        borderRadius: const BorderRadius.vertical(
+                        borderRadius: BorderRadius.vertical(
                           top: Radius.circular(AppTheme.radiusLarge),
                         ),
                       ),
-                      child: Center(
+                      child: const Center(
                         child: AppIcon(
                           AppIcons.film,
                           size: 28,
@@ -782,7 +795,7 @@ class _ProjectCard extends StatelessWidget {
                           const BoxConstraints.tightFor(width: 44, height: 44),
                       padding: EdgeInsets.zero,
                       style: IconButton.styleFrom(
-                        backgroundColor: Colors.black.withOpacity(0.58),
+                        backgroundColor: Colors.black.withValues(alpha: 0.58),
                         foregroundColor: Colors.white,
                       ),
                       icon: const AppIcon(
@@ -802,7 +815,7 @@ class _ProjectCard extends StatelessWidget {
                         vertical: 2,
                       ),
                       decoration: BoxDecoration(
-                        color: Colors.black.withOpacity(0.7),
+                        color: Colors.black.withValues(alpha: 0.7),
                         borderRadius:
                             BorderRadius.circular(AppTheme.radiusSmall),
                       ),
@@ -869,15 +882,6 @@ class _ProjectCard extends StatelessWidget {
 
 // ─── Template Data + Card ────────────────────────────────────────
 class _TemplateData {
-  final String name;
-  final String icon;
-  final String aspectRatio;
-  final String dimensions;
-  final int width;
-  final int height;
-  final Gradient gradient;
-  final Color color;
-
   const _TemplateData({
     required this.name,
     required this.icon,
@@ -888,13 +892,20 @@ class _TemplateData {
     required this.gradient,
     required this.color,
   });
+  final String name;
+  final String icon;
+  final String aspectRatio;
+  final String dimensions;
+  final int width;
+  final int height;
+  final Gradient gradient;
+  final Color color;
 }
 
 class _TemplateCard extends StatelessWidget {
+  const _TemplateCard({required this.data, required this.onTap});
   final _TemplateData data;
   final VoidCallback onTap;
-
-  const _TemplateCard({required this.data, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -920,7 +931,7 @@ class _TemplateCard extends StatelessWidget {
                   width: 48,
                   height: 48,
                   decoration: BoxDecoration(
-                    color: data.color.withOpacity(0.15),
+                    color: data.color.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
                   ),
                   alignment: Alignment.center,
@@ -961,6 +972,15 @@ class _TemplateCard extends StatelessWidget {
 
 // ─── Reusable Gradient Button ────────────────────────────────────
 class _GradientButton extends StatelessWidget {
+  const _GradientButton({
+    required this.icon,
+    required this.label,
+    required this.gradient,
+    required this.onPressed,
+    this.padding = const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
+    this.isLoading = false,
+    this.enabled = true,
+  }) : shadow = null;
   final String icon;
   final String label;
   final Gradient gradient;
@@ -969,17 +989,6 @@ class _GradientButton extends StatelessWidget {
   final EdgeInsets padding;
   final bool isLoading;
   final bool enabled;
-
-  const _GradientButton({
-    required this.icon,
-    required this.label,
-    required this.gradient,
-    required this.onPressed,
-    this.shadow,
-    this.padding = const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
-    this.isLoading = false,
-    this.enabled = true,
-  });
 
   @override
   Widget build(BuildContext context) {
@@ -1031,14 +1040,13 @@ class _GradientButton extends StatelessWidget {
 
 // ─── Create Project Dialog ───────────────────────────────────────
 class _CreateProjectDialog extends StatefulWidget {
+  const _CreateProjectDialog({required this.onCreate});
   final Future<String?> Function(
     String name,
     int width,
     int height,
     double fps,
   ) onCreate;
-
-  const _CreateProjectDialog({required this.onCreate});
 
   @override
   State<_CreateProjectDialog> createState() => _CreateProjectDialogState();
@@ -1079,7 +1087,7 @@ class _CreateProjectDialogState extends State<_CreateProjectDialog> {
         children: [
           DecoratedBox(
             decoration: BoxDecoration(
-              color: AppTheme.primary.withOpacity(0.16),
+              color: AppTheme.primary.withValues(alpha: 0.16),
               borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
             ),
             child: const SizedBox(
@@ -1125,7 +1133,9 @@ class _CreateProjectDialogState extends State<_CreateProjectDialog> {
             showSelectedIcon: false,
             segments: const [
               ButtonSegment(
-                  value: _CanvasPreset.landscape, label: Text('16:9')),
+                value: _CanvasPreset.landscape,
+                label: Text('16:9'),
+              ),
               ButtonSegment(value: _CanvasPreset.portrait, label: Text('9:16')),
               ButtonSegment(value: _CanvasPreset.square, label: Text('1:1')),
             ],
@@ -1140,10 +1150,12 @@ class _CreateProjectDialogState extends State<_CreateProjectDialog> {
           SegmentedButton<String>(
             showSelectedIcon: false,
             segments: _resolutions
-                .map((option) => ButtonSegment<String>(
-                      value: option.label,
-                      label: Text(option.label),
-                    ))
+                .map(
+                  (option) => ButtonSegment<String>(
+                    value: option.label,
+                    label: Text(option.label),
+                  ),
+                )
                 .toList(),
             selected: {_selectedResolution},
             onSelectionChanged: (selection) => setState(
@@ -1266,8 +1278,8 @@ class _CreateProjectDialogState extends State<_CreateProjectDialog> {
 enum _CanvasPreset { landscape, portrait, square }
 
 class _ResolutionOption {
+  const _ResolutionOption(this.label, this.width, this.height);
   final String label;
   final int width;
   final int height;
-  const _ResolutionOption(this.label, this.width, this.height);
 }

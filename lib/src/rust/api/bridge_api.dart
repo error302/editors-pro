@@ -92,6 +92,7 @@ class TrackInfo {
   final bool locked;
   final bool visible;
   final double volume;
+
   /// Phase F.5: clips on this track. The engine's TrackStateDto includes
   /// a clips list; this field parses it so Flutter can look up asset_ids.
   final List<ClipStateInfo> clips;
@@ -431,8 +432,8 @@ class EffectInfo {
         effectType: json['effect_type'] as String,
         enabled: json['enabled'] as bool? ?? true,
         parameters: (json['parameters'] as List?)
-                ?.map(
-                    (e) => EffectParameterInfo.fromJson(e as Map<String, dynamic>))
+                ?.map((e) =>
+                    EffectParameterInfo.fromJson(e as Map<String, dynamic>))
                 .toList() ??
             [],
       );
@@ -486,8 +487,8 @@ class FilterTypeInfo {
         displayName: json['display_name'] as String,
         category: json['category'] as String,
         parameters: (json['parameters'] as List?)
-                ?.map(
-                    (e) => EffectParameterInfo.fromJson(e as Map<String, dynamic>))
+                ?.map((e) =>
+                    EffectParameterInfo.fromJson(e as Map<String, dynamic>))
                 .toList() ??
             [],
       );
@@ -513,8 +514,8 @@ class FilterPresetInfo {
         name: json['name'] as String,
         description: json['description'] as String,
         parameters: (json['parameters'] as List?)
-                ?.map(
-                    (e) => EffectParameterInfo.fromJson(e as Map<String, dynamic>))
+                ?.map((e) =>
+                    EffectParameterInfo.fromJson(e as Map<String, dynamic>))
                 .toList() ??
             [],
       );
@@ -594,11 +595,11 @@ class FontInfo {
   });
 
   factory FontInfo.fromJson(Map<String, dynamic> json) => FontInfo(
-    name: json['name'] as String,
-    family: json['family'] as String,
-    style: json['style'] as String,
-    isBuiltin: json['is_builtin'] as bool,
-  );
+        name: json['name'] as String,
+        family: json['family'] as String,
+        style: json['style'] as String,
+        isBuiltin: json['is_builtin'] as bool,
+      );
 }
 
 /// Bridge-compatible transcription segment
@@ -702,8 +703,7 @@ class BridgeSpeedCurve {
   factory BridgeSpeedCurve.fromJson(Map<String, dynamic> json) =>
       BridgeSpeedCurve(
         segments: (json['segments'] as List)
-            .map((e) =>
-                BridgeSpeedSegment.fromJson(e as Map<String, dynamic>))
+            .map((e) => BridgeSpeedSegment.fromJson(e as Map<String, dynamic>))
             .toList(),
       );
 
@@ -712,7 +712,8 @@ class BridgeSpeedCurve {
       };
 
   /// Convenience: create a constant-speed curve
-  factory BridgeSpeedCurve.constant(double speed, {int durationMs = 0x7FFFFFFFFFFFFFFF}) =>
+  factory BridgeSpeedCurve.constant(double speed,
+          {int durationMs = 0x7FFFFFFFFFFFFFFF}) =>
       BridgeSpeedCurve(segments: [
         BridgeSpeedSegment(
           startMs: 0,
@@ -758,8 +759,7 @@ class SpeedCurveInfo {
 
   factory SpeedCurveInfo.fromJson(Map<String, dynamic> json) => SpeedCurveInfo(
         segments: (json['segments'] as List)
-            .map((e) =>
-                SpeedSegmentInfo.fromJson(e as Map<String, dynamic>))
+            .map((e) => SpeedSegmentInfo.fromJson(e as Map<String, dynamic>))
             .toList(),
       );
 }
@@ -796,20 +796,28 @@ class KeyframeInfo {
 class TemplateInfo {
   /// Unique template identifier
   final String id;
+
   /// Display name of the template
   final String name;
+
   /// Description of what the template creates
   final String description;
+
   /// Category name (e.g., "Social", "Cinematic", "Tutorial")
   final String category;
+
   /// Preview image path for the template thumbnail
   final String previewPath;
+
   /// Number of placeholder slots that need user media
   final int placeholderCount;
+
   /// Total duration in milliseconds
   final int durationMs;
+
   /// Aspect ratio as a string (e.g., "16:9", "9:16", "1:1")
   final String aspectRatio;
+
   /// Tags for search/filtering
   final List<String> tags;
 
@@ -1210,8 +1218,7 @@ class EditorsProEngineApi {
 
   /// Load a project from an .epp file.
   Future<ProjectInfo> loadProject({required String filePath}) async {
-    final result =
-        await _call<dynamic>('load_project', {'path': filePath});
+    final result = await _call<dynamic>('load_project', {'path': filePath});
     return ProjectInfo.fromJson(result as Map<String, dynamic>);
   }
 
@@ -1454,8 +1461,7 @@ class EditorsProEngineApi {
 
   /// Get the export settings for a named preset.
   Future<BridgeExportSettings?> getExportPreset({required String name}) async {
-    final result =
-        await _call<dynamic>('get_export_preset', {'name': name});
+    final result = await _call<dynamic>('get_export_preset', {'name': name});
     if (result == null) return null;
     return BridgeExportSettings.fromJson(result as Map<String, dynamic>);
   }
@@ -1499,8 +1505,7 @@ class EditorsProEngineApi {
 
   /// Toggle track visibility (mute/unmute for audio).
   Future<void> toggleTrackVisibility({required String trackId}) async {
-    return await _call<void>(
-        'toggle_track_visibility', {'track_id': trackId});
+    return await _call<void>('toggle_track_visibility', {'track_id': trackId});
   }
 
   /// Get audio samples for an asset at a specific time range.
@@ -2129,8 +2134,8 @@ class EditorsProEngineApi {
       'language': language,
     });
     return (result as List)
-        .map((e) =>
-            TranscriptionSegmentInfo.fromJson(e as Map<String, dynamic>))
+        .map(
+            (e) => TranscriptionSegmentInfo.fromJson(e as Map<String, dynamic>))
         .toList();
   }
 
@@ -2143,8 +2148,7 @@ class EditorsProEngineApi {
     required String assetId,
     required String trackId,
   }) async {
-    final result = await _call<dynamic>(
-        'add_subtitles_from_transcription', {
+    final result = await _call<dynamic>('add_subtitles_from_transcription', {
       'asset_id': assetId,
       'track_id': trackId,
     });
@@ -2218,7 +2222,8 @@ class PerformanceSnapshotInfo {
         memoryRssMb: (json['memory_rss_mb'] as num).toDouble(),
         memoryPeakMb: (json['memory_peak_mb'] as num).toDouble(),
         memoryAvailableMb: (json['memory_available_mb'] as num).toDouble(),
-        memoryPressureLevel: json['memory_pressure_level'] as String? ?? 'normal',
+        memoryPressureLevel:
+            json['memory_pressure_level'] as String? ?? 'normal',
         gpuAvailable: json['gpu_available'] as bool? ?? false,
         gpuAdapterName: json['gpu_adapter_name'] as String? ?? '',
         gpuBackendName: json['gpu_backend_name'] as String? ?? '',
@@ -2313,19 +2318,22 @@ Future<void> setProfilingEnabled({required bool enabled}) async {
 
 /// Check if profiling is currently enabled.
 Future<bool> isProfilingEnabled() async {
-  final result = await RustLib.instance.api._call<dynamic>('is_profiling_enabled', {});
+  final result =
+      await RustLib.instance.api._call<dynamic>('is_profiling_enabled', {});
   return result as bool;
 }
 
 /// Get a performance snapshot from the engine.
 Future<PerformanceSnapshotInfo> getPerformanceSnapshot() async {
-  final result = await RustLib.instance.api._call<dynamic>('get_performance_snapshot', {});
+  final result =
+      await RustLib.instance.api._call<dynamic>('get_performance_snapshot', {});
   return PerformanceSnapshotInfo.fromJson(result as Map<String, dynamic>);
 }
 
 /// Get the profiler report as a list of span statistics.
 Future<List<SpanStatsInfo>> getProfilerReport() async {
-  final result = await RustLib.instance.api._call<dynamic>('get_profiler_report', {});
+  final result =
+      await RustLib.instance.api._call<dynamic>('get_profiler_report', {});
   return (result as List)
       .map((e) => SpanStatsInfo.fromJson(e as Map<String, dynamic>))
       .toList();
@@ -2338,31 +2346,36 @@ Future<void> resetProfiler() async {
 
 /// Get the engine version string.
 Future<String> getEngineVersion() async {
-  final result = await RustLib.instance.api._call<dynamic>('get_engine_version', {});
+  final result =
+      await RustLib.instance.api._call<dynamic>('get_engine_version', {});
   return result as String;
 }
 
 /// Get the memory pressure level ("normal", "warning", "critical").
 Future<String> getMemoryPressureLevel() async {
-  final result = await RustLib.instance.api._call<dynamic>('get_memory_pressure_level', {});
+  final result = await RustLib.instance.api
+      ._call<dynamic>('get_memory_pressure_level', {});
   return result as String;
 }
 
 /// Get current memory usage in bytes.
 Future<int> getMemoryUsageBytes() async {
-  final result = await RustLib.instance.api._call<dynamic>('get_memory_usage_bytes', {});
+  final result =
+      await RustLib.instance.api._call<dynamic>('get_memory_usage_bytes', {});
   return result as int;
 }
 
 /// Check if the engine should release caches due to memory pressure.
 Future<bool> shouldReleaseCaches() async {
-  final result = await RustLib.instance.api._call<dynamic>('should_release_caches', {});
+  final result =
+      await RustLib.instance.api._call<dynamic>('should_release_caches', {});
   return result as bool;
 }
 
 /// Check if the engine should reduce quality due to memory pressure.
 Future<bool> shouldReduceQuality() async {
-  final result = await RustLib.instance.api._call<dynamic>('should_reduce_quality', {});
+  final result =
+      await RustLib.instance.api._call<dynamic>('should_reduce_quality', {});
   return result as bool;
 }
 
@@ -2383,7 +2396,8 @@ Future<bool> shouldReduceQuality() async {
 ///
 /// Engine method: `lut_load_cube_content`.
 /// See persona/skills/lut-management/SKILL.md.
-Future<Map<String, dynamic>> lutLoadCubeContent({required String content}) async {
+Future<Map<String, dynamic>> lutLoadCubeContent(
+    {required String content}) async {
   final result = await RustLib.instance.api
       ._call<dynamic>('lut_load_cube_content', {'content': content});
   return (result as Map).cast<String, dynamic>();
@@ -2656,7 +2670,8 @@ Future<bool> validateAdvancedTrim({
   if (adjInMs != null) args['adj_in_ms'] = adjInMs;
   if (adjOutMs != null) args['adj_out_ms'] = adjOutMs;
   if (adjStartMs != null) args['adj_start_ms'] = adjStartMs;
-  final result = await RustLib.instance.api._call<dynamic>('validate_advanced_trim', args);
+  final result =
+      await RustLib.instance.api._call<dynamic>('validate_advanced_trim', args);
   return result as bool;
 }
 
@@ -2685,7 +2700,8 @@ Future<String> applyEqToSamples({
   required String samplesBase64,
   int sampleRate = 44100,
 }) async {
-  final result = await RustLib.instance.api._call<dynamic>('apply_eq_to_samples', {
+  final result =
+      await RustLib.instance.api._call<dynamic>('apply_eq_to_samples', {
     'settings': settings,
     'samples': samplesBase64,
     'sample_rate': sampleRate,
@@ -2821,8 +2837,10 @@ Future<void> setTrackEqSettings({
 /// Get the EQ settings for a track as JSON. Returns null if no EQ is set.
 ///
 /// Engine method: `get_track_eq_settings`.
-Future<Map<String, dynamic>?> getTrackEqSettings({required String trackId}) async {
-  final result = await RustLib.instance.api._call<dynamic>('get_track_eq_settings', {
+Future<Map<String, dynamic>?> getTrackEqSettings(
+    {required String trackId}) async {
+  final result =
+      await RustLib.instance.api._call<dynamic>('get_track_eq_settings', {
     'track_id': trackId,
   });
   if (result == null) return null;
@@ -2854,7 +2872,8 @@ Future<void> setAudioSamples({
 ///
 /// Engine method: `get_current_loudness`.
 Future<Map<String, dynamic>?> getCurrentLoudness() async {
-  final result = await RustLib.instance.api._call<dynamic>('get_current_loudness', {});
+  final result =
+      await RustLib.instance.api._call<dynamic>('get_current_loudness', {});
   if (result == null) return null;
   return (result as Map).cast<String, dynamic>();
 }

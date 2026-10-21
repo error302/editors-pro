@@ -1,21 +1,10 @@
 import 'dart:async';
 import 'dart:developer' as developer;
 
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-
-import '../../../data/models/project_model.dart';
-import '../../../core/services/engine_service.dart';
-import '../../../core/extensions/context_extensions.dart';
-import '../../projects/providers/project_provider.dart';
-import '../services/av_sync_coordinator.dart';
-import 'engine_bridge_provider.dart';
-
 // Re-export the bridge-generated DTOs so the rest of the app can
 // reference them without knowing the bridge internals.
 import 'package:editors_pro/src/rust/api/bridge_api.dart'
     show
-        BridgeExportSettings,
-        BridgeExportResult,
         BridgeProjectSettings,
         BridgeSpeedCurve,
         BridgeSpeedSegment,
@@ -26,9 +15,42 @@ import 'package:editors_pro/src/rust/api/bridge_api.dart'
         MediaAssetInfo,
         ProjectInfo,
         TranscriptionSegmentInfo;
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../../core/extensions/context_extensions.dart';
+import '../../../core/services/engine_service.dart';
+import '../../../data/models/project_model.dart';
+import '../../projects/providers/project_provider.dart';
+import '../services/av_sync_coordinator.dart';
+import 'engine_bridge_provider.dart';
 
 /// Editor state
 class EditorState {
+  const EditorState({
+    this.isPlaying = false,
+    this.currentTimeMs = 0,
+    this.durationMs = 0,
+    this.zoomLevel = 1.0,
+    this.isImporting = false,
+    this.isExporting = false,
+    this.exportProgress = 0,
+    this.selectedClipId,
+    this.selectedTrackId,
+    this.leftPanelTab = LeftPanelTab.media,
+    this.showInspector = false,
+    this.playbackSpeed = 1.0,
+    this.lastError,
+    this.isAudioPlaying = false,
+    this.masterVolume = 1.0,
+    this.isDecodingFrame = false,
+    this.gpuAvailable = false,
+    this.gpuInfo,
+    this.hardwareEncoderAvailable = false,
+    this.gpuAccelerationEnabled = true,
+    this.showSafeZones = false,
+    this.safeZoneMode = SafeZoneMode.broadcast,
+    this.showAudioMeterBridge = false,
+  });
   final bool isPlaying;
   final int currentTimeMs;
   final int durationMs;
@@ -72,32 +94,6 @@ class EditorState {
 
   /// Phase F.2: whether the audio meter bridge is visible at the bottom.
   final bool showAudioMeterBridge;
-
-  const EditorState({
-    this.isPlaying = false,
-    this.currentTimeMs = 0,
-    this.durationMs = 0,
-    this.zoomLevel = 1.0,
-    this.isImporting = false,
-    this.isExporting = false,
-    this.exportProgress = 0,
-    this.selectedClipId,
-    this.selectedTrackId,
-    this.leftPanelTab = LeftPanelTab.media,
-    this.showInspector = false,
-    this.playbackSpeed = 1.0,
-    this.lastError,
-    this.isAudioPlaying = false,
-    this.masterVolume = 1.0,
-    this.isDecodingFrame = false,
-    this.gpuAvailable = false,
-    this.gpuInfo,
-    this.hardwareEncoderAvailable = false,
-    this.gpuAccelerationEnabled = true,
-    this.showSafeZones = false,
-    this.safeZoneMode = SafeZoneMode.broadcast,
-    this.showAudioMeterBridge = false,
-  });
 
   EditorState copyWith({
     bool? isPlaying,
@@ -194,11 +190,10 @@ enum LeftPanelTab {
 /// - Clip drag-and-move via engine bridge
 /// - Project save/load integration
 class EditorNotifier extends StateNotifier<EditorState> {
+  EditorNotifier(this._ref) : super(const EditorState());
   Timer? _playbackTimer;
   DateTime? _lastFrameTime;
   final Ref _ref;
-
-  EditorNotifier(this._ref) : super(const EditorState());
 
   @override
   void dispose() {
@@ -451,7 +446,9 @@ class EditorNotifier extends StateNotifier<EditorState> {
     try {
       final api = EngineService.instance.api;
       await api.splitClip(
-          clipId: clipId, timeMs: BigInt.from(state.currentTimeMs));
+        clipId: clipId,
+        timeMs: BigInt.from(state.currentTimeMs),
+      );
       await _syncDurationFromEngine();
       _refreshEngineState();
       await _ref.read(projectProvider.notifier).syncFromEngine();
@@ -587,8 +584,12 @@ class EditorNotifier extends StateNotifier<EditorState> {
   }
 
   /// Create a new project via the Rust engine.
-  Future<ProjectInfo?> createProject(String name,
-      {int? width, int? height, double? fps}) async {
+  Future<ProjectInfo?> createProject(
+    String name, {
+    int? width,
+    int? height,
+    double? fps,
+  }) async {
     if (!_engineReady) return null;
     try {
       final api = EngineService.instance.api;
@@ -682,13 +683,19 @@ class EditorNotifier extends StateNotifier<EditorState> {
   }
 
   /// Configure audio ducking for a track.
-  Future<void> setDucking(String trackId,
-      {required bool enabled, double duckLevel = 0.3}) async {
+  Future<void> setDucking(
+    String trackId, {
+    required bool enabled,
+    double duckLevel = 0.3,
+  }) async {
     if (!_engineReady) return;
     try {
       final api = EngineService.instance.api;
       await api.setDucking(
-          trackId: trackId, enabled: enabled, duckLevel: duckLevel);
+        trackId: trackId,
+        enabled: enabled,
+        duckLevel: duckLevel,
+      );
     } catch (e) {
       developer.log('setDucking failed: $e', name: 'EditorNotifier');
       state = state.copyWith(lastError: 'Set ducking failed: $e');
@@ -1192,10 +1199,10 @@ class EditorNotifier extends StateNotifier<EditorState> {
       state = state.copyWith(
         gpuAvailable: available,
         gpuInfo: gpuInfo,
-        hardwareEncoderAvailable: gpuInfo?.isHardwareEncoderAvailable ?? false,
+        hardwareEncoderAvailable: gpuInfo.isHardwareEncoderAvailable,
       );
       developer.log(
-        'GPU availability: $available, HW encoder: ${gpuInfo?.isHardwareEncoderAvailable ?? false}',
+        'GPU availability: $available, HW encoder: ${gpuInfo.isHardwareEncoderAvailable}',
         name: 'EditorNotifier',
       );
     } catch (e) {

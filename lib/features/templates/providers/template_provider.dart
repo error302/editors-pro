@@ -7,16 +7,6 @@ import '../../../src/rust/api/bridge_api.dart' show TemplateInfo;
 
 /// Template data model for the UI
 class TemplateData {
-  final String id;
-  final String name;
-  final String description;
-  final String category;
-  final String previewPath;
-  final int placeholderCount;
-  final int durationMs;
-  final String aspectRatio;
-  final List<String> tags;
-
   const TemplateData({
     required this.id,
     required this.name,
@@ -28,14 +18,6 @@ class TemplateData {
     required this.aspectRatio,
     required this.tags,
   });
-
-  /// Format duration as M:SS
-  String get durationFormatted {
-    final seconds = durationMs ~/ 1000;
-    final minutes = seconds ~/ 60;
-    final remainingSeconds = seconds % 60;
-    return '$minutes:${remainingSeconds.toString().padLeft(2, '0')}';
-  }
 
   /// Create from engine TemplateInfo
   factory TemplateData.fromTemplateInfo(TemplateInfo info) {
@@ -51,11 +33,30 @@ class TemplateData {
       tags: info.tags,
     );
   }
+  final String id;
+  final String name;
+  final String description;
+  final String category;
+  final String previewPath;
+  final int placeholderCount;
+  final int durationMs;
+  final String aspectRatio;
+  final List<String> tags;
+
+  /// Format duration as M:SS
+  String get durationFormatted {
+    final seconds = durationMs ~/ 1000;
+    final minutes = seconds ~/ 60;
+    final remainingSeconds = seconds % 60;
+    return '$minutes:${remainingSeconds.toString().padLeft(2, '0')}';
+  }
 
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is TemplateData && runtimeType == other.runtimeType && id == other.id;
+      other is TemplateData &&
+          runtimeType == other.runtimeType &&
+          id == other.id;
 
   @override
   int get hashCode => id.hashCode;
@@ -63,14 +64,6 @@ class TemplateData {
 
 /// Placeholder slot data
 class PlaceholderSlotData {
-  final String id;
-  final String label;
-  final String mediaType; // "video" or "image"
-  final int startMs;
-  final int expectedDurationMs;
-  final bool isFilled;
-  final String? assignedMediaPath;
-
   const PlaceholderSlotData({
     required this.id,
     required this.label,
@@ -80,6 +73,13 @@ class PlaceholderSlotData {
     this.isFilled = false,
     this.assignedMediaPath,
   });
+  final String id;
+  final String label;
+  final String mediaType; // "video" or "image"
+  final int startMs;
+  final int expectedDurationMs;
+  final bool isFilled;
+  final String? assignedMediaPath;
 
   /// Format expected duration as M:SS
   String get expectedDurationFormatted {
@@ -107,13 +107,6 @@ class PlaceholderSlotData {
 
 /// Template creation state
 class TemplateCreationState {
-  final TemplateData? selectedTemplate;
-  final Map<String, String> mediaAssignments; // slotId -> mediaPath
-  final bool isCreating;
-  final String? errorMessage;
-  final List<TemplateData> availableTemplates;
-  final bool isLoadingTemplates;
-
   const TemplateCreationState({
     this.selectedTemplate,
     this.mediaAssignments = const {},
@@ -122,6 +115,12 @@ class TemplateCreationState {
     this.availableTemplates = const [],
     this.isLoadingTemplates = false,
   });
+  final TemplateData? selectedTemplate;
+  final Map<String, String> mediaAssignments; // slotId -> mediaPath
+  final bool isCreating;
+  final String? errorMessage;
+  final List<TemplateData> availableTemplates;
+  final bool isLoadingTemplates;
 
   /// Whether all video slots are filled (text slots are optional)
   bool get canCreate {
@@ -156,10 +155,8 @@ class TemplateCreationState {
       mediaAssignments: mediaAssignments ?? this.mediaAssignments,
       isCreating: isCreating ?? this.isCreating,
       errorMessage: clearError ? null : (errorMessage ?? this.errorMessage),
-      availableTemplates:
-          availableTemplates ?? this.availableTemplates,
-      isLoadingTemplates:
-          isLoadingTemplates ?? this.isLoadingTemplates,
+      availableTemplates: availableTemplates ?? this.availableTemplates,
+      isLoadingTemplates: isLoadingTemplates ?? this.isLoadingTemplates,
     );
   }
 }

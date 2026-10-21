@@ -1,16 +1,15 @@
 import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../core/theme/app_theme.dart';
+
 import '../../../core/extensions/context_extensions.dart';
+import '../../../core/theme/app_theme.dart';
 
 // ─── EQ Band Model ────────────────────────────────────────────────────
 
 class EqBand {
-  final String label;
-  final double frequency; // Hz
-  final double gain; // -12 to +12 dB
-  final double q; // 0.5 to 8.0
+  // 0.5 to 8.0
 
   const EqBand({
     required this.label,
@@ -18,6 +17,10 @@ class EqBand {
     this.gain = 0.0,
     this.q = 1.0,
   });
+  final String label;
+  final double frequency; // Hz
+  final double gain; // -12 to +12 dB
+  final double q;
 
   EqBand copyWith({double? gain, double? q}) {
     return EqBand(
@@ -34,15 +37,14 @@ class EqBand {
 enum NrFocus { broadband, low, mid, high }
 
 class NoiseReductionState {
-  final bool enabled;
-  final double strength; // 0-100
-  final NrFocus focus;
-
   const NoiseReductionState({
     this.enabled = false,
     this.strength = 50.0,
     this.focus = NrFocus.broadband,
   });
+  final bool enabled;
+  final double strength; // 0-100
+  final NrFocus focus;
 
   NoiseReductionState copyWith({
     bool? enabled,
@@ -60,12 +62,7 @@ class NoiseReductionState {
 // ─── Compressor Model ─────────────────────────────────────────────────
 
 class CompressorState {
-  final double threshold; // -60 to 0 dB
-  final double ratio; // 1:1 to 20:1
-  final double attack; // 0.1 to 100 ms
-  final double release; // 10 to 1000 ms
-  final double makeupGain; // 0 to 24 dB
-  final double gainReduction; // simulated real-time
+  // simulated real-time
 
   const CompressorState({
     this.threshold = -20.0,
@@ -75,6 +72,12 @@ class CompressorState {
     this.makeupGain = 0.0,
     this.gainReduction = 0.0,
   });
+  final double threshold; // -60 to 0 dB
+  final double ratio; // 1:1 to 20:1
+  final double attack; // 0.1 to 100 ms
+  final double release; // 10 to 1000 ms
+  final double makeupGain; // 0 to 24 dB
+  final double gainReduction;
 
   CompressorState copyWith({
     double? threshold,
@@ -98,17 +101,16 @@ class CompressorState {
 // ─── Full EQ State ────────────────────────────────────────────────────
 
 class AudioEqState {
-  final List<EqBand> bands;
-  final NoiseReductionState noiseReduction;
-  final CompressorState compressor;
-  final String? activePreset;
-
   const AudioEqState({
     required this.bands,
     this.noiseReduction = const NoiseReductionState(),
     this.compressor = const CompressorState(),
     this.activePreset,
   });
+  final List<EqBand> bands;
+  final NoiseReductionState noiseReduction;
+  final CompressorState compressor;
+  final String? activePreset;
 
   AudioEqState copyWith({
     List<EqBand>? bands,
@@ -125,7 +127,9 @@ class AudioEqState {
     );
   }
 
-  static AudioEqState get flat => AudioEqState(
+  // Shared immutable neutral state; retain the existing getter API.
+  // ignore: prefer_constructors_over_static_methods
+  static AudioEqState get flat => const AudioEqState(
         bands: [
           EqBand(label: 'Low', frequency: 60),
           EqBand(label: 'Low-Mid', frequency: 250),
@@ -139,13 +143,6 @@ class AudioEqState {
 // ─── EQ Presets ───────────────────────────────────────────────────────
 
 class EqPreset {
-  final String id;
-  final String name;
-  final List<double> gains; // 5 bands, -12 to +12 dB
-  final List<double> qs; // 5 bands, 0.5 to 8.0
-  final NoiseReductionState? noiseReduction;
-  final CompressorState? compressor;
-
   const EqPreset({
     required this.id,
     required this.name,
@@ -154,6 +151,12 @@ class EqPreset {
     this.noiseReduction,
     this.compressor,
   });
+  final String id;
+  final String name;
+  final List<double> gains; // 5 bands, -12 to +12 dB
+  final List<double> qs; // 5 bands, 0.5 to 8.0
+  final NoiseReductionState? noiseReduction;
+  final CompressorState? compressor;
 
   AudioEqState toState() {
     final base = AudioEqState.flat;
@@ -203,8 +206,18 @@ const _eqPresets = <EqPreset>[
     name: 'Podcast',
     gains: [-4, 1, 6, 4, -2],
     qs: [0.7, 1.2, 1.5, 1.3, 0.8],
-    noiseReduction: NoiseReductionState(enabled: true, strength: 40.0, focus: NrFocus.broadband),
-    compressor: CompressorState(threshold: -18, ratio: 3.0, attack: 10, release: 150, makeupGain: 4),
+    noiseReduction: NoiseReductionState(
+      enabled: true,
+      strength: 40.0,
+      focus: NrFocus.broadband,
+    ),
+    compressor: CompressorState(
+      threshold: -18,
+      ratio: 3.0,
+      attack: 10,
+      release: 150,
+      makeupGain: 4,
+    ),
   ),
   EqPreset(
     id: 'music',
@@ -274,9 +287,8 @@ class AudioEqNotifier extends StateNotifier<AudioEqState> {
 // ─── Audio EQ Panel ───────────────────────────────────────────────────
 
 class AudioEqPanel extends ConsumerStatefulWidget {
+  const AudioEqPanel({required this.trackId, super.key});
   final String trackId;
-
-  const AudioEqPanel({super.key, required this.trackId});
 
   @override
   ConsumerState<AudioEqPanel> createState() => _AudioEqPanelState();
@@ -306,24 +318,24 @@ class _AudioEqPanelState extends ConsumerState<AudioEqPanel>
         // ── Header ──────────────────────────────────────────────────
         Padding(
           padding: const EdgeInsets.symmetric(
-              horizontal: AppTheme.spacing12, vertical: AppTheme.spacing8),
+            horizontal: AppTheme.spacing12,
+            vertical: AppTheme.spacing8,
+          ),
           child: Row(
             children: [
               Text('Audio EQ', style: context.textTheme.titleMedium),
               const SizedBox(width: 8),
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                 decoration: BoxDecoration(
-                  color: AppTheme.audioTrackColor.withOpacity(0.15),
-                  borderRadius:
-                      BorderRadius.circular(AppTheme.radiusSmall),
+                  color: AppTheme.audioTrackColor.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
                 ),
                 child: Text(
                   widget.trackId.length > 8
                       ? widget.trackId.substring(0, 8)
                       : widget.trackId,
-                  style: TextStyle(
+                  style: const TextStyle(
                     fontSize: 9,
                     fontWeight: FontWeight.w600,
                     color: AppTheme.audioTrackColor,
@@ -371,8 +383,8 @@ class _AudioEqPanelState extends ConsumerState<AudioEqPanel>
 // ═══════════════════════════════════════════════════════════════════════
 
 class _EqTab extends ConsumerWidget {
-  final String trackId;
   const _EqTab({required this.trackId});
+  final String trackId;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -380,7 +392,9 @@ class _EqTab extends ConsumerWidget {
 
     return SingleChildScrollView(
       padding: const EdgeInsets.symmetric(
-          horizontal: AppTheme.spacing12, vertical: AppTheme.spacing8),
+        horizontal: AppTheme.spacing12,
+        vertical: AppTheme.spacing8,
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -410,7 +424,7 @@ class _EqTab extends ConsumerWidget {
                   side: BorderSide(
                     color: isActive
                         ? AppTheme.primary
-                        : AppTheme.textDisabled.withOpacity(0.2),
+                        : AppTheme.textDisabled.withValues(alpha: 0.2),
                   ),
                   visualDensity: VisualDensity.compact,
                   onSelected: (_) {
@@ -447,14 +461,10 @@ class _EqTab extends ConsumerWidget {
             return _BandControl(
               band: band,
               onGainChanged: (v) {
-                ref
-                    .read(_eqStateProviders(trackId).notifier)
-                    .setBandGain(i, v);
+                ref.read(_eqStateProviders(trackId).notifier).setBandGain(i, v);
               },
               onQChanged: (v) {
-                ref
-                    .read(_eqStateProviders(trackId).notifier)
-                    .setBandQ(i, v);
+                ref.read(_eqStateProviders(trackId).notifier).setBandQ(i, v);
               },
             );
           }),
@@ -466,9 +476,7 @@ class _EqTab extends ConsumerWidget {
             children: [
               TextButton.icon(
                 onPressed: () {
-                  ref
-                      .read(_eqStateProviders(trackId).notifier)
-                      .resetToFlat();
+                  ref.read(_eqStateProviders(trackId).notifier).resetToFlat();
                 },
                 icon: const Icon(Icons.refresh, size: 16),
                 label: const Text('Reset to Flat'),
@@ -484,15 +492,14 @@ class _EqTab extends ConsumerWidget {
 // ─── Single Band Control ──────────────────────────────────────────────
 
 class _BandControl extends StatelessWidget {
-  final EqBand band;
-  final ValueChanged<double> onGainChanged;
-  final ValueChanged<double> onQChanged;
-
   const _BandControl({
     required this.band,
     required this.onGainChanged,
     required this.onQChanged,
   });
+  final EqBand band;
+  final ValueChanged<double> onGainChanged;
+  final ValueChanged<double> onQChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -521,7 +528,7 @@ class _BandControl extends StatelessWidget {
                 const SizedBox(width: 8),
                 Text(
                   '${band.frequency >= 1000 ? '${(band.frequency / 1000).toStringAsFixed(band.frequency % 1000 == 0 ? 0 : 1)}k' : band.frequency.toStringAsFixed(0)}Hz',
-                  style: TextStyle(
+                  style: const TextStyle(
                     fontSize: 10,
                     fontWeight: FontWeight.w500,
                     color: AppTheme.primary,
@@ -534,9 +541,8 @@ class _BandControl extends StatelessWidget {
                   padding:
                       const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
                   decoration: BoxDecoration(
-                    color: _gainColor(band.gain).withOpacity(0.15),
-                    borderRadius:
-                        BorderRadius.circular(AppTheme.radiusSmall),
+                    color: _gainColor(band.gain).withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
                   ),
                   child: Text(
                     '${band.gain >= 0 ? '+' : ''}${band.gain.toStringAsFixed(1)} dB',
@@ -555,17 +561,21 @@ class _BandControl extends StatelessWidget {
             // Gain slider
             Row(
               children: [
-                SizedBox(
+                const SizedBox(
                   width: 36,
-                  child: Text('Gain',
-                      style: TextStyle(
-                          fontSize: 9, color: AppTheme.textDisabled)),
+                  child: Text(
+                    'Gain',
+                    style: TextStyle(
+                      fontSize: 9,
+                      color: AppTheme.textDisabled,
+                    ),
+                  ),
                 ),
                 Expanded(
                   child: SliderTheme(
                     data: SliderThemeData(
                       activeTrackColor: _gainColor(band.gain),
-                      thumbColor: _gainColor(band.gain).withOpacity(0.9),
+                      thumbColor: _gainColor(band.gain).withValues(alpha: 0.9),
                       inactiveTrackColor: AppTheme.border,
                       trackHeight: 2,
                       thumbShape:
@@ -588,11 +598,15 @@ class _BandControl extends StatelessWidget {
             // Q slider
             Row(
               children: [
-                SizedBox(
+                const SizedBox(
                   width: 36,
-                  child: Text('Q',
-                      style: TextStyle(
-                          fontSize: 9, color: AppTheme.textDisabled)),
+                  child: Text(
+                    'Q',
+                    style: TextStyle(
+                      fontSize: 9,
+                      color: AppTheme.textDisabled,
+                    ),
+                  ),
                 ),
                 Expanded(
                   child: Slider(
@@ -608,7 +622,7 @@ class _BandControl extends StatelessWidget {
                   width: 40,
                   child: Text(
                     band.q.toStringAsFixed(1),
-                    style: TextStyle(
+                    style: const TextStyle(
                       fontSize: 9,
                       color: AppTheme.textSecondary,
                       fontFamily: 'monospace',
@@ -633,9 +647,8 @@ class _BandControl extends StatelessWidget {
 // ─── EQ Curve Painter ─────────────────────────────────────────────────
 
 class _EqCurvePainter extends CustomPainter {
-  final List<EqBand> bands;
-
   _EqCurvePainter({required this.bands});
+  final List<EqBand> bands;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -654,13 +667,19 @@ class _EqCurvePainter extends CustomPainter {
     // Horizontal center (0 dB)
     final cy = padTop + plotH / 2;
     canvas.drawLine(
-        Offset(padLeft, cy), Offset(size.width - padRight, cy), gridPaint);
+      Offset(padLeft, cy),
+      Offset(size.width - padRight, cy),
+      gridPaint,
+    );
 
     // Horizontal +6 / -6
     for (final db in [-6.0, 6.0]) {
       final y = padTop + plotH / 2 - (db / 12.0) * (plotH / 2);
-      canvas.drawLine(Offset(padLeft, y), Offset(size.width - padRight, y),
-          gridPaint);
+      canvas.drawLine(
+        Offset(padLeft, y),
+        Offset(size.width - padRight, y),
+        gridPaint,
+      );
     }
 
     // Frequency gridlines: 60, 250, 1k, 4k, 16k
@@ -670,8 +689,8 @@ class _EqCurvePainter extends CustomPainter {
     final maxLog = math.log(20000);
 
     for (var i = 0; i < freqs.length; i++) {
-      final x = padLeft +
-          (math.log(freqs[i]) - minLog) / (maxLog - minLog) * plotW;
+      final x =
+          padLeft + (math.log(freqs[i]) - minLog) / (maxLog - minLog) * plotW;
       canvas.drawLine(Offset(x, padTop), Offset(x, padTop + plotH), gridPaint);
 
       // Label
@@ -744,7 +763,7 @@ class _EqCurvePainter extends CustomPainter {
       canvas.drawPath(
         fillPath,
         Paint()
-          ..color = AppTheme.primary.withOpacity(0.12)
+          ..color = AppTheme.primary.withValues(alpha: 0.12)
           ..style = PaintingStyle.fill,
       );
     }
@@ -769,8 +788,7 @@ class _EqCurvePainter extends CustomPainter {
 
     // ── Band markers ────────────────────────────────────────────────
     for (final band in bands) {
-      final t =
-          (math.log(band.frequency) - minLog) / (maxLog - minLog);
+      final t = (math.log(band.frequency) - minLog) / (maxLog - minLog);
       final x = padLeft + t * plotW;
       final y = padTop +
           plotH / 2 -
@@ -801,7 +819,6 @@ class _EqCurvePainter extends CustomPainter {
     final q = band.q;
     // RBJ peak EQ approximation
     final a = math.pow(10.0, band.gain / 40.0);
-    final w0 = 2 * math.pi * freq / band.frequency;
     // Simplified: use a bell shape
     final x = (ratio - 1.0 / ratio) * q;
     final denom = 1.0 + x * x;
@@ -828,8 +845,8 @@ class _EqCurvePainter extends CustomPainter {
 // ═══════════════════════════════════════════════════════════════════════
 
 class _NoiseReductionTab extends ConsumerWidget {
-  final String trackId;
   const _NoiseReductionTab({required this.trackId});
+  final String trackId;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -839,7 +856,9 @@ class _NoiseReductionTab extends ConsumerWidget {
 
     return SingleChildScrollView(
       padding: const EdgeInsets.symmetric(
-          horizontal: AppTheme.spacing12, vertical: AppTheme.spacing12),
+        horizontal: AppTheme.spacing12,
+        vertical: AppTheme.spacing12,
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -848,7 +867,7 @@ class _NoiseReductionTab extends ConsumerWidget {
             children: [
               Switch(
                 value: nr.enabled,
-                activeColor: AppTheme.audioTrackColor,
+                activeThumbColor: AppTheme.audioTrackColor,
                 onChanged: (v) {
                   notifier.updateNoiseReduction(
                     nr.copyWith(enabled: v),
@@ -866,9 +885,8 @@ class _NoiseReductionTab extends ConsumerWidget {
                   padding:
                       const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                   decoration: BoxDecoration(
-                    color: AppTheme.audioTrackColor.withOpacity(0.15),
-                    borderRadius:
-                        BorderRadius.circular(AppTheme.radiusSmall),
+                    color: AppTheme.audioTrackColor.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
                   ),
                   child: const Text(
                     'ACTIVE',
@@ -948,7 +966,7 @@ class _NoiseReductionTab extends ConsumerWidget {
                   side: BorderSide(
                     color: isActive
                         ? AppTheme.audioTrackColor
-                        : AppTheme.textDisabled.withOpacity(0.2),
+                        : AppTheme.textDisabled.withValues(alpha: 0.2),
                   ),
                   visualDensity: VisualDensity.compact,
                   onSelected: nr.enabled
@@ -975,8 +993,11 @@ class _NoiseReductionTab extends ConsumerWidget {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(Icons.info_outline,
-                    size: 16, color: AppTheme.textDisabled),
+                const Icon(
+                  Icons.info_outline,
+                  size: 16,
+                  color: AppTheme.textDisabled,
+                ),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
@@ -1017,8 +1038,8 @@ class _NoiseReductionTab extends ConsumerWidget {
 // ═══════════════════════════════════════════════════════════════════════
 
 class _CompressorTab extends ConsumerStatefulWidget {
-  final String trackId;
   const _CompressorTab({required this.trackId});
+  final String trackId;
 
   @override
   ConsumerState<_CompressorTab> createState() => _CompressorTabState();
@@ -1048,7 +1069,9 @@ class _CompressorTabState extends ConsumerState<_CompressorTab> {
 
     return SingleChildScrollView(
       padding: const EdgeInsets.symmetric(
-          horizontal: AppTheme.spacing12, vertical: AppTheme.spacing12),
+        horizontal: AppTheme.spacing12,
+        vertical: AppTheme.spacing12,
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1165,14 +1188,6 @@ class _CompressorTabState extends ConsumerState<_CompressorTab> {
 // ─── Compressor Slider Widget ─────────────────────────────────────────
 
 class _CompressorSlider extends StatelessWidget {
-  final String label;
-  final double value;
-  final double min;
-  final double max;
-  final int divisions;
-  final String unit;
-  final ValueChanged<double> onChanged;
-
   const _CompressorSlider({
     required this.label,
     required this.value,
@@ -1182,6 +1197,13 @@ class _CompressorSlider extends StatelessWidget {
     required this.unit,
     required this.onChanged,
   });
+  final String label;
+  final double value;
+  final double min;
+  final double max;
+  final int divisions;
+  final String unit;
+  final ValueChanged<double> onChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -1221,9 +1243,10 @@ class _CompressorSlider extends StatelessWidget {
 // ─── Gain Reduction Meter ─────────────────────────────────────────────
 
 class _GainReductionMeter extends StatelessWidget {
-  final double reductionDb; // negative value, e.g. -6.0
+  // negative value, e.g. -6.0
 
   const _GainReductionMeter({required this.reductionDb});
+  final double reductionDb;
 
   @override
   Widget build(BuildContext context) {
@@ -1243,7 +1266,7 @@ class _GainReductionMeter extends StatelessWidget {
             children: List.generate(30, (i) {
               return Expanded(
                 child: Container(
-                  decoration: BoxDecoration(
+                  decoration: const BoxDecoration(
                     border: Border(
                       right: BorderSide(
                         color: AppTheme.border,
@@ -1263,12 +1286,12 @@ class _GainReductionMeter extends StatelessWidget {
               child: Container(
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.horizontal(
-                    left: Radius.circular(normalized > 0.95
-                        ? 0
-                        : AppTheme.radiusSmall),
-                    right: Radius.circular(AppTheme.radiusSmall),
+                    left: Radius.circular(
+                      normalized > 0.95 ? 0 : AppTheme.radiusSmall,
+                    ),
+                    right: const Radius.circular(AppTheme.radiusSmall),
                   ),
-                  gradient: LinearGradient(
+                  gradient: const LinearGradient(
                     colors: [
                       AppTheme.warning,
                       AppTheme.error,
@@ -1284,9 +1307,7 @@ class _GainReductionMeter extends StatelessWidget {
               style: TextStyle(
                 fontSize: 10,
                 fontWeight: FontWeight.w600,
-                color: normalized > 0.5
-                    ? Colors.white
-                    : AppTheme.textPrimary,
+                color: normalized > 0.5 ? Colors.white : AppTheme.textPrimary,
                 fontFamily: 'monospace',
               ),
             ),
@@ -1300,13 +1321,12 @@ class _GainReductionMeter extends StatelessWidget {
 // ─── Compression Curve Painter ────────────────────────────────────────
 
 class _CompressionCurvePainter extends CustomPainter {
-  final double threshold;
-  final double ratio;
-
   _CompressionCurvePainter({
     required this.threshold,
     required this.ratio,
   });
+  final double threshold;
+  final double ratio;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -1327,7 +1347,7 @@ class _CompressionCurvePainter extends CustomPainter {
     );
 
     // Axis labels
-    final labelStyle = TextStyle(
+    const labelStyle = TextStyle(
       color: AppTheme.textDisabled,
       fontSize: 8,
       fontFamily: 'monospace',
@@ -1337,7 +1357,12 @@ class _CompressionCurvePainter extends CustomPainter {
     for (final db in [-60.0, -40.0, -20.0, 0.0]) {
       final x = pad + ((db + 60) / 60) * plotW;
       canvas.drawLine(Offset(x, pad), Offset(x, pad + plotH), gridPaint);
-      _drawLabel(canvas, '${db.round()}', Offset(x, pad + plotH + 4), labelStyle);
+      _drawLabel(
+        canvas,
+        '${db.round()}',
+        Offset(x, pad + plotH + 4),
+        labelStyle,
+      );
     }
 
     // Output (y-axis) labels
@@ -1380,7 +1405,7 @@ class _CompressionCurvePainter extends CustomPainter {
     // Threshold marker
     final tx = pad + ((threshold + 60) / 60) * plotW;
     final thresholdPaint = Paint()
-      ..color = AppTheme.warning.withOpacity(0.6)
+      ..color = AppTheme.warning.withValues(alpha: 0.6)
       ..strokeWidth = 1.0;
     canvas.drawLine(Offset(tx, pad), Offset(tx, pad + plotH), thresholdPaint);
   }

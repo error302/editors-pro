@@ -1,13 +1,12 @@
-import 'package:flutter/material.dart';
-import 'package:flutter_test/flutter_test.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-
 import 'package:editors_pro/core/services/engine_service.dart';
 import 'package:editors_pro/core/services/project_repository.dart';
 import 'package:editors_pro/data/models/project_model.dart';
 import 'package:editors_pro/features/editor/providers/editor_provider.dart';
 import 'package:editors_pro/features/editor/widgets/inspector_panel.dart';
 import 'package:editors_pro/features/projects/providers/project_provider.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -86,7 +85,7 @@ void main() {
 
     testWidgets('shows clip properties when a clip is selected',
         (tester) async {
-      final project = ProjectModel(
+      const project = ProjectModel(
         id: 'p1',
         name: 'Test',
         createdAt: 0,
@@ -154,7 +153,7 @@ void main() {
     });
 
     testWidgets('shows video clip type badge', (tester) async {
-      final project = ProjectModel(
+      const project = ProjectModel(
         id: 'p1',
         name: 'Test',
         createdAt: 0,
@@ -168,7 +167,12 @@ void main() {
             name: 'Video 1',
             trackType: TrackType.video,
             clips: [
-              ClipModel(id: 'clip1', assetId: 'a1', startMs: 0, durationMs: 5000),
+              ClipModel(
+                id: 'clip1',
+                assetId: 'a1',
+                startMs: 0,
+                durationMs: 5000,
+              ),
             ],
             orderIndex: 0,
           ),
@@ -188,7 +192,7 @@ void main() {
     });
 
     testWidgets('shows audio clip type badge', (tester) async {
-      final project = ProjectModel(
+      const project = ProjectModel(
         id: 'p1',
         name: 'Test',
         createdAt: 0,
@@ -202,7 +206,12 @@ void main() {
             name: 'Audio 1',
             trackType: TrackType.audio,
             clips: [
-              ClipModel(id: 'clip1', assetId: 'a1', startMs: 0, durationMs: 5000),
+              ClipModel(
+                id: 'clip1',
+                assetId: 'a1',
+                startMs: 0,
+                durationMs: 5000,
+              ),
             ],
             orderIndex: 0,
           ),
@@ -222,7 +231,7 @@ void main() {
     });
 
     testWidgets('shows timing properties for selected clip', (tester) async {
-      final project = ProjectModel(
+      const project = ProjectModel(
         id: 'p1',
         name: 'Test',
         createdAt: 0,
@@ -270,7 +279,7 @@ void main() {
     });
 
     testWidgets('shows effects section for selected clip', (tester) async {
-      final project = ProjectModel(
+      const project = ProjectModel(
         id: 'p1',
         name: 'Test',
         createdAt: 0,
@@ -332,7 +341,7 @@ void main() {
     });
 
     testWidgets('close button deselects clip', (tester) async {
-      final project = ProjectModel(
+      const project = ProjectModel(
         id: 'p1',
         name: 'Test',
         createdAt: 0,
@@ -346,7 +355,12 @@ void main() {
             name: 'Video 1',
             trackType: TrackType.video,
             clips: [
-              ClipModel(id: 'clip1', assetId: 'a1', startMs: 0, durationMs: 5000),
+              ClipModel(
+                id: 'clip1',
+                assetId: 'a1',
+                startMs: 0,
+                durationMs: 5000,
+              ),
             ],
             orderIndex: 0,
           ),
@@ -374,7 +388,7 @@ void main() {
 
     testWidgets('shows track properties when a track is selected',
         (tester) async {
-      final project = ProjectModel(
+      const project = ProjectModel(
         id: 'p1',
         name: 'Test',
         createdAt: 0,
@@ -419,7 +433,7 @@ void main() {
     });
 
     testWidgets('track inspector shows clip count', (tester) async {
-      final project = ProjectModel(
+      const project = ProjectModel(
         id: 'p1',
         name: 'Test',
         createdAt: 0,
@@ -434,7 +448,12 @@ void main() {
             trackType: TrackType.video,
             clips: [
               ClipModel(id: 'c1', assetId: 'a1', startMs: 0, durationMs: 5000),
-              ClipModel(id: 'c2', assetId: 'a2', startMs: 5000, durationMs: 3000),
+              ClipModel(
+                id: 'c2',
+                assetId: 'a2',
+                startMs: 5000,
+                durationMs: 3000,
+              ),
             ],
             orderIndex: 0,
           ),
@@ -454,7 +473,7 @@ void main() {
     });
 
     testWidgets('shows audio ducking section for audio tracks', (tester) async {
-      final project = ProjectModel(
+      const project = ProjectModel(
         id: 'p1',
         name: 'Test',
         createdAt: 0,
@@ -486,7 +505,7 @@ void main() {
     });
 
     testWidgets('does not show audio ducking for video tracks', (tester) async {
-      final project = ProjectModel(
+      const project = ProjectModel(
         id: 'p1',
         name: 'Test',
         createdAt: 0,
@@ -522,21 +541,24 @@ void main() {
 /// A [EditorNotifier] that starts with a given state and does not access
 /// the Rust engine.
 class _TestEditorNotifier extends EditorNotifier {
-  _TestEditorNotifier(Ref ref, EditorState initialState) : super(ref) {
+  _TestEditorNotifier(super.ref, EditorState initialState) {
     state = initialState;
   }
 
   @override
   Future<void> initialize() async {}
 
+  @override
   void togglePlayback() {
     state = state.copyWith(isPlaying: !state.isPlaying);
   }
 
+  @override
   void seekTo(int timeMs) {
     state = state.copyWith(currentTimeMs: timeMs);
   }
 
+  @override
   void selectClip(String? clipId) {
     state = state.copyWith(
       selectedClipId: clipId,
@@ -544,6 +566,7 @@ class _TestEditorNotifier extends EditorNotifier {
     );
   }
 
+  @override
   void selectTrack(String? trackId) {
     state = state.copyWith(
       selectedTrackId: trackId,
@@ -551,15 +574,18 @@ class _TestEditorNotifier extends EditorNotifier {
     );
   }
 
+  @override
   void toggleInspector() {
     state = state.copyWith(showInspector: !state.showInspector);
   }
 
+  @override
   void zoomIn() {
     final newZoom = (state.zoomLevel * 1.2).clamp(0.1, 10.0);
     state = state.copyWith(zoomLevel: newZoom);
   }
 
+  @override
   void zoomOut() {
     final newZoom = (state.zoomLevel / 1.2).clamp(0.1, 10.0);
     state = state.copyWith(zoomLevel: newZoom);

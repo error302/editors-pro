@@ -1,13 +1,17 @@
-import 'package:flutter_test/flutter_test.dart';
-import 'package:flutter/services.dart';
 import 'package:editors_pro/core/services/export_service.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   group('ExportForegroundService', () {
-    setUp(() => ExportForegroundService.instance.androidPlatformOverride = false);
-    tearDown(() => ExportForegroundService.instance.androidPlatformOverride = null);
+    setUp(
+      () => ExportForegroundService.instance.androidPlatformOverride = false,
+    );
+    tearDown(
+      () => ExportForegroundService.instance.androidPlatformOverride = null,
+    );
     test('Android start, progress and completion use the native channel',
         () async {
       ExportForegroundService.instance.androidPlatformOverride = true;
@@ -24,8 +28,10 @@ void main() {
         expect(service.isRunning, isTrue);
         await service.updateProgress(150, 'Encoding');
         await service.complete('/output.mp4', '1 MB');
-        expect(calls.map((call) => call.method),
-            ['startExport', 'updateProgress', 'complete']);
+        expect(
+          calls.map((call) => call.method),
+          ['startExport', 'updateProgress', 'complete'],
+        );
         expect((calls[1].arguments as Map)['progress'], 100);
         expect(service.isRunning, isFalse);
       } finally {

@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:collection';
 import 'dart:developer' as developer;
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -226,7 +225,7 @@ class _PreviewViewportState extends ConsumerState<PreviewViewport> {
                             child: Container(
                               width: 64,
                               height: 64,
-                              decoration: BoxDecoration(
+                              decoration: const BoxDecoration(
                                 color: AppTheme.primary,
                                 shape: BoxShape.circle,
                               ),
@@ -266,7 +265,7 @@ class _PreviewViewportState extends ConsumerState<PreviewViewport> {
 
                       // Decoding indicator
                       if (_fetchingFrame)
-                        Positioned(
+                        const Positioned(
                           bottom: 8,
                           right: 8,
                           child: SizedBox(
@@ -358,7 +357,7 @@ class _PreviewViewportState extends ConsumerState<PreviewViewport> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
               decoration: BoxDecoration(
-                color: AppTheme.primary.withOpacity(0.15),
+                color: AppTheme.primary.withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(AppTheme.radiusFull),
               ),
               child: Text(
@@ -602,7 +601,7 @@ class _PreviewViewportState extends ConsumerState<PreviewViewport> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(
+              const Icon(
                 Icons.movie_creation_outlined,
                 size: 64,
                 color: AppTheme.textDisabled,
@@ -713,8 +712,9 @@ class _PreviewViewportState extends ConsumerState<PreviewViewport> {
     }
 
     if (selectedClip == null) return const SizedBox.shrink();
-    if (selectedTrack?.trackType == TrackType.text)
+    if (selectedTrack?.trackType == TrackType.text) {
       return const SizedBox.shrink();
+    }
     final selectedClipId = selectedClip.id;
 
     // Calculate clip bounds relative to the preview area
@@ -792,12 +792,12 @@ class _PreviewViewportState extends ConsumerState<PreviewViewport> {
           // Scrubber
           Expanded(
             child: SliderTheme(
-              data: SliderThemeData(
+              data: const SliderThemeData(
                 activeTrackColor: AppTheme.primary,
                 thumbColor: Colors.white,
                 inactiveTrackColor: AppTheme.borderLight,
                 trackHeight: 2,
-                thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 5),
+                thumbShape: RoundSliderThumbShape(enabledThumbRadius: 5),
               ),
               child: Slider(
                 value: state.durationMs > 0
@@ -841,12 +841,6 @@ class _ActiveVideoClip {
 
 /// A compact toggle button for the overlay toolbar.
 class _OverlayToggleButton extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final bool isActive;
-  final VoidCallback onTap;
-  final VoidCallback? onLongPress;
-
   const _OverlayToggleButton({
     required this.icon,
     required this.label,
@@ -854,6 +848,11 @@ class _OverlayToggleButton extends StatelessWidget {
     required this.onTap,
     this.onLongPress,
   });
+  final IconData icon;
+  final String label;
+  final bool isActive;
+  final VoidCallback onTap;
+  final VoidCallback? onLongPress;
 
   @override
   Widget build(BuildContext context) {

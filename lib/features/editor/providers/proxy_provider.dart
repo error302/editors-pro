@@ -2,18 +2,30 @@
 ///
 /// Manages proxy generation settings, active proxy tracking, and
 /// provides a Riverpod StateNotifier that wraps the engine bridge API.
+library;
 
 import 'dart:developer' as developer;
 
+import 'package:editors_pro/src/rust/api/bridge_api.dart' show ProxyInfo;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/services/engine_service.dart';
-import 'package:editors_pro/src/rust/api/bridge_api.dart' show ProxyInfo;
 
 // ─── Data Classes ──────────────────────────────────────────────────
 
 /// Immutable snapshot of the proxy workflow state.
 class ProxyState {
+  const ProxyState({
+    this.quality = '480p',
+    this.autoProxyEnabled = true,
+    this.activeProxyCount = 0,
+    this.cacheSizeBytes = 0,
+    this.proxyInfo = const {},
+    this.generatingAssetId,
+    this.isGenerating = false,
+    this.errorMessage,
+  });
+
   /// Current proxy quality setting: "Off", "360p", "480p", "720p"
   final String quality;
 
@@ -37,17 +49,6 @@ class ProxyState {
 
   /// Last error message, if any
   final String? errorMessage;
-
-  const ProxyState({
-    this.quality = '480p',
-    this.autoProxyEnabled = true,
-    this.activeProxyCount = 0,
-    this.cacheSizeBytes = 0,
-    this.proxyInfo = const {},
-    this.generatingAssetId,
-    this.isGenerating = false,
-    this.errorMessage,
-  });
 
   ProxyState copyWith({
     String? quality,
@@ -78,6 +79,32 @@ class ProxyState {
 
 /// Proxy information for a single asset.
 class ProxyInfoData {
+  const ProxyInfoData({
+    required this.assetId,
+    required this.originalPath,
+    required this.quality,
+    required this.originalWidth,
+    required this.originalHeight,
+    this.proxyPath,
+    this.proxyWidth,
+    this.proxyHeight,
+    this.fileSizeBytes,
+  });
+
+  /// Create from a bridge [ProxyInfo] DTO.
+  factory ProxyInfoData.fromBridge(ProxyInfo info) {
+    return ProxyInfoData(
+      assetId: info.assetId,
+      originalPath: info.originalPath,
+      proxyPath: info.proxyPath,
+      quality: info.quality,
+      originalWidth: info.originalWidth,
+      originalHeight: info.originalHeight,
+      proxyWidth: info.proxyWidth,
+      proxyHeight: info.proxyHeight,
+      fileSizeBytes: info.fileSizeBytes,
+    );
+  }
   final String assetId;
   final String originalPath;
   final String? proxyPath;
@@ -87,18 +114,6 @@ class ProxyInfoData {
   final int? proxyWidth;
   final int? proxyHeight;
   final int? fileSizeBytes;
-
-  const ProxyInfoData({
-    required this.assetId,
-    required this.originalPath,
-    this.proxyPath,
-    required this.quality,
-    required this.originalWidth,
-    required this.originalHeight,
-    this.proxyWidth,
-    this.proxyHeight,
-    this.fileSizeBytes,
-  });
 
   /// Whether this asset has a generated proxy file
   bool get hasProxy => proxyPath != null;
@@ -135,21 +150,6 @@ class ProxyInfoData {
     if (w >= 854 || h >= 480) return '480p';
     if (w >= 640 || h >= 360) return '360p';
     return '${w}x$h';
-  }
-
-  /// Create from a bridge [ProxyInfo] DTO.
-  factory ProxyInfoData.fromBridge(ProxyInfo info) {
-    return ProxyInfoData(
-      assetId: info.assetId,
-      originalPath: info.originalPath,
-      proxyPath: info.proxyPath,
-      quality: info.quality,
-      originalWidth: info.originalWidth,
-      originalHeight: info.originalHeight,
-      proxyWidth: info.proxyWidth,
-      proxyHeight: info.proxyHeight,
-      fileSizeBytes: info.fileSizeBytes,
-    );
   }
 }
 

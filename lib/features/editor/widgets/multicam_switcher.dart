@@ -18,20 +18,19 @@ import '../../../core/theme/app_theme.dart';
 /// the event's beat, refine cuts, hard cuts for energy, dissolves for
 /// soft transitions. See persona/skills/multicam-editing/SKILL.md.
 class MulticamSwitcher extends StatefulWidget {
+  const MulticamSwitcher({
+    required this.angles,
+    required this.activeAngleIndex,
+    required this.onSwitchAngle,
+    required this.onResync,
+    super.key,
+    this.isSynced = false,
+  });
   final List<MulticamAngle> angles;
   final int activeAngleIndex;
   final void Function(int angleIndex) onSwitchAngle;
   final VoidCallback onResync;
   final bool isSynced;
-
-  const MulticamSwitcher({
-    super.key,
-    required this.angles,
-    required this.activeAngleIndex,
-    required this.onSwitchAngle,
-    required this.onResync,
-    this.isSynced = false,
-  });
 
   @override
   State<MulticamSwitcher> createState() => _MulticamSwitcherState();
@@ -45,8 +44,10 @@ class _MulticamSwitcherState extends State<MulticamSwitcher> {
       children: [
         Row(
           children: [
-            Text('Multicam Switcher',
-                style: Theme.of(context).textTheme.titleMedium),
+            Text(
+              'Multicam Switcher',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
             const Spacer(),
             if (!widget.isSynced)
               ElevatedButton.icon(
@@ -55,15 +56,17 @@ class _MulticamSwitcherState extends State<MulticamSwitcher> {
                 label: const Text('Sync'),
               )
             else
-              Row(
+              const Row(
                 children: [
-                  const Icon(Icons.check_circle, color: Colors.green, size: 16),
-                  const SizedBox(width: 4),
-                  Text('Synced',
-                      style: TextStyle(
-                        color: Colors.green,
-                        fontSize: 12,
-                      )),
+                  Icon(Icons.check_circle, color: Colors.green, size: 16),
+                  SizedBox(width: 4),
+                  Text(
+                    'Synced',
+                    style: TextStyle(
+                      color: Colors.green,
+                      fontSize: 12,
+                    ),
+                  ),
                 ],
               ),
           ],
@@ -94,7 +97,9 @@ class _MulticamSwitcherState extends State<MulticamSwitcher> {
                 child: Container(
                   decoration: BoxDecoration(
                     border: Border.all(
-                      color: isActive ? Colors.blue : Colors.grey.withValues(alpha: 0.3),
+                      color: isActive
+                          ? Colors.blue
+                          : Colors.grey.withValues(alpha: 0.3),
                       width: isActive ? 3 : 1,
                     ),
                     borderRadius: BorderRadius.circular(8),
@@ -110,8 +115,10 @@ class _MulticamSwitcherState extends State<MulticamSwitcher> {
                         child: angle.thumbnail != null
                             ? Image.memory(angle.thumbnail!, fit: BoxFit.cover)
                             : Center(
-                                child: Icon(Icons.videocam,
-                                    color: Colors.grey.withValues(alpha: 0.5)),
+                                child: Icon(
+                                  Icons.videocam,
+                                  color: Colors.grey.withValues(alpha: 0.5),
+                                ),
                               ),
                       ),
                       // Angle label
@@ -120,7 +127,9 @@ class _MulticamSwitcherState extends State<MulticamSwitcher> {
                         left: 4,
                         child: Container(
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 6, vertical: 2),
+                            horizontal: 6,
+                            vertical: 2,
+                          ),
                           decoration: BoxDecoration(
                             color: Colors.black.withValues(alpha: 0.7),
                             borderRadius: BorderRadius.circular(4),
@@ -146,8 +155,11 @@ class _MulticamSwitcherState extends State<MulticamSwitcher> {
                               color: Colors.red,
                               shape: BoxShape.circle,
                             ),
-                            child: const Icon(Icons.fiber_manual_record,
-                                color: Colors.white, size: 12),
+                            child: const Icon(
+                              Icons.fiber_manual_record,
+                              color: Colors.white,
+                              size: 12,
+                            ),
                           ),
                         ),
                       // Audio source indicator
@@ -161,8 +173,11 @@ class _MulticamSwitcherState extends State<MulticamSwitcher> {
                               color: Colors.green.withValues(alpha: 0.8),
                               borderRadius: BorderRadius.circular(4),
                             ),
-                            child: const Icon(Icons.graphic_eq,
-                                color: Colors.white, size: 14),
+                            child: const Icon(
+                              Icons.graphic_eq,
+                              color: Colors.white,
+                              size: 14,
+                            ),
                           ),
                         ),
                     ],
@@ -201,15 +216,14 @@ class _MulticamSwitcherState extends State<MulticamSwitcher> {
 }
 
 class MulticamAngle {
-  final String label;
-  final String clipId;
-  final Uint8List? thumbnail;
-  final bool isAudioSource;
-
   MulticamAngle({
     required this.label,
     required this.clipId,
     this.thumbnail,
     this.isAudioSource = false,
   });
+  final String label;
+  final String clipId;
+  final Uint8List? thumbnail;
+  final bool isAudioSource;
 }

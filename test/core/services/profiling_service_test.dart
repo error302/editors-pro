@@ -1,5 +1,5 @@
-import 'package:flutter_test/flutter_test.dart';
 import 'package:editors_pro/core/services/profiling_service.dart';
+import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('PerformanceMonitor', () {
@@ -31,11 +31,11 @@ void main() {
     test('detects dropped frames', () {
       monitor.setTargetFps(24.0);
       // Fast frames
-      for (int i = 0; i < 10; i++) {
+      for (var i = 0; i < 10; i++) {
         monitor.recordFrameDuration(const Duration(milliseconds: 20));
       }
       // Slow frames (over budget)
-      for (int i = 0; i < 5; i++) {
+      for (var i = 0; i < 5; i++) {
         monitor.recordFrameDuration(const Duration(milliseconds: 80));
       }
 
@@ -47,15 +47,24 @@ void main() {
       monitor.recordDecodeDuration(const Duration(milliseconds: 8));
       monitor.recordDecodeDuration(const Duration(milliseconds: 6));
 
-      expect(monitor.averageDecodeDuration.inMilliseconds, greaterThanOrEqualTo(5));
-      expect(monitor.averageDecodeDuration.inMilliseconds, lessThanOrEqualTo(8));
+      expect(
+        monitor.averageDecodeDuration.inMilliseconds,
+        greaterThanOrEqualTo(5),
+      );
+      expect(
+        monitor.averageDecodeDuration.inMilliseconds,
+        lessThanOrEqualTo(8),
+      );
     });
 
     test('recordRenderDuration tracks render times', () {
       monitor.recordRenderDuration(const Duration(milliseconds: 20));
       monitor.recordRenderDuration(const Duration(milliseconds: 30));
 
-      expect(monitor.averageRenderDuration.inMilliseconds, greaterThanOrEqualTo(20));
+      expect(
+        monitor.averageRenderDuration.inMilliseconds,
+        greaterThanOrEqualTo(20),
+      );
     });
 
     test('cache statistics', () {
@@ -127,11 +136,11 @@ void main() {
 
     test('p95 frame duration', () {
       // 90 fast frames
-      for (int i = 0; i < 90; i++) {
+      for (var i = 0; i < 90; i++) {
         monitor.recordFrameDuration(const Duration(milliseconds: 30));
       }
       // 10 slow frames
-      for (int i = 0; i < 10; i++) {
+      for (var i = 0; i < 10; i++) {
         monitor.recordFrameDuration(const Duration(milliseconds: 60));
       }
 
@@ -189,7 +198,12 @@ void main() {
       monitor.setTargetFps(24.0);
       monitor.recordFrameDuration(const Duration(milliseconds: 41));
       monitor.recordDecodeDuration(const Duration(milliseconds: 5));
-      monitor.recordCacheStats(hits: 10, misses: 5, evictions: 1, cachedFrames: 3);
+      monitor.recordCacheStats(
+        hits: 10,
+        misses: 5,
+        evictions: 1,
+        cachedFrames: 3,
+      );
       monitor.recordMemoryStats(
         rssBytes: 256 * 1024 * 1024,
         peakBytes: 300 * 1024 * 1024,
@@ -206,7 +220,12 @@ void main() {
     test('toMap returns complete summary', () {
       monitor.setTargetFps(24.0);
       monitor.recordFrameDuration(const Duration(milliseconds: 41));
-      monitor.recordCacheStats(hits: 10, misses: 2, evictions: 1, cachedFrames: 5);
+      monitor.recordCacheStats(
+        hits: 10,
+        misses: 2,
+        evictions: 1,
+        cachedFrames: 5,
+      );
 
       final map = monitor.toMap();
       expect(map.containsKey('fps'), isTrue);

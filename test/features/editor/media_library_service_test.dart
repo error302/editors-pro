@@ -1,7 +1,7 @@
 import 'dart:io';
 
-import 'package:flutter_test/flutter_test.dart';
 import 'package:editors_pro/features/editor/services/media_library_service.dart';
+import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   late Directory testDirectory;
@@ -36,8 +36,10 @@ void main() {
       fileName: 'clip.mp4',
     );
 
-    expect(first.parent.path,
-        '${testDirectory.path}${Platform.pathSeparator}media');
+    expect(
+      first.parent.path,
+      '${testDirectory.path}${Platform.pathSeparator}media',
+    );
     expect(first.path, isNot(source.path));
     expect(second.path, isNot(first.path));
     expect(await first.readAsBytes(), contents);

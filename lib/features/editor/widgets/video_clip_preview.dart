@@ -8,7 +8,6 @@ import 'package:video_player/video_player.dart';
 /// Android's platform decoder for a single source clip in the preview.
 class VideoClipPreview extends StatefulWidget {
   const VideoClipPreview({
-    super.key,
     required this.filePath,
     required this.fileName,
     required this.clipStartMs,
@@ -16,6 +15,7 @@ class VideoClipPreview extends StatefulWidget {
     required this.speed,
     required this.currentTimeMs,
     required this.isPlaying,
+    super.key,
   });
 
   final String filePath;

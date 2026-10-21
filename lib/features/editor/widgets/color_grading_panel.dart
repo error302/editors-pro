@@ -16,6 +16,12 @@ import '../../../core/theme/app_theme.dart';
 /// infrastructure. Future enhancement: route through a proper LUT
 /// pipeline when LUT support is added.
 class ColorGradingPanel extends StatefulWidget {
+  const ColorGradingPanel({
+    required this.onChanged,
+    super.key,
+    this.initialValues = ColorGradeValues.neutral,
+  });
+
   /// Called whenever any wheel value changes. The three values are
   /// RGB offsets in the range [-1.0, 1.0] for lift (additive),
   /// multipliers in [0.5, 2.0] for gamma (power), and multipliers
@@ -25,12 +31,6 @@ class ColorGradingPanel extends StatefulWidget {
   /// Initial values for the three wheels. Defaults to neutral
   /// (no color shift, no brightness change).
   final ColorGradeValues initialValues;
-
-  const ColorGradingPanel({
-    super.key,
-    required this.onChanged,
-    this.initialValues = ColorGradeValues.neutral,
-  });
 
   @override
   State<ColorGradingPanel> createState() => _ColorGradingPanelState();
@@ -148,15 +148,6 @@ class _ColorGradingPanelState extends State<ColorGradingPanel> {
 
 /// A single color wheel with hue/saturation dial and master slider.
 class _ColorWheel extends StatelessWidget {
-  final String label;
-  final String subtitle;
-  final double hue; // 0-360 degrees
-  final double saturation; // 0.0-1.0
-  final double master; // -1.0 to 1.0 (0 = neutral)
-  final ValueChanged<double> onHueChanged;
-  final ValueChanged<double> onSaturationChanged;
-  final ValueChanged<double> onMasterChanged;
-
   const _ColorWheel({
     required this.label,
     required this.subtitle,
@@ -167,6 +158,14 @@ class _ColorWheel extends StatelessWidget {
     required this.onSaturationChanged,
     required this.onMasterChanged,
   });
+  final String label;
+  final String subtitle;
+  final double hue; // 0-360 degrees
+  final double saturation; // 0.0-1.0
+  final double master; // -1.0 to 1.0 (0 = neutral)
+  final ValueChanged<double> onHueChanged;
+  final ValueChanged<double> onSaturationChanged;
+  final ValueChanged<double> onMasterChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -215,7 +214,7 @@ class _ColorWheel extends StatelessWidget {
                   const SizedBox(width: 8),
                   Text(
                     subtitle,
-                    style: TextStyle(
+                    style: const TextStyle(
                       fontSize: 12,
                       color: AppTheme.textSecondary,
                     ),
@@ -223,7 +222,7 @@ class _ColorWheel extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 4),
-              Text(
+              const Text(
                 'Master',
                 style: TextStyle(
                   fontSize: 11,
@@ -249,10 +248,9 @@ class _ColorWheel extends StatelessWidget {
 /// Paints a circular color wheel with a draggable indicator at the
 /// current hue/saturation position.
 class _ColorWheelPainter extends CustomPainter {
+  _ColorWheelPainter({required this.hue, required this.saturation});
   final double hue;
   final double saturation;
-
-  _ColorWheelPainter({required this.hue, required this.saturation});
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -260,12 +258,12 @@ class _ColorWheelPainter extends CustomPainter {
     final radius = size.width / 2;
 
     // Draw the hue ring as 360 segments.
-    for (int i = 0; i < 360; i++) {
+    for (var i = 0; i < 360; i++) {
       final paint = Paint()
         ..color = HSLColor.fromAHSL(1.0, i.toDouble(), 1.0, 0.5).toColor()
         ..style = PaintingStyle.fill;
       final startAngle = (i - 90) * math.pi / 180;
-      final sweepAngle = math.pi / 180;
+      const sweepAngle = math.pi / 180;
       canvas.drawArc(
         Rect.fromCircle(center: center, radius: radius),
         startAngle,
@@ -279,7 +277,7 @@ class _ColorWheelPainter extends CustomPainter {
     canvas.drawCircle(
       center,
       radius * 0.7,
-      Paint()..color = Colors.black.withOpacity(0.6),
+      Paint()..color = Colors.black.withValues(alpha: 0.6),
     );
 
     // Draw the position indicator (small circle at hue/saturation).
@@ -322,16 +320,6 @@ class _ColorWheelPainter extends CustomPainter {
 ///   tonal range (0 = neutral, +1 = +1 stop, -1 = -1 stop).
 @immutable
 class ColorGradeValues {
-  final double liftHue;
-  final double liftSaturation;
-  final double liftMaster;
-  final double gammaHue;
-  final double gammaSaturation;
-  final double gammaMaster;
-  final double gainHue;
-  final double gainSaturation;
-  final double gainMaster;
-
   const ColorGradeValues({
     this.liftHue = 0,
     this.liftSaturation = 0,
@@ -343,6 +331,15 @@ class ColorGradeValues {
     this.gainSaturation = 0,
     this.gainMaster = 0,
   });
+  final double liftHue;
+  final double liftSaturation;
+  final double liftMaster;
+  final double gammaHue;
+  final double gammaSaturation;
+  final double gammaMaster;
+  final double gainHue;
+  final double gainSaturation;
+  final double gainMaster;
 
   static const neutral = ColorGradeValues();
 
@@ -381,12 +378,15 @@ class ColorGradeValues {
   }
 
   static List<double> _hslToRgbOffset(
-      double hue, double saturation, double master) {
+    double hue,
+    double saturation,
+    double master,
+  ) {
     final color = HSLColor.fromAHSL(1.0, hue, saturation, 0.5).toColor();
     return [
-      (color.red / 255.0 - 0.5) * saturation + master,
-      (color.green / 255.0 - 0.5) * saturation + master,
-      (color.blue / 255.0 - 0.5) * saturation + master,
+      (color.r - 0.5) * saturation + master,
+      (color.g - 0.5) * saturation + master,
+      (color.b - 0.5) * saturation + master,
     ];
   }
 }

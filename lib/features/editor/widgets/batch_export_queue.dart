@@ -12,18 +12,17 @@ import '../../../core/theme/app_theme.dart';
 /// for hours. The pro move is to queue master + platform encodes, start
 /// the queue, walk away. See persona/skills/batch-export/SKILL.md.
 class BatchExportQueue extends StatefulWidget {
-  final List<BatchJob> jobs;
-  final VoidCallback onAddJob;
-  final void Function(String jobId) onCancelJob;
-  final VoidCallback onClearFinished;
-
   const BatchExportQueue({
-    super.key,
     required this.jobs,
     required this.onAddJob,
     required this.onCancelJob,
     required this.onClearFinished,
+    super.key,
   });
+  final List<BatchJob> jobs;
+  final VoidCallback onAddJob;
+  final void Function(String jobId) onCancelJob;
+  final VoidCallback onClearFinished;
 
   @override
   State<BatchExportQueue> createState() => _BatchExportQueueState();
@@ -32,18 +31,24 @@ class BatchExportQueue extends StatefulWidget {
 class _BatchExportQueueState extends State<BatchExportQueue> {
   @override
   Widget build(BuildContext context) {
-    final queued = widget.jobs.where((j) => j.status == BatchJobStatus.queued).length;
-    final running = widget.jobs.where((j) => j.status == BatchJobStatus.running).length;
-    final completed = widget.jobs.where((j) => j.status == BatchJobStatus.completed).length;
-    final failed = widget.jobs.where((j) => j.status == BatchJobStatus.failed).length;
+    final queued =
+        widget.jobs.where((j) => j.status == BatchJobStatus.queued).length;
+    final running =
+        widget.jobs.where((j) => j.status == BatchJobStatus.running).length;
+    final completed =
+        widget.jobs.where((j) => j.status == BatchJobStatus.completed).length;
+    final failed =
+        widget.jobs.where((j) => j.status == BatchJobStatus.failed).length;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
           children: [
-            Text('Batch Export Queue',
-                style: Theme.of(context).textTheme.titleMedium),
+            Text(
+              'Batch Export Queue',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
             const Spacer(),
             IconButton(
               icon: const Icon(Icons.cleaning_services_outlined),
@@ -75,13 +80,16 @@ class _BatchExportQueueState extends State<BatchExportQueue> {
         // Job list
         Expanded(
           child: widget.jobs.isEmpty
-              ? Center(
+              ? const Center(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.queue_music_outlined,
-                          size: 48, color: AppTheme.textSecondary),
-                      const SizedBox(height: AppTheme.spacing8),
+                      Icon(
+                        Icons.queue_music_outlined,
+                        size: 48,
+                        color: AppTheme.textSecondary,
+                      ),
+                      SizedBox(height: AppTheme.spacing8),
                       Text(
                         'No jobs queued. Add one to start.',
                         style: TextStyle(color: AppTheme.textSecondary),
@@ -103,11 +111,10 @@ class _BatchExportQueueState extends State<BatchExportQueue> {
 }
 
 class _StatusChip extends StatelessWidget {
+  const _StatusChip(this.label, this.count, this.color);
   final String label;
   final int count;
   final Color color;
-
-  const _StatusChip(this.label, this.count, this.color);
 
   @override
   Widget build(BuildContext context) {
@@ -121,11 +128,13 @@ class _StatusChip extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text('$count',
-              style: TextStyle(
-                color: color,
-                fontWeight: FontWeight.bold,
-              )),
+          Text(
+            '$count',
+            style: TextStyle(
+              color: color,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
           const SizedBox(width: 4),
           Text(label, style: TextStyle(color: color, fontSize: 12)),
         ],
@@ -135,10 +144,9 @@ class _StatusChip extends StatelessWidget {
 }
 
 class _JobTile extends StatelessWidget {
+  const _JobTile({required this.job, required this.onCancel});
   final BatchJob job;
   final VoidCallback onCancel;
-
-  const _JobTile({required this.job, required this.onCancel});
 
   @override
   Widget build(BuildContext context) {
@@ -150,20 +158,28 @@ class _JobTile extends StatelessWidget {
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('${job.preset} • ${job.outputPath}',
-                style: const TextStyle(fontSize: 11),
-                maxLines: 1, overflow: TextOverflow.ellipsis),
+            Text(
+              '${job.preset} • ${job.outputPath}',
+              style: const TextStyle(fontSize: 11),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
             if (job.status == BatchJobStatus.running) ...[
               const SizedBox(height: 4),
               LinearProgressIndicator(value: job.progress),
               const SizedBox(height: 2),
-              Text('${(job.progress * 100).round()}%',
-                  style: const TextStyle(fontSize: 11)),
+              Text(
+                '${(job.progress * 100).round()}%',
+                style: const TextStyle(fontSize: 11),
+              ),
             ] else if (job.status == BatchJobStatus.failed) ...[
               const SizedBox(height: 4),
-              Text(job.error ?? 'Unknown error',
-                  style: TextStyle(fontSize: 11, color: status.color),
-                  maxLines: 2, overflow: TextOverflow.ellipsis),
+              Text(
+                job.error ?? 'Unknown error',
+                style: TextStyle(fontSize: 11, color: status.color),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
             ],
           ],
         ),
@@ -182,37 +198,28 @@ class _JobTile extends StatelessWidget {
   _StatusInfo _statusInfo(BatchJobStatus s) {
     switch (s) {
       case BatchJobStatus.queued:
-        return _StatusInfo(Icons.schedule, Colors.grey, 'Queued');
+        return const _StatusInfo(Icons.schedule, Colors.grey, 'Queued');
       case BatchJobStatus.running:
-        return _StatusInfo(Icons.play_arrow, Colors.blue, 'Running');
+        return const _StatusInfo(Icons.play_arrow, Colors.blue, 'Running');
       case BatchJobStatus.completed:
-        return _StatusInfo(Icons.check_circle, Colors.green, 'Completed');
+        return const _StatusInfo(Icons.check_circle, Colors.green, 'Completed');
       case BatchJobStatus.failed:
-        return _StatusInfo(Icons.error, Colors.red, 'Failed');
+        return const _StatusInfo(Icons.error, Colors.red, 'Failed');
       case BatchJobStatus.cancelled:
-        return _StatusInfo(Icons.cancel, Colors.grey, 'Cancelled');
+        return const _StatusInfo(Icons.cancel, Colors.grey, 'Cancelled');
     }
   }
 }
 
 class _StatusInfo {
+  const _StatusInfo(this.icon, this.color, this.label);
   final IconData icon;
   final Color color;
   final String label;
-  const _StatusInfo(this.icon, this.color, this.label);
 }
 
 /// Mirrors the Rust `ExportJob` / `JobStatus` from batch.rs.
 class BatchJob {
-  final String id;
-  final String name;
-  final String projectPath;
-  final String outputPath;
-  final String preset;
-  final BatchJobStatus status;
-  final double progress;
-  final String? error;
-
   BatchJob({
     required this.id,
     required this.name,
@@ -223,6 +230,14 @@ class BatchJob {
     required this.progress,
     this.error,
   });
+  final String id;
+  final String name;
+  final String projectPath;
+  final String outputPath;
+  final String preset;
+  final BatchJobStatus status;
+  final double progress;
+  final String? error;
 }
 
 enum BatchJobStatus { queued, running, completed, failed, cancelled }

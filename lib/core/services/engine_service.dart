@@ -369,7 +369,7 @@ class EngineService {
     if (!_initialized) return 0;
     try {
       final freed = await _api!.clearProxyCache();
-      return freed ?? 0;
+      return freed;
     } catch (e) {
       developer.log('clearProxyCache failed: $e', name: 'EngineService');
       return 0;
@@ -381,7 +381,7 @@ class EngineService {
     if (!_initialized) return 0;
     try {
       final size = await _api!.getProxyCacheSize();
-      return size ?? 0;
+      return size;
     } catch (e) {
       developer.log('getProxyCacheSize failed: $e', name: 'EngineService');
       return 0;

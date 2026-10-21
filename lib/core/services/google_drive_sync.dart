@@ -47,7 +47,7 @@ class GoogleDriveSync {
   GoogleDriveSync._();
   static final GoogleDriveSync instance = GoogleDriveSync._();
 
-  final FlutterAppAuth _appAuth = FlutterAppAuth();
+  static const FlutterAppAuth _appAuth = FlutterAppAuth();
   final FlutterSecureStorage _secureStorage = const FlutterSecureStorage(
     aOptions: AndroidOptions(encryptedSharedPreferences: true),
   );
@@ -138,7 +138,7 @@ class GoogleDriveSync {
         ),
       );
 
-      if (result == null || result.accessToken == null) {
+      if (result.accessToken == null) {
         throw StateError('OAuth2 flow returned no access token');
       }
 
@@ -329,10 +329,10 @@ class GoogleDriveSync {
 
     final response = await http.get(
       Uri.parse(
-        "https://www.googleapis.com/drive/v3/files"
+        'https://www.googleapis.com/drive/v3/files'
         "?q='$folderId' in parents and trashed=false and name contains '.epp'"
-        "&fields=files(id,name,modifiedTime,size,mimeType)"
-        "&orderBy=modifiedTime desc",
+        '&fields=files(id,name,modifiedTime,size,mimeType)'
+        '&orderBy=modifiedTime desc',
       ),
       headers: {'Authorization': 'Bearer $token'},
     );
@@ -405,7 +405,8 @@ class GoogleDriveSync {
 
     if (_accessToken != null &&
         _tokenExpiry != null &&
-        DateTime.now().isBefore(_tokenExpiry!.subtract(Duration(minutes: 1)))) {
+        DateTime.now()
+            .isBefore(_tokenExpiry!.subtract(const Duration(minutes: 1)))) {
       return _accessToken!;
     }
 
@@ -436,7 +437,7 @@ class GoogleDriveSync {
         ),
       );
 
-      if (result == null || result.accessToken == null) {
+      if (result.accessToken == null) {
         throw StateError('Token refresh returned no access token');
       }
 
@@ -475,9 +476,9 @@ class GoogleDriveSync {
     // Search for an existing folder with our name.
     final response = await http.get(
       Uri.parse(
-        "https://www.googleapis.com/drive/v3/files"
+        'https://www.googleapis.com/drive/v3/files'
         "?q=mimeType='application/vnd.google-apps.folder' and name='$_driveFolderName' and trashed=false"
-        "&fields=files(id,name)",
+        '&fields=files(id,name)',
       ),
       headers: {'Authorization': 'Bearer $token'},
     );
@@ -487,7 +488,10 @@ class GoogleDriveSync {
       final files = json['files'] as List? ?? [];
       if (files.isNotEmpty) {
         _driveFolderId = files[0]['id'] as String;
-        await _secureStorage.write(key: _keyDriveFolderId, value: _driveFolderId);
+        await _secureStorage.write(
+          key: _keyDriveFolderId,
+          value: _driveFolderId,
+        );
         return _driveFolderId!;
       }
     }
@@ -524,13 +528,16 @@ class GoogleDriveSync {
 
   /// Find a file by name within a folder. Returns the file ID or `null`.
   Future<String?> _findFileByName(
-      String token, String folderId, String fileName) async {
+    String token,
+    String folderId,
+    String fileName,
+  ) async {
     final encodedName = Uri.encodeQueryComponent(fileName);
     final response = await http.get(
       Uri.parse(
-        "https://www.googleapis.com/drive/v3/files"
+        'https://www.googleapis.com/drive/v3/files'
         "?q='$folderId' in parents and name='$encodedName' and trashed=false"
-        "&fields=files(id,name)",
+        '&fields=files(id,name)',
       ),
       headers: {'Authorization': 'Bearer $token'},
     );
@@ -605,12 +612,6 @@ class GoogleDriveSync {
 
 /// A project entry returned by [GoogleDriveSync.listProjects].
 class DriveProjectEntry {
-  final String projectId;
-  final String name;
-  final String cloudFileId;
-  final int modifiedAt;
-  final int sizeBytes;
-
   const DriveProjectEntry({
     required this.projectId,
     required this.name,
@@ -618,4 +619,9 @@ class DriveProjectEntry {
     required this.modifiedAt,
     required this.sizeBytes,
   });
+  final String projectId;
+  final String name;
+  final String cloudFileId;
+  final int modifiedAt;
+  final int sizeBytes;
 }

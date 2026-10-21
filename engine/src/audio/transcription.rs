@@ -425,8 +425,8 @@ impl TranscriptionEngine {
         }
 
         // Parse the requested model size
-        let model = TranscriptionModel::from_str(&config.model_size)
-            .unwrap_or(TranscriptionModel::Base);
+        let model =
+            TranscriptionModel::from_str(&config.model_size).unwrap_or(TranscriptionModel::Base);
 
         log::info!(
             "Transcription requested for: {} (language: {}, model: {})",
@@ -449,8 +449,8 @@ impl TranscriptionEngine {
         config: &TranscriptionConfig,
         progress_callback: Option<&dyn Fn(f32, TranscriptionStatus)>,
     ) -> Result<TranscriptionResult, String> {
-        let model = TranscriptionModel::from_str(&config.model_size)
-            .unwrap_or(TranscriptionModel::Base);
+        let model =
+            TranscriptionModel::from_str(&config.model_size).unwrap_or(TranscriptionModel::Base);
 
         // Phase 1: Loading model
         self.status = TranscriptionStatus::LoadingModel;
@@ -631,10 +631,8 @@ impl TranscriptionEngine {
                 TranscriptionModel::Large => 0.96,
             };
             // Add slight random-ish variation based on index
-            let confidence = (base_confidence
-                + (((i * 7 + 3) % 11) as f32 / 110.0)
-                - 0.05)
-                .clamp(0.3, 1.0);
+            let confidence =
+                (base_confidence + (((i * 7 + 3) % 11) as f32 / 110.0) - 0.05).clamp(0.3, 1.0);
 
             // Generate word-level timestamps if enabled
             let words = if config.word_timestamps {
@@ -644,13 +642,7 @@ impl TranscriptionEngine {
             };
 
             let mut segment = if config.word_timestamps {
-                TranscriptionSegment::with_words(
-                    phrase,
-                    start_ms,
-                    end_ms,
-                    confidence,
-                    words,
-                )
+                TranscriptionSegment::with_words(phrase, start_ms, end_ms, confidence, words)
             } else {
                 TranscriptionSegment::new(phrase, start_ms, end_ms, confidence)
             };
@@ -694,10 +686,8 @@ impl TranscriptionEngine {
                 let word_start = start_ms + (i as u64) * per_word_ms;
                 let word_end = word_start + per_word_ms;
                 // Word confidence varies slightly from segment confidence
-                let word_conf = (segment_confidence
-                    + (((i * 3 + 1) % 7) as f32 / 70.0)
-                    - 0.05)
-                    .clamp(0.2, 1.0);
+                let word_conf =
+                    (segment_confidence + (((i * 3 + 1) % 7) as f32 / 70.0) - 0.05).clamp(0.2, 1.0);
                 TranscriptionWord::new(word, word_start, word_end, word_conf)
             })
             .collect()
@@ -753,11 +743,15 @@ pub fn transcribe_audio(
     let mut engine = TranscriptionEngine::new();
 
     // Adapt the simple progress callback to the engine's richer callback
-    let result = engine.simulate_transcription(audio_path, config, Some(&|progress, _status| {
-        if let Some(ref cb) = progress_callback {
-            cb(progress);
-        }
-    }))?;
+    let result = engine.simulate_transcription(
+        audio_path,
+        config,
+        Some(&|progress, _status| {
+            if let Some(ref cb) = progress_callback {
+                cb(progress);
+            }
+        }),
+    )?;
 
     Ok(result)
 }
@@ -948,13 +942,31 @@ mod tests {
 
     #[test]
     fn test_transcription_model_from_str() {
-        assert_eq!(TranscriptionModel::from_str("tiny"), Some(TranscriptionModel::Tiny));
-        assert_eq!(TranscriptionModel::from_str("base"), Some(TranscriptionModel::Base));
-        assert_eq!(TranscriptionModel::from_str("small"), Some(TranscriptionModel::Small));
-        assert_eq!(TranscriptionModel::from_str("medium"), Some(TranscriptionModel::Medium));
-        assert_eq!(TranscriptionModel::from_str("large"), Some(TranscriptionModel::Large));
+        assert_eq!(
+            TranscriptionModel::from_str("tiny"),
+            Some(TranscriptionModel::Tiny)
+        );
+        assert_eq!(
+            TranscriptionModel::from_str("base"),
+            Some(TranscriptionModel::Base)
+        );
+        assert_eq!(
+            TranscriptionModel::from_str("small"),
+            Some(TranscriptionModel::Small)
+        );
+        assert_eq!(
+            TranscriptionModel::from_str("medium"),
+            Some(TranscriptionModel::Medium)
+        );
+        assert_eq!(
+            TranscriptionModel::from_str("large"),
+            Some(TranscriptionModel::Large)
+        );
         assert_eq!(TranscriptionModel::from_str("unknown"), None);
-        assert_eq!(TranscriptionModel::from_str("TINY"), Some(TranscriptionModel::Tiny));
+        assert_eq!(
+            TranscriptionModel::from_str("TINY"),
+            Some(TranscriptionModel::Tiny)
+        );
     }
 
     #[test]
@@ -985,9 +997,15 @@ mod tests {
     fn test_transcription_status_label() {
         assert_eq!(TranscriptionStatus::Idle.label(), "Idle");
         assert_eq!(TranscriptionStatus::LoadingModel.label(), "Loading model…");
-        assert_eq!(TranscriptionStatus::ExtractingAudio.label(), "Extracting audio…");
+        assert_eq!(
+            TranscriptionStatus::ExtractingAudio.label(),
+            "Extracting audio…"
+        );
         assert_eq!(TranscriptionStatus::Transcribing.label(), "Transcribing…");
-        assert_eq!(TranscriptionStatus::ProcessingSegments.label(), "Processing segments…");
+        assert_eq!(
+            TranscriptionStatus::ProcessingSegments.label(),
+            "Processing segments…"
+        );
         assert_eq!(TranscriptionStatus::Complete.label(), "Complete");
         assert_eq!(TranscriptionStatus::Error.label(), "Error");
     }
@@ -996,7 +1014,10 @@ mod tests {
     fn test_transcription_status_progress_start() {
         assert_eq!(TranscriptionStatus::LoadingModel.progress_start(), 0.0);
         assert!(TranscriptionStatus::ExtractingAudio.progress_start() > 0.0);
-        assert!(TranscriptionStatus::Transcribing.progress_start() > TranscriptionStatus::ExtractingAudio.progress_start());
+        assert!(
+            TranscriptionStatus::Transcribing.progress_start()
+                > TranscriptionStatus::ExtractingAudio.progress_start()
+        );
         assert_eq!(TranscriptionStatus::Complete.progress_start(), 1.0);
     }
 
@@ -1024,13 +1045,13 @@ mod tests {
         let mut f = fs::File::create(&dummy_path).unwrap();
         f.write_all(b"dummy audio data").unwrap();
 
-        let mut progress_values: Vec<(f32, TranscriptionStatus)> = Vec::new();
+        let progress_values = std::sync::Mutex::new(Vec::<(f32, TranscriptionStatus)>::new());
         let result = engine
             .simulate_transcription(
                 dummy_path.to_str().unwrap(),
                 &config,
                 Some(&|progress, status| {
-                    progress_values.push((progress, status));
+                    progress_values.lock().unwrap().push((progress, status));
                 }),
             )
             .unwrap();
@@ -1040,6 +1061,7 @@ mod tests {
         assert_eq!(engine.status(), TranscriptionStatus::Complete);
         assert!(engine.loaded_model().is_some());
 
+        let progress_values = progress_values.lock().unwrap();
         // Progress should have been reported
         assert!(!progress_values.is_empty());
 
@@ -1104,15 +1126,16 @@ mod tests {
     #[test]
     fn test_transcribe_audio_with_progress() {
         let config = TranscriptionConfig::default();
-        let mut progress_values: Vec<f32> = Vec::new();
+        let progress_values = std::sync::Arc::new(std::sync::Mutex::new(Vec::<f32>::new()));
+        let callback_values = progress_values.clone();
         let result = transcribe_audio(
             "/path/to/audio.wav",
             &config,
-            Some(Box::new(|p| progress_values.push(p))),
+            Some(Box::new(move |p| callback_values.lock().unwrap().push(p))),
         )
         .unwrap();
         assert!(!result.is_empty());
-        assert!(!progress_values.is_empty());
+        assert!(!progress_values.lock().unwrap().is_empty());
     }
 
     #[test]

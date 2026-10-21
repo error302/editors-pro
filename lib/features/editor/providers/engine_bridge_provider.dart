@@ -1,8 +1,6 @@
-import 'dart:async';
-
+import 'package:editors_pro/src/rust/api/bridge_api.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:editors_pro/src/rust/api/bridge_api.dart';
 import '../../../core/services/engine_service.dart';
 
 /// Provider that asynchronously initializes and returns the

@@ -81,7 +81,7 @@ class AppTheme {
   // ─── Shadows & Glows (subtle, tinted) ──────────────────────────
   static List<BoxShadow> primaryGlow({double opacity = 0.3}) => [
         BoxShadow(
-          color: primary.withOpacity(opacity),
+          color: primary.withValues(alpha: opacity),
           blurRadius: 16,
           offset: const Offset(0, 2),
         ),
@@ -89,7 +89,7 @@ class AppTheme {
 
   static List<BoxShadow> accentGlow({double opacity = 0.2}) => [
         BoxShadow(
-          color: primary.withOpacity(opacity),
+          color: primary.withValues(alpha: opacity),
           blurRadius: 12,
           offset: const Offset(0, 1),
         ),
@@ -97,7 +97,7 @@ class AppTheme {
 
   static List<BoxShadow> softShadow = [
     BoxShadow(
-      color: Colors.black.withOpacity(0.4),
+      color: Colors.black.withValues(alpha: 0.4),
       blurRadius: 8,
       offset: const Offset(0, 2),
     ),
@@ -170,7 +170,9 @@ class AppTheme {
         foregroundColor: Colors.white,
         elevation: 0,
         padding: const EdgeInsets.symmetric(
-            horizontal: spacing20, vertical: spacing12),
+          horizontal: spacing20,
+          vertical: spacing12,
+        ),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(radiusMedium),
         ),
@@ -186,7 +188,9 @@ class AppTheme {
         foregroundColor: textPrimary,
         side: const BorderSide(color: borderLight, width: 1),
         padding: const EdgeInsets.symmetric(
-            horizontal: spacing20, vertical: spacing12),
+          horizontal: spacing20,
+          vertical: spacing12,
+        ),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(radiusMedium),
         ),
@@ -236,15 +240,17 @@ class AppTheme {
       ),
       hintStyle: const TextStyle(color: textDisabled),
       contentPadding: const EdgeInsets.symmetric(
-          horizontal: spacing16, vertical: spacing12),
+        horizontal: spacing16,
+        vertical: spacing12,
+      ),
     ),
-    sliderTheme: SliderThemeData(
+    sliderTheme: const SliderThemeData(
       activeTrackColor: primary,
       thumbColor: Colors.white,
       inactiveTrackColor: borderLight,
       trackHeight: 3,
-      thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 7),
-      overlayShape: const RoundSliderOverlayShape(overlayRadius: 16),
+      thumbShape: RoundSliderThumbShape(enabledThumbRadius: 7),
+      overlayShape: RoundSliderOverlayShape(overlayRadius: 16),
     ),
     snackBarTheme: SnackBarThemeData(
       backgroundColor: surfaceVariant,
@@ -268,53 +274,85 @@ class AppTheme {
     ),
     chipTheme: ChipThemeData(
       backgroundColor: surfaceVariant,
-      selectedColor: primary.withOpacity(0.15),
+      selectedColor: primary.withValues(alpha: 0.15),
       labelStyle: const TextStyle(color: textPrimary, fontSize: 12),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(radiusSmall),
       ),
       side: BorderSide.none,
     ),
-    tabBarTheme: TabBarThemeData(
+    tabBarTheme: const TabBarThemeData(
       labelColor: primary,
       unselectedLabelColor: textSecondary,
       indicatorColor: primary,
       indicatorSize: TabBarIndicatorSize.label,
-      labelStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+      labelStyle: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
       unselectedLabelStyle:
-          const TextStyle(fontWeight: FontWeight.w400, fontSize: 14),
+          TextStyle(fontWeight: FontWeight.w400, fontSize: 14),
     ),
     textTheme: const TextTheme(
       headlineLarge: TextStyle(
-          fontSize: 28,
-          fontWeight: FontWeight.w700,
-          color: textPrimary,
-          letterSpacing: -0.5),
+        fontSize: 28,
+        fontWeight: FontWeight.w700,
+        color: textPrimary,
+        letterSpacing: -0.5,
+      ),
       headlineMedium: TextStyle(
-          fontSize: 24,
-          fontWeight: FontWeight.w700,
-          color: textPrimary,
-          letterSpacing: -0.3),
+        fontSize: 24,
+        fontWeight: FontWeight.w700,
+        color: textPrimary,
+        letterSpacing: -0.3,
+      ),
       headlineSmall: TextStyle(
-          fontSize: 20, fontWeight: FontWeight.w600, color: textPrimary),
+        fontSize: 20,
+        fontWeight: FontWeight.w600,
+        color: textPrimary,
+      ),
       titleLarge: TextStyle(
-          fontSize: 18, fontWeight: FontWeight.w600, color: textPrimary),
+        fontSize: 18,
+        fontWeight: FontWeight.w600,
+        color: textPrimary,
+      ),
       titleMedium: TextStyle(
-          fontSize: 16, fontWeight: FontWeight.w600, color: textPrimary),
+        fontSize: 16,
+        fontWeight: FontWeight.w600,
+        color: textPrimary,
+      ),
       titleSmall: TextStyle(
-          fontSize: 14, fontWeight: FontWeight.w600, color: textPrimary),
+        fontSize: 14,
+        fontWeight: FontWeight.w600,
+        color: textPrimary,
+      ),
       bodyLarge: TextStyle(
-          fontSize: 16, fontWeight: FontWeight.w400, color: textPrimary),
+        fontSize: 16,
+        fontWeight: FontWeight.w400,
+        color: textPrimary,
+      ),
       bodyMedium: TextStyle(
-          fontSize: 14, fontWeight: FontWeight.w400, color: textPrimary),
+        fontSize: 14,
+        fontWeight: FontWeight.w400,
+        color: textPrimary,
+      ),
       bodySmall: TextStyle(
-          fontSize: 12, fontWeight: FontWeight.w400, color: textSecondary),
+        fontSize: 12,
+        fontWeight: FontWeight.w400,
+        color: textSecondary,
+      ),
       labelLarge: TextStyle(
-          fontSize: 14, fontWeight: FontWeight.w600, color: textPrimary),
+        fontSize: 14,
+        fontWeight: FontWeight.w600,
+        color: textPrimary,
+      ),
       labelMedium: TextStyle(
-          fontSize: 12, fontWeight: FontWeight.w500, color: textSecondary),
+        fontSize: 12,
+        fontWeight: FontWeight.w500,
+        color: textSecondary,
+      ),
       labelSmall: TextStyle(
-          fontSize: 10, fontWeight: FontWeight.w500, color: textDisabled),
+        fontSize: 10,
+        fontWeight: FontWeight.w500,
+        color: textDisabled,
+      ),
     ),
   );
 
@@ -352,7 +390,9 @@ class AppTheme {
         foregroundColor: Colors.white,
         elevation: 0,
         padding: const EdgeInsets.symmetric(
-            horizontal: spacing20, vertical: spacing12),
+          horizontal: spacing20,
+          vertical: spacing12,
+        ),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(radiusMedium),
         ),
@@ -368,7 +408,9 @@ class AppTheme {
         foregroundColor: lightTextPrimary,
         side: const BorderSide(color: lightBorderLight, width: 1),
         padding: const EdgeInsets.symmetric(
-            horizontal: spacing20, vertical: spacing12),
+          horizontal: spacing20,
+          vertical: spacing12,
+        ),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(radiusMedium),
         ),
@@ -418,15 +460,17 @@ class AppTheme {
       ),
       hintStyle: const TextStyle(color: lightTextDisabled),
       contentPadding: const EdgeInsets.symmetric(
-          horizontal: spacing16, vertical: spacing12),
+        horizontal: spacing16,
+        vertical: spacing12,
+      ),
     ),
-    sliderTheme: SliderThemeData(
+    sliderTheme: const SliderThemeData(
       activeTrackColor: primary,
       thumbColor: lightSurface,
       inactiveTrackColor: lightBorder,
       trackHeight: 3,
-      thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 7),
-      overlayShape: const RoundSliderOverlayShape(overlayRadius: 16),
+      thumbShape: RoundSliderThumbShape(enabledThumbRadius: 7),
+      overlayShape: RoundSliderOverlayShape(overlayRadius: 16),
     ),
     snackBarTheme: SnackBarThemeData(
       backgroundColor: lightSurfaceVariant,
@@ -450,53 +494,85 @@ class AppTheme {
     ),
     chipTheme: ChipThemeData(
       backgroundColor: lightSurfaceVariant,
-      selectedColor: primary.withOpacity(0.15),
+      selectedColor: primary.withValues(alpha: 0.15),
       labelStyle: const TextStyle(color: lightTextPrimary, fontSize: 12),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(radiusSmall),
       ),
       side: BorderSide.none,
     ),
-    tabBarTheme: TabBarThemeData(
+    tabBarTheme: const TabBarThemeData(
       labelColor: primary,
       unselectedLabelColor: lightTextSecondary,
       indicatorColor: primary,
       indicatorSize: TabBarIndicatorSize.label,
-      labelStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+      labelStyle: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
       unselectedLabelStyle:
-          const TextStyle(fontWeight: FontWeight.w400, fontSize: 14),
+          TextStyle(fontWeight: FontWeight.w400, fontSize: 14),
     ),
     textTheme: const TextTheme(
       headlineLarge: TextStyle(
-          fontSize: 28,
-          fontWeight: FontWeight.w700,
-          color: lightTextPrimary,
-          letterSpacing: -0.5),
+        fontSize: 28,
+        fontWeight: FontWeight.w700,
+        color: lightTextPrimary,
+        letterSpacing: -0.5,
+      ),
       headlineMedium: TextStyle(
-          fontSize: 24,
-          fontWeight: FontWeight.w700,
-          color: lightTextPrimary,
-          letterSpacing: -0.3),
+        fontSize: 24,
+        fontWeight: FontWeight.w700,
+        color: lightTextPrimary,
+        letterSpacing: -0.3,
+      ),
       headlineSmall: TextStyle(
-          fontSize: 20, fontWeight: FontWeight.w600, color: lightTextPrimary),
+        fontSize: 20,
+        fontWeight: FontWeight.w600,
+        color: lightTextPrimary,
+      ),
       titleLarge: TextStyle(
-          fontSize: 18, fontWeight: FontWeight.w600, color: lightTextPrimary),
+        fontSize: 18,
+        fontWeight: FontWeight.w600,
+        color: lightTextPrimary,
+      ),
       titleMedium: TextStyle(
-          fontSize: 16, fontWeight: FontWeight.w600, color: lightTextPrimary),
+        fontSize: 16,
+        fontWeight: FontWeight.w600,
+        color: lightTextPrimary,
+      ),
       titleSmall: TextStyle(
-          fontSize: 14, fontWeight: FontWeight.w600, color: lightTextPrimary),
+        fontSize: 14,
+        fontWeight: FontWeight.w600,
+        color: lightTextPrimary,
+      ),
       bodyLarge: TextStyle(
-          fontSize: 16, fontWeight: FontWeight.w400, color: lightTextPrimary),
+        fontSize: 16,
+        fontWeight: FontWeight.w400,
+        color: lightTextPrimary,
+      ),
       bodyMedium: TextStyle(
-          fontSize: 14, fontWeight: FontWeight.w400, color: lightTextPrimary),
+        fontSize: 14,
+        fontWeight: FontWeight.w400,
+        color: lightTextPrimary,
+      ),
       bodySmall: TextStyle(
-          fontSize: 12, fontWeight: FontWeight.w400, color: lightTextSecondary),
+        fontSize: 12,
+        fontWeight: FontWeight.w400,
+        color: lightTextSecondary,
+      ),
       labelLarge: TextStyle(
-          fontSize: 14, fontWeight: FontWeight.w600, color: lightTextPrimary),
+        fontSize: 14,
+        fontWeight: FontWeight.w600,
+        color: lightTextPrimary,
+      ),
       labelMedium: TextStyle(
-          fontSize: 12, fontWeight: FontWeight.w500, color: lightTextSecondary),
+        fontSize: 12,
+        fontWeight: FontWeight.w500,
+        color: lightTextSecondary,
+      ),
       labelSmall: TextStyle(
-          fontSize: 10, fontWeight: FontWeight.w500, color: lightTextDisabled),
+        fontSize: 10,
+        fontWeight: FontWeight.w500,
+        color: lightTextDisabled,
+      ),
     ),
   );
 }

@@ -8,19 +8,20 @@ use proptest::prelude::*;
 use crate::decoder::{FrameData, VideoInfo};
 use crate::timeline::clip::Clip;
 use crate::timeline::track::{Track, TrackType};
-use crate::utils::math::{rgb_to_hsl, hsl_to_rgb};
+use crate::utils::math::{hsv_to_rgb, rgb_to_hsv};
 
-// ─── Color Roundtrip: RGB → HSL → RGB ───────────────────────
+// ─── Color Roundtrip: RGB → HSV → RGB ───────────────────────
 
 proptest! {
     #[test]
-    fn rgb_hsl_roundtrip(
+    fn rgb_hsv_roundtrip(
         r in 0u8..=255,
         g in 0u8..=255,
         b in 0u8..=255,
     ) {
-        let (h, s, l) = rgb_to_hsl(r, g, b);
-        let (r2, g2, b2) = hsl_to_rgb(h, s, l);
+        let (h, s, l) = rgb_to_hsv(r as f64 / 255.0, g as f64 / 255.0, b as f64 / 255.0);
+        let (r2, g2, b2) = hsv_to_rgb(h, s, l);
+        let (r2, g2, b2) = ((r2 * 255.0).round() as u8, (g2 * 255.0).round() as u8, (b2 * 255.0).round() as u8);
         // Allow 1-unit tolerance due to floating point
         assert!(
             (r as i16 - r2 as i16).abs() <= 1 &&

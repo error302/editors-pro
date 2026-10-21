@@ -4,7 +4,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import 'core/theme/app_theme.dart';
-import 'l10n/app_localizations.dart';
 import 'features/cloud/presentation/cloud_screen.dart';
 import 'features/editor/presentation/editor_screen.dart';
 import 'features/editor/providers/editor_provider.dart';
@@ -15,6 +14,7 @@ import 'features/settings/providers/settings_provider.dart';
 import 'features/settings/settings_screen.dart';
 import 'features/splash/splash_screen.dart';
 import 'features/templates/presentation/template_browser.dart';
+import 'l10n/app_localizations.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
   // Phase B.7: gate the /cloud route behind the experimental feature

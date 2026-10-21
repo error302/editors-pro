@@ -1,3 +1,4 @@
+import 'dart:developer' as developer;
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
@@ -51,7 +52,7 @@ class ExportForegroundService {
       // starting from background. This is a best-effort operation.
       // The export will still work without the foreground service;
       // it just may be killed if the app is minimized for too long.
-      print('ExportForegroundService.start failed: ${e.message}');
+      developer.log('ExportForegroundService.start failed: ${e.message}');
     }
   }
 
@@ -68,7 +69,8 @@ class ExportForegroundService {
         'stage': stage,
       });
     } on PlatformException catch (e) {
-      print('ExportForegroundService.updateProgress failed: ${e.message}');
+      developer
+          .log('ExportForegroundService.updateProgress failed: ${e.message}');
     }
   }
 
@@ -84,7 +86,7 @@ class ExportForegroundService {
         'fileSize': fileSize,
       });
     } on PlatformException catch (e) {
-      print('ExportForegroundService.complete failed: ${e.message}');
+      developer.log('ExportForegroundService.complete failed: ${e.message}');
     }
     _isRunning = false;
   }
@@ -96,7 +98,7 @@ class ExportForegroundService {
     try {
       await _channel.invokeMethod('cancel');
     } on PlatformException catch (e) {
-      print('ExportForegroundService.cancel failed: ${e.message}');
+      developer.log('ExportForegroundService.cancel failed: ${e.message}');
     }
     _isRunning = false;
   }

@@ -87,10 +87,7 @@ impl PreviewPipeline {
                 .store((time * self.config.target_fps) as u64, Ordering::SeqCst);
         }
 
-        debug!(
-            "Preview frame at {:.3}s ({}x{})",
-            time, width, height
-        );
+        debug!("Preview frame at {:.3}s ({}x{})", time, width, height);
         Ok(frame_data)
     }
 
@@ -98,10 +95,13 @@ impl PreviewPipeline {
     pub fn seek(&self, time: f64) -> Result<()> {
         let duration = self.project.timeline.get_duration();
         let clamped_time = time.clamp(0.0, duration);
-        self.current_time.store(clamped_time.to_bits(), Ordering::SeqCst);
+        self.current_time
+            .store(clamped_time.to_bits(), Ordering::SeqCst);
         if self.config.target_fps > 0.0 {
-            self.current_frame
-                .store((clamped_time * self.config.target_fps) as u64, Ordering::SeqCst);
+            self.current_frame.store(
+                (clamped_time * self.config.target_fps) as u64,
+                Ordering::SeqCst,
+            );
         }
         debug!("Seeked to {:.3}s", clamped_time);
         Ok(())
@@ -109,7 +109,8 @@ impl PreviewPipeline {
 
     /// Set the playback speed (1.0 = normal, 2.0 = double speed, etc.).
     pub fn set_playback_speed(&self, speed: f32) {
-        self.playback_speed.store((speed as f64).to_bits(), Ordering::SeqCst);
+        self.playback_speed
+            .store((speed as f64).to_bits(), Ordering::SeqCst);
         debug!("Playback speed set to {:.2}x", speed);
     }
 
@@ -153,10 +154,7 @@ impl PreviewPipeline {
             PreviewQuality::Eighth => 8,
         };
 
-        (
-            (max_w / divisor).max(16),
-            (max_h / divisor).max(16),
-        )
+        ((max_w / divisor).max(16), (max_h / divisor).max(16))
     }
 
     /// Adapt quality based on rendering performance.
@@ -205,7 +203,9 @@ mod tests {
 
     fn make_project() -> Project {
         let mut project = Project::new("Preview Test");
-        project.timeline.add_track(Track::new("V1", TrackType::Video));
+        project
+            .timeline
+            .add_track(TrackType::Video, Some("V1".into()));
         project
     }
 

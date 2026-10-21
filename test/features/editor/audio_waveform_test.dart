@@ -1,9 +1,8 @@
 import 'dart:ui' as ui;
 
+import 'package:editors_pro/features/editor/widgets/audio_waveform_painter.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-
-import 'package:editors_pro/features/editor/widgets/audio_waveform_painter.dart';
 
 void main() {
   group('AudioWaveformPainter', () {

@@ -5,8 +5,8 @@ import 'dart:typed_data';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../core/services/engine_service.dart';
 import '../../../core/services/audio_player_service.dart';
+import '../../../core/services/engine_service.dart';
 import '../providers/editor_provider.dart';
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -63,6 +63,7 @@ import '../providers/editor_provider.dart';
 /// before resuming, ensuring that the first displayed frame after a
 /// seek is perfectly aligned with the first audio sample played.
 class AvSyncCoordinator {
+  AvSyncCoordinator(this._ref);
   final Ref _ref;
 
   // ── Timing ────────────────────────────────────────────────────────
@@ -113,12 +114,10 @@ class AvSyncCoordinator {
   // ── Playback Rate ─────────────────────────────────────────────────
 
   /// Supported playback rates (must match EditorState clamping).
-  static const List<double> _supportedRates = [0.25, 0.5, 1.0, 2.0, 4.0];
 
   // ── Internal State ────────────────────────────────────────────────
 
   Timer? _syncTimer;
-  DateTime? _lastTickTime;
 
   /// Monotonically-increasing wall-clock origin for PTS calculations.
   DateTime? _playbackOrigin;
@@ -179,8 +178,6 @@ class AvSyncCoordinator {
   /// for a few ticks after seeking.
   DateTime? _lastSeekTime;
 
-  AvSyncCoordinator(this._ref);
-
   // ═══════════════════════════════════════════════════════════════════
   // Public API
   // ═══════════════════════════════════════════════════════════════════
@@ -226,7 +223,6 @@ class AvSyncCoordinator {
     await AudioPlayerService.instance.play();
 
     // ── Start the sync timer ──────────────────────────────────────
-    _lastTickTime = DateTime.now();
     _syncTickCount = 0;
     _driftExceededCount = 0;
     _totalDriftCorrectionMs = 0;
@@ -251,7 +247,6 @@ class AvSyncCoordinator {
   Future<void> stop() async {
     _syncTimer?.cancel();
     _syncTimer = null;
-    _lastTickTime = null;
     _playbackOrigin = null;
     _seekInProgress = false;
     _lastSeekTime = null;
@@ -376,10 +371,6 @@ class AvSyncCoordinator {
     }
 
     final now = DateTime.now();
-    final elapsed = _lastTickTime != null
-        ? now.difference(_lastTickTime!).inMilliseconds
-        : _syncTickMs;
-    _lastTickTime = now;
 
     _syncTickCount++;
 
@@ -504,7 +495,7 @@ class AvSyncCoordinator {
             _detectedLatencyMs = _latencySampleSum / _latencySampleCount;
             developer.log(
               'Detected audio latency: ${_detectedLatencyMs.toStringAsFixed(1)}ms '
-              '(${_latencySampleCount} samples)',
+              '($_latencySampleCount samples)',
               name: 'AvSyncCoordinator',
             );
           }
@@ -521,10 +512,10 @@ class AvSyncCoordinator {
     if (_latencySampleCount < _latencyProbeMinSamples) return;
 
     // Target buffer = max(min, min(max, base + scale × latency))
-    final targetBufferMs = (_minBufferAheadMs +
-            _latencyBufferScale * _detectedLatencyMs)
-        .clamp(_minBufferAheadMs.toDouble(), _maxBufferAheadMs.toDouble())
-        .round();
+    final targetBufferMs =
+        (_minBufferAheadMs + _latencyBufferScale * _detectedLatencyMs)
+            .clamp(_minBufferAheadMs.toDouble(), _maxBufferAheadMs.toDouble())
+            .round();
 
     // Smooth the transition — don't change the buffer size by more
     // than 50ms per tick to avoid sudden jumps.
@@ -537,10 +528,10 @@ class AvSyncCoordinator {
 
     // Adjust chunk size proportionally: larger buffer → larger chunks
     // to keep the number of fetches per second reasonable.
-    _audioChunkMs = (_defaultAudioChunkMs *
-            (_audioBufferAheadMs / _minBufferAheadMs))
-        .round()
-        .clamp(_defaultAudioChunkMs, 600);
+    _audioChunkMs =
+        (_defaultAudioChunkMs * (_audioBufferAheadMs / _minBufferAheadMs))
+            .round()
+            .clamp(_defaultAudioChunkMs, 600);
   }
 
   /// Prime the audio buffer with initial samples starting at [startMs].
@@ -590,9 +581,8 @@ class AvSyncCoordinator {
           (_audioChunkMs / speed).round().clamp(50, _maxBufferAheadMs);
 
       final fetchStartMs = math.max(bufferEndMs, playheadMs);
-      final fetchEndMs = (fetchStartMs + scaledChunkMs)
-          .clamp(0, neededAheadMs)
-          .round();
+      final fetchEndMs =
+          (fetchStartMs + scaledChunkMs).clamp(0, neededAheadMs).round();
 
       if (fetchEndMs > fetchStartMs) {
         _fetchAndWriteAudio(fetchStartMs, fetchEndMs - fetchStartMs, speed);
@@ -693,14 +683,13 @@ class AvSyncCoordinator {
 
       if (correctionMs != 0) {
         // Nudge the audio position by seeking a small amount.
-        final correctedAudioPos =
-            _snapToFrameBoundary(audioPos - correctionMs);
+        final correctedAudioPos = _snapToFrameBoundary(audioPos - correctionMs);
         AudioPlayerService.instance.seekTo(correctedAudioPos);
         _audioPositionMs = correctedAudioPos;
         _totalDriftCorrectionMs += correctionMs.abs();
 
         // Partially decay the EWMA so we don't over-correct next tick.
-        _smoothedDriftMs *= (1.0 - _maxCorrectionFraction);
+        _smoothedDriftMs *= 1.0 - _maxCorrectionFraction;
       }
     }
   }
@@ -718,16 +707,6 @@ class AvSyncCoordinator {
 
 /// Diagnostics for the A/V sync system.
 class AvSyncDiagnostics {
-  final int syncTickCount;
-  final int driftExceededCount;
-  final int totalDriftCorrectionMs;
-  final double smoothedDriftMs;
-  final bool audioInitialized;
-  final double detectedLatencyMs;
-  final int adaptiveBufferAheadMs;
-  final int adaptiveChunkMs;
-  final double frameRate;
-
   const AvSyncDiagnostics({
     required this.syncTickCount,
     required this.driftExceededCount,
@@ -739,6 +718,15 @@ class AvSyncDiagnostics {
     required this.adaptiveChunkMs,
     required this.frameRate,
   });
+  final int syncTickCount;
+  final int driftExceededCount;
+  final int totalDriftCorrectionMs;
+  final double smoothedDriftMs;
+  final bool audioInitialized;
+  final double detectedLatencyMs;
+  final int adaptiveBufferAheadMs;
+  final int adaptiveChunkMs;
+  final double frameRate;
 
   double get driftExceededRatio =>
       syncTickCount > 0 ? driftExceededCount / syncTickCount : 0.0;
@@ -756,7 +744,7 @@ class AvSyncDiagnostics {
       'smoothed_drift=${smoothedDriftMs.toStringAsFixed(1)}ms, '
       'latency=${detectedLatencyMs.toStringAsFixed(1)}ms, '
       'buffer_ahead=${adaptiveBufferAheadMs}ms, chunk=${adaptiveChunkMs}ms, '
-      'fps=${frameRate}, audio=$audioInitialized)';
+      'fps=$frameRate, audio=$audioInitialized)';
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

@@ -8,13 +8,14 @@
 ///
 /// Google Drive is the only implemented provider. OAuth remains unavailable
 /// until the package ID and signing certificate are registered.
+library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../core/theme/app_theme.dart';
-import '../../../core/extensions/context_extensions.dart';
 import '../../../core/constants/cloud_config.dart';
+import '../../../core/extensions/context_extensions.dart';
+import '../../../core/theme/app_theme.dart';
 import '../providers/cloud_provider.dart';
 
 class CloudScreen extends ConsumerStatefulWidget {
@@ -89,7 +90,7 @@ class _CloudScreenState extends ConsumerState<CloudScreen> {
           ],
 
           // ─── Cloud Projects ───────────────────────────────────
-          _SectionHeader(title: 'Cloud Projects'),
+          const _SectionHeader(title: 'Cloud Projects'),
           const SizedBox(height: 8),
           _CloudProjectsList(
             projects: syncState.cloudProjects,
@@ -116,14 +117,14 @@ class _CloudScreenState extends ConsumerState<CloudScreen> {
 
   Future<void> _handleSyncAll(CloudSyncNotifier notifier) async {
     // Phase E.20: sync all tracked projects.
-    final projects = notifier.state.cloudProjects;
+    final projects = notifier.currentState.cloudProjects;
     if (projects.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('No cloud projects to sync')),
       );
       return;
     }
-    int successCount = 0;
+    var successCount = 0;
     for (final project in projects) {
       final ok = await notifier.syncProject(project.projectId);
       if (ok) successCount++;
@@ -149,8 +150,8 @@ class _CloudScreenState extends ConsumerState<CloudScreen> {
         SnackBar(
           content: Text(
             success
-                ? 'Project synced to ${notifier.state.providerName}'
-                : (notifier.state.lastError ?? 'Sync failed'),
+                ? 'Project synced to ${notifier.currentState.providerName}'
+                : (notifier.currentState.lastError ?? 'Sync failed'),
           ),
         ),
       );
@@ -166,7 +167,7 @@ class _CloudScreenState extends ConsumerState<CloudScreen> {
       builder: (ctx) => AlertDialog(
         title: const Text('Sign Out?'),
         content: Text(
-          'This will disconnect your ${notifier.state.providerName} account. '
+          'This will disconnect your ${notifier.currentState.providerName} account. '
           'Your local projects will not be affected.',
         ),
         actions: [
@@ -230,8 +231,8 @@ class _CloudScreenState extends ConsumerState<CloudScreen> {
 // ─── Reusable Widgets ──────────────────────────────────────────────
 
 class _SectionHeader extends StatelessWidget {
-  final String title;
   const _SectionHeader({required this.title});
+  final String title;
 
   @override
   Widget build(BuildContext context) {
@@ -250,19 +251,18 @@ class _SectionHeader extends StatelessWidget {
 }
 
 class _ProviderStatusCard extends StatelessWidget {
+  const _ProviderStatusCard({
+    required this.isAuthenticated,
+    required this.providerName,
+    required this.isProviderConfigured,
+    required this.onSignIn,
+    this.accountName,
+  });
   final bool isAuthenticated;
   final String? accountName;
   final String providerName;
   final bool isProviderConfigured;
   final VoidCallback onSignIn;
-
-  const _ProviderStatusCard({
-    required this.isAuthenticated,
-    this.accountName,
-    required this.providerName,
-    required this.isProviderConfigured,
-    required this.onSignIn,
-  });
 
   @override
   Widget build(BuildContext context) {
@@ -310,10 +310,10 @@ class _ProviderStatusCard extends StatelessWidget {
                     padding:
                         const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
-                      color: AppTheme.success.withOpacity(0.15),
+                      color: AppTheme.success.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(4),
                       border: Border.all(
-                        color: AppTheme.success.withOpacity(0.4),
+                        color: AppTheme.success.withValues(alpha: 0.4),
                         width: 1,
                       ),
                     ),
@@ -364,15 +364,14 @@ class _ProviderStatusCard extends StatelessWidget {
 }
 
 class _SyncActionsCard extends StatelessWidget {
-  final bool isSyncing;
-  final int pendingConflicts;
-  final VoidCallback onSyncAll;
-
   const _SyncActionsCard({
     required this.isSyncing,
     required this.pendingConflicts,
     required this.onSyncAll,
   });
+  final bool isSyncing;
+  final int pendingConflicts;
+  final VoidCallback onSyncAll;
 
   @override
   Widget build(BuildContext context) {
@@ -407,10 +406,10 @@ class _SyncActionsCard extends StatelessWidget {
                     padding:
                         const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
-                      color: AppTheme.warning.withOpacity(0.15),
+                      color: AppTheme.warning.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(4),
                       border: Border.all(
-                        color: AppTheme.warning.withOpacity(0.4),
+                        color: AppTheme.warning.withValues(alpha: 0.4),
                         width: 1,
                       ),
                     ),
@@ -442,23 +441,22 @@ class _SyncActionsCard extends StatelessWidget {
 }
 
 class _ErrorBanner extends StatelessWidget {
-  final String message;
-  final VoidCallback onDismiss;
-
   const _ErrorBanner({
     required this.message,
     required this.onDismiss,
   });
+  final String message;
+  final VoidCallback onDismiss;
 
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: AppTheme.error.withOpacity(0.1),
+        color: AppTheme.error.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
         border: Border.all(
-          color: AppTheme.error.withOpacity(0.3),
+          color: AppTheme.error.withValues(alpha: 0.3),
           width: 1,
         ),
       ),
@@ -487,17 +485,16 @@ class _ErrorBanner extends StatelessWidget {
 }
 
 class _CloudProjectsList extends StatelessWidget {
-  final List<CloudProjectEntry> projects;
-  final bool isSyncing;
-  final ValueChanged<String> onSyncProject;
-  final ValueChanged<String> onResolveConflict;
-
   const _CloudProjectsList({
     required this.projects,
     required this.isSyncing,
     required this.onSyncProject,
     required this.onResolveConflict,
   });
+  final List<CloudProjectEntry> projects;
+  final bool isSyncing;
+  final ValueChanged<String> onSyncProject;
+  final ValueChanged<String> onResolveConflict;
 
   @override
   Widget build(BuildContext context) {
@@ -508,7 +505,7 @@ class _CloudProjectsList extends StatelessWidget {
           padding: const EdgeInsets.all(32),
           child: Column(
             children: [
-              Icon(
+              const Icon(
                 Icons.cloud_off_outlined,
                 size: 48,
                 color: AppTheme.textDisabled,
@@ -554,7 +551,7 @@ class _CloudProjectsList extends StatelessWidget {
                   padding:
                       const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                   decoration: BoxDecoration(
-                    color: AppTheme.info.withOpacity(0.15),
+                    color: AppTheme.info.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(4),
                   ),
                   child: Text(
@@ -594,8 +591,11 @@ class _InfoCard extends StatelessWidget {
           children: [
             Row(
               children: [
-                const Icon(Icons.info_outline,
-                    color: AppTheme.secondary, size: 20),
+                const Icon(
+                  Icons.info_outline,
+                  color: AppTheme.secondary,
+                  size: 20,
+                ),
                 const SizedBox(width: 8),
                 Text(
                   'How Cloud Sync Works',
@@ -606,22 +606,22 @@ class _InfoCard extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 12),
-            _InfoRow(
+            const _InfoRow(
               icon: Icons.description_outlined,
               text: 'Only .epp project files are synced (typically < 1MB)',
             ),
             const SizedBox(height: 8),
-            _InfoRow(
+            const _InfoRow(
               icon: Icons.videocam_off_outlined,
               text: 'Source media (video files) stays local — not uploaded',
             ),
             const SizedBox(height: 8),
-            _InfoRow(
+            const _InfoRow(
               icon: Icons.merge_outlined,
               text: 'Conflicts are detected and resolved per project',
             ),
             const SizedBox(height: 8),
-            _InfoRow(
+            const _InfoRow(
               icon: Icons.offline_bolt_outlined,
               text: 'Works offline — syncs when connectivity is restored',
             ),
@@ -633,10 +633,9 @@ class _InfoCard extends StatelessWidget {
 }
 
 class _InfoRow extends StatelessWidget {
+  const _InfoRow({required this.icon, required this.text});
   final IconData icon;
   final String text;
-
-  const _InfoRow({required this.icon, required this.text});
 
   @override
   Widget build(BuildContext context) {

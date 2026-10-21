@@ -86,7 +86,8 @@ void main() {
       expect(state.isComplete, isFalse);
     });
 
-    test('isComplete is true when not exporting, progress 1.0, path set, no error',
+    test(
+        'isComplete is true when not exporting, progress 1.0, path set, no error',
         () {
       const state = ExportState(
         isExporting: false,

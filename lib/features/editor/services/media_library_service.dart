@@ -7,6 +7,8 @@ import 'package:uuid/uuid.dart';
 import '../../../core/constants/app_constants.dart';
 
 class MediaLibraryService {
+  MediaLibraryService({Directory? storageDirectory})
+      : _storageDirectory = storageDirectory;
   static const _supportedExtensions = {
     '.mp4',
     '.mov',
@@ -36,9 +38,6 @@ class MediaLibraryService {
     '.gif',
   };
 
-  MediaLibraryService({Directory? storageDirectory})
-      : _storageDirectory = storageDirectory;
-
   final Directory? _storageDirectory;
 
   Future<File> copyIntoLibrary({
@@ -47,13 +46,17 @@ class MediaLibraryService {
   }) async {
     final extension = p.extension(fileName).toLowerCase();
     if (!_supportedExtensions.contains(extension)) {
-      throw FormatException('The selected media format is not supported.');
+      throw const FormatException(
+        'The selected media format is not supported.',
+      );
     }
 
     final source = File(sourcePath);
     if (!await source.exists()) {
       throw FileSystemException(
-          'The selected file is no longer available.', sourcePath);
+        'The selected file is no longer available.',
+        sourcePath,
+      );
     }
 
     var storageDirectory = _storageDirectory;

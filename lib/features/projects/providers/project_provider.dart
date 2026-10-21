@@ -9,17 +9,16 @@ import '../../../data/models/project_model.dart';
 
 /// Current project state
 class ProjectState {
-  final ProjectModel? currentProject;
-  final List<ProjectModel> recentProjects;
-  final bool isLoading;
-  final String? error;
-
   const ProjectState({
     this.currentProject,
     this.recentProjects = const [],
     this.isLoading = false,
     this.error,
   });
+  final ProjectModel? currentProject;
+  final List<ProjectModel> recentProjects;
+  final bool isLoading;
+  final String? error;
 
   ProjectState copyWith({
     ProjectModel? currentProject,
@@ -42,8 +41,8 @@ class ProjectState {
 /// Project state notifier — now backed by the Drift database via
 /// [ProjectRepository] for persistent storage.
 class ProjectNotifier extends StateNotifier<ProjectState> {
-  final Ref _ref;
   ProjectNotifier(this._ref) : super(const ProjectState());
+  final Ref _ref;
 
   ProjectRepository get _repo => _ref.read(projectRepositoryProvider);
 
@@ -65,13 +64,21 @@ class ProjectNotifier extends StateNotifier<ProjectState> {
 
   /// Create a new project — persists to database and initializes in the
   /// Rust engine.
-  Future<ProjectModel?> createProject(String name,
-      {int width = 1920, int height = 1080, double fps = 30.0}) async {
+  Future<ProjectModel?> createProject(
+    String name, {
+    int width = 1920,
+    int height = 1080,
+    double fps = 30.0,
+  }) async {
     state = state.copyWith(isLoading: true, clearError: true);
 
     try {
-      final project = await _repo.createProject(name,
-          width: width, height: height, fps: fps);
+      final project = await _repo.createProject(
+        name,
+        width: width,
+        height: height,
+        fps: fps,
+      );
 
       state = state.copyWith(
         currentProject: project,
@@ -446,8 +453,9 @@ class ProjectNotifier extends StateNotifier<ProjectState> {
   /// Sync the project model with the latest engine state (after
   /// engine mutations like addClip, split, etc.).
   Future<void> syncFromEngine() async {
-    if (!EngineService.instance.isInitialized || state.currentProject == null)
+    if (!EngineService.instance.isInitialized || state.currentProject == null) {
       return;
+    }
     try {
       final api = EngineService.instance.api;
       final timelineState = await api.getTimelineState();

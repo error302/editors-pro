@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../core/theme/app_theme.dart';
 import '../../../core/extensions/context_extensions.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../settings/providers/settings_provider.dart';
 import '../providers/transcription_provider.dart';
 
@@ -42,17 +42,17 @@ const _modelOptions = [
 /// - Export SRT / Export VTT buttons
 /// - "Add to Timeline" button
 class AutoCaption extends ConsumerStatefulWidget {
+  const AutoCaption({
+    required this.assetId,
+    required this.trackId,
+    super.key,
+  });
+
   /// The asset ID of the video/audio to transcribe
   final String assetId;
 
   /// The text track ID where subtitle clips will be added
   final String trackId;
-
-  const AutoCaption({
-    super.key,
-    required this.assetId,
-    required this.trackId,
-  });
 
   @override
   ConsumerState<AutoCaption> createState() => _AutoCaptionState();
@@ -100,7 +100,7 @@ class _AutoCaptionState extends ConsumerState<AutoCaption> {
         color: AppTheme.surface,
         borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
         border: Border.all(
-          color: AppTheme.textDisabled.withOpacity(0.1),
+          color: AppTheme.textDisabled.withValues(alpha: 0.1),
           width: 1,
         ),
       ),
@@ -209,8 +209,11 @@ class _AutoCaptionState extends ConsumerState<AutoCaption> {
             child: DropdownButton<String>(
               value: state.selectedLanguage,
               isExpanded: true,
-              icon: const Icon(Icons.language,
-                  size: 18, color: AppTheme.textSecondary),
+              icon: const Icon(
+                Icons.language,
+                size: 18,
+                color: AppTheme.textSecondary,
+              ),
               style: context.textTheme.bodyMedium,
               dropdownColor: AppTheme.surfaceVariant,
               items: _languageOptions.map((lang) {
@@ -264,8 +267,11 @@ class _AutoCaptionState extends ConsumerState<AutoCaption> {
             child: DropdownButton<String>(
               value: state.selectedModel,
               isExpanded: true,
-              icon: const Icon(Icons.memory,
-                  size: 18, color: AppTheme.textSecondary),
+              icon: const Icon(
+                Icons.memory,
+                size: 18,
+                color: AppTheme.textSecondary,
+              ),
               style: context.textTheme.bodyMedium,
               dropdownColor: AppTheme.surfaceVariant,
               items: _modelOptions.map((model) {
@@ -382,10 +388,10 @@ class _AutoCaptionState extends ConsumerState<AutoCaption> {
     return Container(
       padding: const EdgeInsets.all(AppTheme.spacing8),
       decoration: BoxDecoration(
-        color: AppTheme.error.withOpacity(0.1),
+        color: AppTheme.error.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
         border: Border.all(
-          color: AppTheme.error.withOpacity(0.3),
+          color: AppTheme.error.withValues(alpha: 0.3),
           width: 1,
         ),
       ),
@@ -403,9 +409,7 @@ class _AutoCaptionState extends ConsumerState<AutoCaption> {
           ),
           InkWell(
             onTap: () {
-              ref
-                  .read(transcriptionProvider.notifier)
-                  .clearTranscription();
+              ref.read(transcriptionProvider.notifier).clearTranscription();
             },
             child: const Icon(Icons.close, size: 14, color: AppTheme.error),
           ),
@@ -442,12 +446,12 @@ class _AutoCaptionState extends ConsumerState<AutoCaption> {
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
         decoration: BoxDecoration(
           color: allSelected
-              ? AppTheme.secondary.withOpacity(0.1)
+              ? AppTheme.secondary.withValues(alpha: 0.1)
               : AppTheme.surfaceVariant,
           borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
           border: Border.all(
             color: allSelected
-                ? AppTheme.secondary.withOpacity(0.3)
+                ? AppTheme.secondary.withValues(alpha: 0.3)
                 : Colors.transparent,
             width: 1,
           ),
@@ -456,9 +460,7 @@ class _AutoCaptionState extends ConsumerState<AutoCaption> {
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(
-              allSelected
-                  ? Icons.deselect
-                  : Icons.select_all,
+              allSelected ? Icons.deselect : Icons.select_all,
               size: 14,
               color: allSelected ? AppTheme.secondary : AppTheme.textSecondary,
             ),
@@ -466,7 +468,8 @@ class _AutoCaptionState extends ConsumerState<AutoCaption> {
             Text(
               allSelected ? 'Deselect All' : 'Select All',
               style: context.textTheme.bodySmall?.copyWith(
-                color: allSelected ? AppTheme.secondary : AppTheme.textSecondary,
+                color:
+                    allSelected ? AppTheme.secondary : AppTheme.textSecondary,
                 fontSize: 11,
                 fontWeight: FontWeight.w600,
               ),
@@ -481,7 +484,7 @@ class _AutoCaptionState extends ConsumerState<AutoCaption> {
     return Container(
       constraints: const BoxConstraints(maxHeight: 240),
       decoration: BoxDecoration(
-        color: AppTheme.surfaceVariant.withOpacity(0.5),
+        color: AppTheme.surfaceVariant.withValues(alpha: 0.5),
         borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
       ),
       child: ListView.separated(
@@ -556,9 +559,8 @@ class _AutoCaptionState extends ConsumerState<AutoCaption> {
               style: OutlinedButton.styleFrom(
                 foregroundColor: AppTheme.secondary,
                 side: BorderSide(
-                  color: hasSelected
-                      ? AppTheme.secondary
-                      : AppTheme.textDisabled,
+                  color:
+                      hasSelected ? AppTheme.secondary : AppTheme.textDisabled,
                   width: 1,
                 ),
                 shape: RoundedRectangleBorder(
@@ -593,9 +595,8 @@ class _AutoCaptionState extends ConsumerState<AutoCaption> {
               style: OutlinedButton.styleFrom(
                 foregroundColor: AppTheme.secondary,
                 side: BorderSide(
-                  color: hasSelected
-                      ? AppTheme.secondary
-                      : AppTheme.textDisabled,
+                  color:
+                      hasSelected ? AppTheme.secondary : AppTheme.textDisabled,
                   width: 1,
                 ),
                 shape: RoundedRectangleBorder(
@@ -623,7 +624,7 @@ class _AutoCaptionState extends ConsumerState<AutoCaption> {
         style: ElevatedButton.styleFrom(
           backgroundColor: AppTheme.secondary,
           foregroundColor: Colors.white,
-          disabledBackgroundColor: AppTheme.textDisabled.withOpacity(0.3),
+          disabledBackgroundColor: AppTheme.textDisabled.withValues(alpha: 0.3),
           disabledForegroundColor: AppTheme.textDisabled,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
@@ -654,15 +655,6 @@ class _AutoCaptionState extends ConsumerState<AutoCaption> {
 
 /// Individual segment preview item with editing and selection support
 class _SegmentPreviewItem extends StatelessWidget {
-  final TranscriptionSegmentData segment;
-  final bool isEditing;
-  final TextEditingController editController;
-  final FocusNode editFocusNode;
-  final VoidCallback onTap;
-  final VoidCallback onSelectionToggle;
-  final ValueChanged<String> onEditSubmit;
-  final VoidCallback onEditCancel;
-
   const _SegmentPreviewItem({
     required this.segment,
     required this.isEditing,
@@ -673,6 +665,14 @@ class _SegmentPreviewItem extends StatelessWidget {
     required this.onEditSubmit,
     required this.onEditCancel,
   });
+  final TranscriptionSegmentData segment;
+  final bool isEditing;
+  final TextEditingController editController;
+  final FocusNode editFocusNode;
+  final VoidCallback onTap;
+  final VoidCallback onSelectionToggle;
+  final ValueChanged<String> onEditSubmit;
+  final VoidCallback onEditCancel;
 
   /// Get the confidence color based on the score
   Color get _confidenceColor {
@@ -683,9 +683,13 @@ class _SegmentPreviewItem extends StatelessWidget {
 
   /// Get the background tint based on confidence
   Color get _confidenceBgColor {
-    if (segment.confidence > 0.8) return AppTheme.success.withOpacity(0.05);
-    if (segment.confidence > 0.5) return AppTheme.warning.withOpacity(0.05);
-    return AppTheme.error.withOpacity(0.05);
+    if (segment.confidence > 0.8) {
+      return AppTheme.success.withValues(alpha: 0.05);
+    }
+    if (segment.confidence > 0.5) {
+      return AppTheme.warning.withValues(alpha: 0.05);
+    }
+    return AppTheme.error.withValues(alpha: 0.05);
   }
 
   @override
@@ -696,13 +700,16 @@ class _SegmentPreviewItem extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
       decoration: BoxDecoration(
         color: dimmed
-            ? AppTheme.cardColor.withOpacity(0.5)
+            ? AppTheme.cardColor.withValues(alpha: 0.5)
             : isEditing
-                ? AppTheme.secondary.withOpacity(0.08)
+                ? AppTheme.secondary.withValues(alpha: 0.08)
                 : _confidenceBgColor,
         borderRadius: BorderRadius.circular(4),
         border: isEditing
-            ? Border.all(color: AppTheme.secondary.withOpacity(0.4), width: 1)
+            ? Border.all(
+                color: AppTheme.secondary.withValues(alpha: 0.4),
+                width: 1,
+              )
             : null,
       ),
       child: Row(
@@ -729,7 +736,7 @@ class _SegmentPreviewItem extends StatelessWidget {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
             decoration: BoxDecoration(
-              color: AppTheme.secondary.withOpacity(0.1),
+              color: AppTheme.secondary.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(3),
             ),
             child: Text(
@@ -766,7 +773,9 @@ class _SegmentPreviewItem extends StatelessWidget {
                     child: Text(
                       segment.text,
                       style: context.textTheme.bodySmall?.copyWith(
-                        color: dimmed ? AppTheme.textDisabled : AppTheme.textPrimary,
+                        color: dimmed
+                            ? AppTheme.textDisabled
+                            : AppTheme.textPrimary,
                         fontSize: 12,
                       ),
                       maxLines: 2,
@@ -794,8 +803,8 @@ class _SegmentPreviewItem extends StatelessWidget {
           if (isEditing)
             GestureDetector(
               onTap: () => onEditSubmit(editController.text),
-              child: Padding(
-                padding: const EdgeInsets.only(top: 2, left: 4),
+              child: const Padding(
+                padding: EdgeInsets.only(top: 2, left: 4),
                 child: Icon(
                   Icons.check,
                   size: 14,

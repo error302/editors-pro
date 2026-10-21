@@ -7,6 +7,14 @@ import 'package:flutter/material.dart';
 /// the given size. The waveform is drawn with a gradient effect
 /// and supports different color schemes for different track types.
 class AudioWaveformPainter extends CustomPainter {
+  const AudioWaveformPainter({
+    required this.peaks,
+    required this.color,
+    this.rmsValues,
+    this.showCenterLine = true,
+    this.barWidthRatio = 0.7,
+  });
+
   /// Peak amplitude values (0.0 to 1.0)
   final List<double> peaks;
 
@@ -22,14 +30,6 @@ class AudioWaveformPainter extends CustomPainter {
   /// Bar width ratio (0.0 to 1.0, where 1.0 means bars touch)
   final double barWidthRatio;
 
-  const AudioWaveformPainter({
-    required this.peaks,
-    required this.color,
-    this.rmsValues,
-    this.showCenterLine = true,
-    this.barWidthRatio = 0.7,
-  });
-
   @override
   void paint(Canvas canvas, Size size) {
     if (peaks.isEmpty) return;
@@ -39,7 +39,7 @@ class AudioWaveformPainter extends CustomPainter {
     // Draw center line
     if (showCenterLine) {
       final centerPaint = Paint()
-        ..color = color.withOpacity(0.15)
+        ..color = color.withValues(alpha: 0.15)
         ..strokeWidth = 1.0;
       canvas.drawLine(
         Offset(0, size.height / 2),
@@ -55,20 +55,20 @@ class AudioWaveformPainter extends CustomPainter {
       final halfHeight = size.height / 2;
 
       rmsPath.moveTo(0, halfHeight);
-      for (int i = 0; i < rmsValues!.length && i < peaks.length; i++) {
+      for (var i = 0; i < rmsValues!.length && i < peaks.length; i++) {
         final x = i * barWidth + barWidth / 2;
         final rmsHeight = (rmsValues![i] * halfHeight).clamp(0.0, halfHeight);
         rmsPath.lineTo(x, halfHeight - rmsHeight);
       }
       // Mirror back
-      for (int i = math.min(rmsValues!.length, peaks.length) - 1; i >= 0; i--) {
+      for (var i = math.min(rmsValues!.length, peaks.length) - 1; i >= 0; i--) {
         final x = i * barWidth + barWidth / 2;
         final rmsHeight = (rmsValues![i] * halfHeight).clamp(0.0, halfHeight);
         rmsPath.lineTo(x, halfHeight + rmsHeight);
       }
       rmsPath.close();
 
-      paint.color = color.withOpacity(0.2);
+      paint.color = color.withValues(alpha: 0.2);
       canvas.drawPath(rmsPath, paint);
     }
 
@@ -78,7 +78,7 @@ class AudioWaveformPainter extends CustomPainter {
     final halfHeight = size.height / 2;
     final gap = (barWidth - actualBarWidth) / 2;
 
-    for (int i = 0; i < peaks.length; i++) {
+    for (var i = 0; i < peaks.length; i++) {
       final peak = peaks[i].clamp(0.0, 1.0);
       if (peak < 0.001) continue; // Skip silent bars
 
@@ -124,6 +124,15 @@ class AudioWaveformPainter extends CustomPainter {
 /// and provides a convenient interface for displaying waveforms
 /// on audio clips in the timeline.
 class AudioWaveformWidget extends StatelessWidget {
+  const AudioWaveformWidget({
+    required this.peaks,
+    required this.color,
+    required this.width,
+    required this.height,
+    super.key,
+    this.rmsValues,
+  });
+
   /// Peak amplitude values (0.0 to 1.0)
   final List<double> peaks;
 
@@ -138,15 +147,6 @@ class AudioWaveformWidget extends StatelessWidget {
 
   /// Height of the widget
   final double height;
-
-  const AudioWaveformWidget({
-    super.key,
-    required this.peaks,
-    this.rmsValues,
-    required this.color,
-    required this.width,
-    required this.height,
-  });
 
   @override
   Widget build(BuildContext context) {

@@ -1,17 +1,16 @@
-import 'package:flutter/material.dart';
-import 'package:flutter_test/flutter_test.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-
 import 'package:editors_pro/app.dart';
 import 'package:editors_pro/core/services/engine_service.dart';
 import 'package:editors_pro/core/services/project_repository.dart';
 import 'package:editors_pro/data/models/project_model.dart';
 import 'package:editors_pro/features/editor/providers/editor_provider.dart';
-import 'package:editors_pro/features/projects/providers/project_provider.dart';
 import 'package:editors_pro/features/onboarding/providers/onboarding_provider.dart';
+import 'package:editors_pro/features/projects/providers/project_provider.dart';
 import 'package:editors_pro/features/settings/providers/settings_provider.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 /// A lightweight fake that satisfies the [ProjectRepository] interface
 /// without touching the filesystem or SQLite.
@@ -39,18 +38,24 @@ class _FakeProjectRepository implements ProjectRepository {
       height: height,
       fps: fps,
       tracks: [
-        TrackModel(
-            id: 'v1',
-            name: 'Video 1',
-            trackType: TrackType.video,
-            orderIndex: 0),
-        TrackModel(
-            id: 'a1',
-            name: 'Audio 1',
-            trackType: TrackType.audio,
-            orderIndex: 1),
-        TrackModel(
-            id: 't1', name: 'Text', trackType: TrackType.text, orderIndex: 2),
+        const TrackModel(
+          id: 'v1',
+          name: 'Video 1',
+          trackType: TrackType.video,
+          orderIndex: 0,
+        ),
+        const TrackModel(
+          id: 'a1',
+          name: 'Audio 1',
+          trackType: TrackType.audio,
+          orderIndex: 1,
+        ),
+        const TrackModel(
+          id: 't1',
+          name: 'Text',
+          trackType: TrackType.text,
+          orderIndex: 2,
+        ),
       ],
     );
   }
@@ -205,7 +210,8 @@ void main() {
       expect(find.text('A new story starts here'), findsOneWidget);
       expect(
         find.text(
-            'Create a project, then bring in your videos, photos and audio. Your edits stay on this device.'),
+          'Create a project, then bring in your videos, photos and audio. Your edits stay on this device.',
+        ),
         findsOneWidget,
       );
     });
@@ -264,7 +270,7 @@ void main() {
       await pumpApp(
         tester,
         projects: [
-          ProjectModel(
+          const ProjectModel(
             id: 'phone-project',
             name: 'Mobile edit',
             createdAt: 1,
@@ -282,17 +288,21 @@ void main() {
 
     testWidgets('search filters saved projects and clearing restores the list',
         (tester) async {
-      await pumpApp(tester, projects: [
-        for (final name in ['Coastal study', 'Portrait session'])
-          ProjectModel(
+      await pumpApp(
+        tester,
+        projects: [
+          for (final name in ['Coastal study', 'Portrait session'])
+            ProjectModel(
               id: name,
               name: name,
               createdAt: 1,
               updatedAt: 1,
               width: 1920,
               height: 1080,
-              fps: 30),
-      ]);
+              fps: 30,
+            ),
+        ],
+      );
       await tester.tap(find.byTooltip('Search projects'));
       await tester.pumpAndSettle();
       await tester.enterText(find.byType(TextField), 'COAST');
@@ -312,7 +322,7 @@ void main() {
   test('delete all projects clears saved projects and the open project',
       () async {
     final projects = [
-      ProjectModel(
+      const ProjectModel(
         id: 'project-1',
         name: 'First',
         createdAt: 1,
@@ -321,7 +331,7 @@ void main() {
         height: 1080,
         fps: 30,
       ),
-      ProjectModel(
+      const ProjectModel(
         id: 'project-2',
         name: 'Second',
         createdAt: 2,
@@ -332,9 +342,11 @@ void main() {
       ),
     ];
     final repository = _FakeProjectRepository(projects: projects);
-    final container = ProviderContainer(overrides: [
-      projectRepositoryProvider.overrideWith((ref) => repository),
-    ]);
+    final container = ProviderContainer(
+      overrides: [
+        projectRepositoryProvider.overrideWith((ref) => repository),
+      ],
+    );
     addTearDown(container.dispose);
 
     final notifier = container.read(projectProvider.notifier);

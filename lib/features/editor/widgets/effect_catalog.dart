@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../core/theme/app_theme.dart';
 import '../../../core/extensions/context_extensions.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../data/models/project_model.dart';
 import '../../projects/providers/project_provider.dart';
 import '../providers/editor_provider.dart';
@@ -43,14 +43,54 @@ class _EffectCatalogState extends ConsumerState<EffectCatalog>
   ];
 
   static const _fallbackPresets = [
-    {'id': 'cinematic', 'name': 'Cinematic', 'description': 'Warm tones with deep shadows', 'category': 'Film'},
-    {'id': 'vintage', 'name': 'Vintage', 'description': 'Faded warm tones with grain', 'category': 'Film'},
-    {'id': 'bw_classic', 'name': 'B&W Classic', 'description': 'Classic black and white', 'category': 'Film'},
-    {'id': 'cool_blue', 'name': 'Cool Blue', 'description': 'Cool blue color grade', 'category': 'Color'},
-    {'id': 'warm_golden', 'name': 'Warm Golden', 'description': 'Warm golden hour look', 'category': 'Color'},
-    {'id': 'high_contrast', 'name': 'High Contrast', 'description': 'Punchy high contrast', 'category': 'Stylize'},
-    {'id': 'fade', 'name': 'Fade', 'description': 'Lifted blacks, faded look', 'category': 'Stylize'},
-    {'id': 'teal_orange', 'name': 'Teal & Orange', 'description': 'Hollywood color grade', 'category': 'Film'},
+    {
+      'id': 'cinematic',
+      'name': 'Cinematic',
+      'description': 'Warm tones with deep shadows',
+      'category': 'Film',
+    },
+    {
+      'id': 'vintage',
+      'name': 'Vintage',
+      'description': 'Faded warm tones with grain',
+      'category': 'Film',
+    },
+    {
+      'id': 'bw_classic',
+      'name': 'B&W Classic',
+      'description': 'Classic black and white',
+      'category': 'Film',
+    },
+    {
+      'id': 'cool_blue',
+      'name': 'Cool Blue',
+      'description': 'Cool blue color grade',
+      'category': 'Color',
+    },
+    {
+      'id': 'warm_golden',
+      'name': 'Warm Golden',
+      'description': 'Warm golden hour look',
+      'category': 'Color',
+    },
+    {
+      'id': 'high_contrast',
+      'name': 'High Contrast',
+      'description': 'Punchy high contrast',
+      'category': 'Stylize',
+    },
+    {
+      'id': 'fade',
+      'name': 'Fade',
+      'description': 'Lifted blacks, faded look',
+      'category': 'Stylize',
+    },
+    {
+      'id': 'teal_orange',
+      'name': 'Teal & Orange',
+      'description': 'Hollywood color grade',
+      'category': 'Film',
+    },
   ];
 
   // ── Categories derived from data ─────────────────────────────────
@@ -120,7 +160,8 @@ class _EffectCatalogState extends ConsumerState<EffectCatalog>
       if (f is Map<String, dynamic>) {
         return {
           'name': (f['name'] as String?) ?? 'Unknown',
-          'icon_key': (f['icon_key'] as String?) ?? (f['icon'] as String?) ?? 'filter',
+          'icon_key':
+              (f['icon_key'] as String?) ?? (f['icon'] as String?) ?? 'filter',
           'category': (f['category'] as String?) ?? 'Basic',
         };
       }
@@ -183,7 +224,8 @@ class _EffectCatalogState extends ConsumerState<EffectCatalog>
 
     // Look up the asset for a human-readable name
     try {
-      final asset = project.mediaAssets.firstWhere((a) => a.id == clip!.assetId);
+      final asset =
+          project.mediaAssets.firstWhere((a) => a.id == clip!.assetId);
       return asset.fileName;
     } catch (_) {
       return clipId;
@@ -206,14 +248,20 @@ class _EffectCatalogState extends ConsumerState<EffectCatalog>
             width: double.infinity,
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             decoration: BoxDecoration(
-              color: AppTheme.primary.withOpacity(0.08),
+              color: AppTheme.primary.withValues(alpha: 0.08),
               border: Border(
-                bottom: BorderSide(color: AppTheme.textDisabled.withOpacity(0.15)),
+                bottom: BorderSide(
+                  color: AppTheme.textDisabled.withValues(alpha: 0.15),
+                ),
               ),
             ),
             child: Row(
               children: [
-                Icon(Icons.movie_filter_outlined, size: 16, color: AppTheme.primary),
+                const Icon(
+                  Icons.movie_filter_outlined,
+                  size: 16,
+                  color: AppTheme.primary,
+                ),
                 const SizedBox(width: 6),
                 Expanded(
                   child: Text(
@@ -265,7 +313,8 @@ class _EffectCatalogState extends ConsumerState<EffectCatalog>
   Widget _buildCategoryChips() {
     final isFilterTab = _tabController.index == 0;
     final categories = isFilterTab ? _filterCategories : _presetCategories;
-    final selected = isFilterTab ? _selectedFilterCategory : _selectedPresetCategory;
+    final selected =
+        isFilterTab ? _selectedFilterCategory : _selectedPresetCategory;
 
     if (categories.length <= 1) return const SizedBox.shrink();
 
@@ -289,7 +338,9 @@ class _EffectCatalogState extends ConsumerState<EffectCatalog>
             backgroundColor: AppTheme.surfaceVariant,
             selectedColor: AppTheme.primary,
             side: BorderSide(
-              color: isSelected ? AppTheme.primary : AppTheme.textDisabled.withOpacity(0.2),
+              color: isSelected
+                  ? AppTheme.primary
+                  : AppTheme.textDisabled.withValues(alpha: 0.2),
             ),
             visualDensity: VisualDensity.compact,
             onSelected: (_) {
@@ -447,17 +498,16 @@ class _EffectCatalogState extends ConsumerState<EffectCatalog>
 // ── Filter card widget ──────────────────────────────────────────────
 
 class _FilterCard extends StatelessWidget {
-  final String name;
-  final String icon;
-  final bool enabled;
-  final VoidCallback onTap;
-
   const _FilterCard({
     required this.name,
     required this.icon,
     required this.enabled,
     required this.onTap,
   });
+  final String name;
+  final String icon;
+  final bool enabled;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -469,7 +519,9 @@ class _FilterCard extends StatelessWidget {
           color: AppTheme.surfaceVariant,
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
-            color: enabled ? AppTheme.textDisabled.withOpacity(0.2) : Colors.transparent,
+            color: enabled
+                ? AppTheme.textDisabled.withValues(alpha: 0.2)
+                : Colors.transparent,
             width: 1,
           ),
         ),
@@ -499,19 +551,32 @@ class _FilterCard extends StatelessWidget {
 
   IconData get _iconData {
     switch (icon) {
-      case 'brightness': return Icons.brightness_6;
-      case 'contrast': return Icons.contrast;
-      case 'saturation': return Icons.water_drop;
-      case 'hue': return Icons.palette;
-      case 'blur': return Icons.blur_on;
-      case 'sharpen': return Icons.deblur;
-      case 'grayscale': return Icons.gradient;
-      case 'sepia': return Icons.filter_vintage;
-      case 'invert': return Icons.invert_colors;
-      case 'vignette': return Icons.vignette;
-      case 'temperature': return Icons.thermostat;
-      case 'chroma_key': return Icons.colorize;
-      default: return Icons.auto_fix_high;
+      case 'brightness':
+        return Icons.brightness_6;
+      case 'contrast':
+        return Icons.contrast;
+      case 'saturation':
+        return Icons.water_drop;
+      case 'hue':
+        return Icons.palette;
+      case 'blur':
+        return Icons.blur_on;
+      case 'sharpen':
+        return Icons.deblur;
+      case 'grayscale':
+        return Icons.gradient;
+      case 'sepia':
+        return Icons.filter_vintage;
+      case 'invert':
+        return Icons.invert_colors;
+      case 'vignette':
+        return Icons.vignette;
+      case 'temperature':
+        return Icons.thermostat;
+      case 'chroma_key':
+        return Icons.colorize;
+      default:
+        return Icons.auto_fix_high;
     }
   }
 }
@@ -519,14 +584,14 @@ class _FilterCard extends StatelessWidget {
 // ── Preset category icon ────────────────────────────────────────────
 
 class _PresetIcon extends StatelessWidget {
-  final String category;
   const _PresetIcon({required this.category});
+  final String category;
 
   @override
   Widget build(BuildContext context) {
     return CircleAvatar(
       radius: 16,
-      backgroundColor: AppTheme.primary.withOpacity(0.12),
+      backgroundColor: AppTheme.primary.withValues(alpha: 0.12),
       child: Icon(
         _icon,
         size: 16,
@@ -537,10 +602,14 @@ class _PresetIcon extends StatelessWidget {
 
   IconData get _icon {
     switch (category) {
-      case 'Film': return Icons.movie_outlined;
-      case 'Color': return Icons.palette_outlined;
-      case 'Stylize': return Icons.auto_awesome_outlined;
-      default: return Icons.auto_fix_high;
+      case 'Film':
+        return Icons.movie_outlined;
+      case 'Color':
+        return Icons.palette_outlined;
+      case 'Stylize':
+        return Icons.auto_awesome_outlined;
+      default:
+        return Icons.auto_fix_high;
     }
   }
 }

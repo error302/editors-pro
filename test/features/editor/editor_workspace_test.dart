@@ -25,7 +25,7 @@ void main() {
   for (final size in [
     const Size(393, 852),
     const Size(1440, 900),
-    const Size(852, 393)
+    const Size(852, 393),
   ]) {
     testWidgets('editor tools fit ${size.width} x ${size.height}',
         (tester) async {
@@ -33,23 +33,27 @@ void main() {
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
-      final project = ProjectModel(
-          id: 'visual',
-          name: 'Coastal study',
-          createdAt: 0,
-          updatedAt: 0,
-          width: 1080,
-          height: 1920,
-          fps: 24);
-      await tester.pumpWidget(ProviderScope(
-        overrides: [
-          currentProjectProvider.overrideWithValue(project),
-          editorProvider.overrideWith((ref) => _Editor(ref)),
-        ],
-        child: MaterialApp(
+      const project = ProjectModel(
+        id: 'visual',
+        name: 'Coastal study',
+        createdAt: 0,
+        updatedAt: 0,
+        width: 1080,
+        height: 1920,
+        fps: 24,
+      );
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            currentProjectProvider.overrideWithValue(project),
+            editorProvider.overrideWith((ref) => _Editor(ref)),
+          ],
+          child: MaterialApp(
             theme: AppTheme.darkTheme,
-            home: const EditorScreen(projectId: 'visual')),
-      ));
+            home: const EditorScreen(projectId: 'visual'),
+          ),
+        ),
+      );
       await tester.pump(const Duration(seconds: 1));
       expect(tester.takeException(), isNull);
       expect(find.text('Export'), findsOneWidget);
@@ -66,9 +70,11 @@ void main() {
       // Opt-in snapshots are design review artifacts, not portable pixel baselines.
       if (const bool.fromEnvironment('CAPTURE_UI')) {
         await expectLater(
-            find.byType(EditorScreen),
-            matchesGoldenFile(
-                'review/editor-${size.width.toInt()}x${size.height.toInt()}.png'));
+          find.byType(EditorScreen),
+          matchesGoldenFile(
+            'review/editor-${size.width.toInt()}x${size.height.toInt()}.png',
+          ),
+        );
       }
       await tester.pumpWidget(const SizedBox());
     });

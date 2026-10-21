@@ -1,5 +1,4 @@
 import 'dart:developer' as developer;
-import 'dart:ui';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -26,7 +25,7 @@ void main() {
     defaultValue: 'legacy-test',
   );
   LicenseRegistry.addLicense(() async* {
-    final licenseText = ffmpegLicenseProfile == 'lgpl-2.1'
+    const licenseText = ffmpegLicenseProfile == 'lgpl-2.1'
         ? 'This app includes FFmpeg 7.1.5 shared libraries under LGPL-2.1-or-later. '
             'The corresponding source is available at '
             'https://ffmpeg.org/releases/ffmpeg-7.1.5.tar.xz. '
@@ -36,7 +35,7 @@ void main() {
             'only and is not cleared for commercial or public distribution. '
             'The verified FFmpeg 7.1.5 LGPL build is selected only after the '
             'Android libraries have been rebuilt.';
-    yield LicenseEntryWithLineBreaks(
+    yield const LicenseEntryWithLineBreaks(
       ['FFmpeg'],
       licenseText,
     );

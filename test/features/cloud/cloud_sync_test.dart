@@ -2,10 +2,10 @@
 ///
 /// These tests verify the conflict resolution strategies and the
 /// CloudSyncState/CloudProjectEntry models used in the Flutter layer.
-
-import 'package:flutter_test/flutter_test.dart';
+library;
 
 import 'package:editors_pro/features/cloud/providers/cloud_provider.dart';
+import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   // ─── CloudSyncState ──────────────────────────────────────────────

@@ -1,6 +1,5 @@
-import 'package:flutter_test/flutter_test.dart';
-
 import 'package:editors_pro/data/models/project_model.dart';
+import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('ProjectModel', () {

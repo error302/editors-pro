@@ -7,6 +7,7 @@
 /// [GoogleDriveSync]. When the provider is "Google Drive", the notifier
 /// delegates to the real OAuth2 PKCE + Drive REST API implementation.
 /// Other providers still use the placeholder.
+library;
 
 import 'dart:developer' as developer;
 
@@ -21,6 +22,16 @@ import '../../../core/services/google_drive_sync.dart';
 
 /// Immutable snapshot of the cloud sync state.
 class CloudSyncState {
+  const CloudSyncState({
+    this.isAuthenticated = false,
+    this.accountName,
+    this.providerName = 'None',
+    this.isSyncing = false,
+    this.pendingConflicts = 0,
+    this.lastError,
+    this.cloudProjects = const [],
+  });
+
   /// Whether the user is authenticated with a cloud provider.
   final bool isAuthenticated;
 
@@ -41,16 +52,6 @@ class CloudSyncState {
 
   /// List of cloud project entries.
   final List<CloudProjectEntry> cloudProjects;
-
-  const CloudSyncState({
-    this.isAuthenticated = false,
-    this.accountName,
-    this.providerName = 'None',
-    this.isSyncing = false,
-    this.pendingConflicts = 0,
-    this.lastError,
-    this.cloudProjects = const [],
-  });
 
   CloudSyncState copyWith({
     bool? isAuthenticated,
@@ -77,13 +78,6 @@ class CloudSyncState {
 
 /// A single cloud project entry for display in the UI.
 class CloudProjectEntry {
-  final String projectId;
-  final String name;
-  final int modifiedAt;
-  final int sizeBytes;
-  final String cloudFileId;
-  final String providerName;
-
   const CloudProjectEntry({
     required this.projectId,
     required this.name,
@@ -92,6 +86,12 @@ class CloudProjectEntry {
     required this.cloudFileId,
     required this.providerName,
   });
+  final String projectId;
+  final String name;
+  final int modifiedAt;
+  final int sizeBytes;
+  final String cloudFileId;
+  final String providerName;
 
   /// Format the file size for display (e.g., "1.2 MB").
   String get formattedSize {
@@ -114,14 +114,6 @@ class CloudProjectEntry {
 
 /// Describes a sync conflict that the user needs to resolve.
 class SyncConflictInfo {
-  final String projectId;
-  final String projectName;
-  final int localModifiedAt;
-  final int cloudModifiedAt;
-  final String localChecksum;
-  final String cloudChecksum;
-  final String suggestedStrategy;
-
   const SyncConflictInfo({
     required this.projectId,
     required this.projectName,
@@ -131,6 +123,13 @@ class SyncConflictInfo {
     required this.cloudChecksum,
     required this.suggestedStrategy,
   });
+  final String projectId;
+  final String projectName;
+  final int localModifiedAt;
+  final int cloudModifiedAt;
+  final String localChecksum;
+  final String cloudChecksum;
+  final String suggestedStrategy;
 }
 
 // ─── Cloud Sync Notifier ──────────────────────────────────────────
@@ -141,6 +140,7 @@ class SyncConflictInfo {
 /// and API calls will be implemented in a future phase.
 class CloudSyncNotifier extends StateNotifier<CloudSyncState> {
   CloudSyncNotifier() : super(const CloudSyncState());
+  CloudSyncState get currentState => state;
 
   /// Authenticate with the selected cloud provider.
   ///
@@ -318,8 +318,10 @@ class CloudSyncNotifier extends StateNotifier<CloudSyncState> {
       // Use the same path pattern as ProjectRepository + AppConstants.
       return '${dir.path}/editors_pro/projects/$projectId.epp';
     } catch (e) {
-      developer.log('Failed to get project EPP path: $e',
-          name: 'CloudSyncNotifier');
+      developer.log(
+        'Failed to get project EPP path: $e',
+        name: 'CloudSyncNotifier',
+      );
       return null;
     }
   }
@@ -357,14 +359,16 @@ class CloudSyncNotifier extends StateNotifier<CloudSyncState> {
         final driveProjects = await GoogleDriveSync.instance.listProjects();
         state = state.copyWith(
           cloudProjects: driveProjects
-              .map((p) => CloudProjectEntry(
-                    projectId: p.projectId,
-                    name: p.name,
-                    modifiedAt: p.modifiedAt,
-                    sizeBytes: p.sizeBytes,
-                    cloudFileId: p.cloudFileId,
-                    providerName: 'Google Drive',
-                  ))
+              .map(
+                (p) => CloudProjectEntry(
+                  projectId: p.projectId,
+                  name: p.name,
+                  modifiedAt: p.modifiedAt,
+                  sizeBytes: p.sizeBytes,
+                  cloudFileId: p.cloudFileId,
+                  providerName: 'Google Drive',
+                ),
+              )
               .toList(),
         );
       } else {
@@ -374,14 +378,16 @@ class CloudSyncNotifier extends StateNotifier<CloudSyncState> {
 
         state = state.copyWith(
           cloudProjects: projects
-              .map((p) => CloudProjectEntry(
-                    projectId: p.projectId,
-                    name: p.name,
-                    modifiedAt: p.modifiedAt,
-                    sizeBytes: p.sizeBytes,
-                    cloudFileId: p.cloudFileId,
-                    providerName: p.providerName,
-                  ))
+              .map(
+                (p) => CloudProjectEntry(
+                  projectId: p.projectId,
+                  name: p.name,
+                  modifiedAt: p.modifiedAt,
+                  sizeBytes: p.sizeBytes,
+                  cloudFileId: p.cloudFileId,
+                  providerName: p.providerName,
+                ),
+              )
               .toList(),
         );
       }
@@ -405,9 +411,8 @@ class CloudSyncNotifier extends StateNotifier<CloudSyncState> {
       await api.resolveSyncConflict(projectId: projectId, strategy: strategy);
 
       // Update conflict count
-      final newCount = state.pendingConflicts > 0
-          ? state.pendingConflicts - 1
-          : 0;
+      final newCount =
+          state.pendingConflicts > 0 ? state.pendingConflicts - 1 : 0;
       state = state.copyWith(pendingConflicts: newCount);
       return true;
     } catch (e) {
