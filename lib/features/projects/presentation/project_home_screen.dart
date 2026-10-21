@@ -24,6 +24,9 @@ class ProjectHomeScreen extends ConsumerStatefulWidget {
 class _ProjectHomeScreenState extends ConsumerState<ProjectHomeScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
+  final _searchController = TextEditingController();
+  bool _searchVisible = false;
+  String _query = '';
 
   @override
   void initState() {
@@ -38,6 +41,7 @@ class _ProjectHomeScreenState extends ConsumerState<ProjectHomeScreen>
   @override
   void dispose() {
     _tabController.dispose();
+    _searchController.dispose();
     super.dispose();
   }
 
@@ -50,6 +54,30 @@ class _ProjectHomeScreenState extends ConsumerState<ProjectHomeScreen>
         child: Column(
           children: [
             _buildHeader(context),
+            if (_searchVisible)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
+                child: TextField(
+                  controller: _searchController,
+                  autofocus: true,
+                  onChanged: (value) => setState(() => _query = value.trim()),
+                  decoration: InputDecoration(
+                    hintText: 'Search projects by name',
+                    prefixIcon: const Icon(Icons.search),
+                    suffixIcon: IconButton(
+                      tooltip: 'Clear search',
+                      icon: const Icon(Icons.close),
+                      onPressed: () {
+                        _searchController.clear();
+                        setState(() {
+                          _query = '';
+                          _searchVisible = false;
+                        });
+                      },
+                    ),
+                  ),
+                ),
+              ),
             _buildTabBar(context),
             Expanded(
               child: TabBarView(
@@ -63,14 +91,16 @@ class _ProjectHomeScreenState extends ConsumerState<ProjectHomeScreen>
           ],
         ),
       ),
-      floatingActionButton: projectState.recentProjects.isEmpty ? null : _buildCreateButton(context),
+      floatingActionButton: projectState.recentProjects.isEmpty
+          ? null
+          : _buildCreateButton(context),
     );
   }
 
   // ─── Header ───────────────────────────────────────────────────
   Widget _buildHeader(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+      padding: const EdgeInsets.fromLTRB(20, 24, 20, 20),
       child: Row(
         children: [
           // Logo in 44x44 clean rounded container
@@ -104,12 +134,12 @@ class _ProjectHomeScreenState extends ConsumerState<ProjectHomeScreen>
                     overflow: TextOverflow.ellipsis,
                     style: context.textTheme.titleLarge?.copyWith(
                       fontWeight: FontWeight.w700,
-                      letterSpacing: 2.0,
+                      letterSpacing: 0.8,
                     ),
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    'Video Editor',
+                    'Your editing studio',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: context.textTheme.bodySmall?.copyWith(
@@ -125,18 +155,7 @@ class _ProjectHomeScreenState extends ConsumerState<ProjectHomeScreen>
           _buildHeaderIconButton(
             icon: AppIcons.search,
             tooltip: 'Search projects',
-            onTap: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: const Text('Search coming soon!'),
-                  behavior: SnackBarBehavior.floating,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  duration: const Duration(seconds: 2),
-                ),
-              );
-            },
+            onTap: () => setState(() => _searchVisible = !_searchVisible),
           ),
           const SizedBox(width: 8),
           // Settings
@@ -155,22 +174,14 @@ class _ProjectHomeScreenState extends ConsumerState<ProjectHomeScreen>
     required String tooltip,
     required VoidCallback onTap,
   }) {
-    return Tooltip(
-      message: tooltip,
-      child: Material(
-        color: AppTheme.surfaceVariant,
-        shape: const CircleBorder(),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: onTap,
-          child: Container(
-            width: 40,
-            height: 40,
-            alignment: Alignment.center,
-            child: AppIcon(icon, size: 18, color: AppTheme.textSecondary),
-          ),
-        ),
+    return IconButton(
+      tooltip: tooltip,
+      onPressed: onTap,
+      style: IconButton.styleFrom(
+        minimumSize: const Size(48, 48),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       ),
+      icon: AppIcon(icon, size: 20, color: AppTheme.textSecondary),
     );
   }
 
@@ -205,8 +216,8 @@ class _ProjectHomeScreenState extends ConsumerState<ProjectHomeScreen>
           letterSpacing: 0.5,
         ),
         tabs: const [
-          Tab(text: 'Recent'),
-          Tab(text: 'Templates'),
+          Tab(text: 'Projects'),
+          Tab(text: 'Canvas presets'),
         ],
       ),
     );
@@ -218,14 +229,47 @@ class _ProjectHomeScreenState extends ConsumerState<ProjectHomeScreen>
       return const Center(child: CircularProgressIndicator());
     }
 
+    if (state.error != null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            const Icon(Icons.folder_off_outlined,
+                size: 40, color: AppTheme.textSecondary),
+            const SizedBox(height: 16),
+            const Text('Projects could not be loaded'),
+            const SizedBox(height: 8),
+            const Text('Your saved edits have not been removed.',
+                textAlign: TextAlign.center),
+            const SizedBox(height: 16),
+            OutlinedButton.icon(
+              onPressed: () =>
+                  ref.read(projectProvider.notifier).loadProjects(),
+              icon: const Icon(Icons.refresh),
+              label: const Text('Try again'),
+            ),
+          ]),
+        ),
+      );
+    }
+
     if (state.recentProjects.isEmpty) {
       return _buildEmptyState(context);
+    }
+
+    final projects = state.recentProjects
+        .where((project) =>
+            project.name.toLowerCase().contains(_query.toLowerCase()))
+        .toList();
+    if (projects.isEmpty) {
+      return const Center(child: Text('No projects match your search'));
     }
 
     return LayoutBuilder(
       builder: (context, constraints) {
         final isWide = constraints.maxWidth >= 600;
-        final crossAxisCount = isWide ? 2 : 1;
+        final crossAxisCount =
+            constraints.maxWidth >= 1200 ? 3 : (isWide ? 2 : 1);
         return GridView.builder(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
           gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
@@ -236,9 +280,9 @@ class _ProjectHomeScreenState extends ConsumerState<ProjectHomeScreen>
             // on phones than the old 1.4 ratio allowed.
             childAspectRatio: isWide ? 1.15 : 1.22,
           ),
-          itemCount: state.recentProjects.length,
+          itemCount: projects.length,
           itemBuilder: (context, index) {
-            final project = state.recentProjects[index];
+            final project = projects[index];
             return _ProjectCard(
               project: project,
               onTap: () => _openProject(context, project),
@@ -298,14 +342,14 @@ class _ProjectHomeScreenState extends ConsumerState<ProjectHomeScreen>
                 ),
             const SizedBox(height: 24),
             Text(
-              'Start Creating',
+              'A new story starts here',
               style: context.textTheme.headlineSmall?.copyWith(
                 fontWeight: FontWeight.w700,
               ),
             ),
             const SizedBox(height: 10),
             Text(
-              'Import a video to get started — no setup required',
+              'Create a project, then bring in your videos, photos and audio. Your edits stay on this device.',
               textAlign: TextAlign.center,
               style: context.textTheme.bodyMedium?.copyWith(
                 color: AppTheme.textSecondary,
@@ -408,10 +452,7 @@ class _ProjectHomeScreenState extends ConsumerState<ProjectHomeScreen>
             width: t.width,
             height: t.height,
           ),
-        )
-            .animate(delay: (index * 80).ms)
-            .fadeIn(duration: 400.ms)
-            .scaleXY(
+        ).animate(delay: (index * 80).ms).fadeIn(duration: 400.ms).scaleXY(
               begin: 0.9,
               end: 1.0,
               duration: 400.ms,
@@ -423,14 +464,15 @@ class _ProjectHomeScreenState extends ConsumerState<ProjectHomeScreen>
 
   // ─── Circular FAB ────────────────────────────────────────────
   Widget _buildCreateButton(BuildContext context) {
-    return FloatingActionButton(
+    return FloatingActionButton.extended(
       backgroundColor: AppTheme.primary,
       foregroundColor: Colors.white,
       elevation: 0,
       highlightElevation: 0,
-      shape: const CircleBorder(),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       onPressed: () => _showCreateProjectDialog(context),
-      child: const AppIcon(AppIcons.plus, size: 24, color: Colors.white),
+      icon: const AppIcon(AppIcons.plus, size: 20, color: Colors.white),
+      label: const Text('New Project'),
     ).animate().scaleXY(
           duration: 600.ms,
           delay: 500.ms,
@@ -482,7 +524,8 @@ class _ProjectHomeScreenState extends ConsumerState<ProjectHomeScreen>
     double fps = 30,
     bool navigate = true,
   }) async {
-    final effectiveName = name.trim().isEmpty ? 'Untitled Project' : name.trim();
+    final effectiveName =
+        name.trim().isEmpty ? 'Untitled Project' : name.trim();
     final project = await ref
         .read(projectProvider.notifier)
         .createProject(effectiveName, width: width, height: height, fps: fps);
@@ -551,7 +594,8 @@ class _ProjectHomeScreenState extends ConsumerState<ProjectHomeScreen>
           children: [
             // Handle
             Container(
-              width: 40, height: 4,
+              width: 40,
+              height: 4,
               margin: const EdgeInsets.symmetric(vertical: 12),
               decoration: BoxDecoration(
                 color: AppTheme.textDisabled,
@@ -601,7 +645,10 @@ class _ProjectHomeScreenState extends ConsumerState<ProjectHomeScreen>
               onTap: () {
                 Navigator.pop(ctx);
                 unawaited(
-                  ref.read(projectProvider.notifier).duplicateProject(project.id).then((_) {
+                  ref
+                      .read(projectProvider.notifier)
+                      .duplicateProject(project.id)
+                      .then((_) {
                     if (context.mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
@@ -610,7 +657,10 @@ class _ProjectHomeScreenState extends ConsumerState<ProjectHomeScreen>
                             label: 'Open copy',
                             onPressed: () {
                               // The duplicated project is at the top of recentProjects
-                              final dup = ref.read(projectProvider).recentProjects.first;
+                              final dup = ref
+                                  .read(projectProvider)
+                                  .recentProjects
+                                  .first;
                               context.go('/editor/${dup.id}');
                             },
                           ),
@@ -871,8 +921,7 @@ class _TemplateCard extends StatelessWidget {
                   height: 48,
                   decoration: BoxDecoration(
                     color: data.color.withOpacity(0.15),
-                    borderRadius:
-                        BorderRadius.circular(AppTheme.radiusMedium),
+                    borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
                   ),
                   alignment: Alignment.center,
                   child: AppIcon(data.icon, size: 22, color: data.color),
@@ -1075,7 +1124,8 @@ class _CreateProjectDialogState extends State<_CreateProjectDialog> {
           SegmentedButton<_CanvasPreset>(
             showSelectedIcon: false,
             segments: const [
-              ButtonSegment(value: _CanvasPreset.landscape, label: Text('16:9')),
+              ButtonSegment(
+                  value: _CanvasPreset.landscape, label: Text('16:9')),
               ButtonSegment(value: _CanvasPreset.portrait, label: Text('9:16')),
               ButtonSegment(value: _CanvasPreset.square, label: Text('1:1')),
             ],
@@ -1166,12 +1216,18 @@ class _CreateProjectDialogState extends State<_CreateProjectDialog> {
   ({int width, int height}) get _dimensions {
     final resolution = _selectedResolutionOption;
     return switch (_selectedCanvas) {
-      _CanvasPreset.landscape =>
-        (width: resolution.width, height: resolution.height),
-      _CanvasPreset.portrait =>
-        (width: resolution.height, height: resolution.width),
-      _CanvasPreset.square =>
-        (width: resolution.height, height: resolution.height),
+      _CanvasPreset.landscape => (
+          width: resolution.width,
+          height: resolution.height
+        ),
+      _CanvasPreset.portrait => (
+          width: resolution.height,
+          height: resolution.width
+        ),
+      _CanvasPreset.square => (
+          width: resolution.height,
+          height: resolution.height
+        ),
     };
   }
 

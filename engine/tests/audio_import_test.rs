@@ -25,7 +25,11 @@ mod ffmpeg_tests {
         wav.extend_from_slice(&bits_per_sample.to_le_bytes());
         wav.extend_from_slice(b"data");
         wav.extend_from_slice(&data_size.to_le_bytes());
-        wav.resize(44 + data_size as usize, 0);
+        for index in 0..sample_count {
+            let value = ((index as f32 * 440.0 * std::f32::consts::TAU / sample_rate as f32).sin()
+                * 8_000.0) as i16;
+            wav.extend_from_slice(&value.to_le_bytes());
+        }
         fs::write(path, wav).unwrap();
     }
 
@@ -62,6 +66,56 @@ mod ffmpeg_tests {
                     .iter()
                     .any(|clip| clip.asset_id == asset.id && clip.duration_ms == 1_000)
         }));
+    }
+
+    #[test]
+    fn exported_timeline_contains_audible_audio_and_video() {
+        use editors_pro_engine::audio::decoder::AudioDecoder;
+        use editors_pro_engine::export_engine::ExportSettings;
+        let directory = tempfile::tempdir().unwrap();
+        let audio_path = directory.path().join("tone.wav");
+        write_pcm_wav(&audio_path, 1_000);
+        let image_path = directory.path().join("frame.png");
+        image::RgbaImage::from_pixel(16, 16, image::Rgba([50, 80, 120, 255]))
+            .save(&image_path)
+            .unwrap();
+        let mut engine = EditorsProEngine::new();
+        engine.initialize().unwrap();
+        engine
+            .create_project("Audio export regression", None)
+            .unwrap();
+        let video = engine.add_track(TrackType::Video, None).unwrap();
+        let audio = engine.add_track(TrackType::Audio, None).unwrap();
+        let image = engine.import_media(image_path.to_str().unwrap()).unwrap();
+        let tone = engine.import_media(audio_path.to_str().unwrap()).unwrap();
+        engine.add_clip(&video.id, &image.id, 0, 1_000).unwrap();
+        engine.add_clip(&audio.id, &tone.id, 0, 1_000).unwrap();
+        let output = directory.path().join("timeline.mp4");
+        let mut settings = ExportSettings::hd_720p();
+        settings.width = 320;
+        settings.height = 240;
+        settings.fps = 24.0;
+        settings.audio_sample_rate = 48_000;
+        engine
+            .export_video(output.to_str().unwrap(), settings, &|_| {})
+            .unwrap();
+        let input = ffmpeg_next::format::input(&output).unwrap();
+        assert!(input
+            .streams()
+            .best(ffmpeg_next::media::Type::Video)
+            .is_some());
+        assert!(input
+            .streams()
+            .best(ffmpeg_next::media::Type::Audio)
+            .is_some());
+        let mut decoded = AudioDecoder::new();
+        decoded.open(output.to_str().unwrap()).unwrap();
+        let buffer = decoded.decode_all(48_000, 2).unwrap();
+        assert!(
+            buffer.samples.iter().any(|sample| sample.abs() > 0.05),
+            "Export must preserve the audible tone"
+        );
+        assert_eq!(buffer.sample_rate, 48_000);
     }
 }
 

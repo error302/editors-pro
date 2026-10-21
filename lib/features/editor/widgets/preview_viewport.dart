@@ -49,9 +49,6 @@ class _PreviewViewportState extends ConsumerState<PreviewViewport> {
     SafeZoneType.titleSafe,
   };
 
-  /// Whether the zebra (overexposure) overlay is visible.
-  bool _showZebra = false;
-
   SafeZoneConfig get _safeZoneConfig => SafeZoneConfig(
         showActionSafe: _enabledSafeZones.contains(SafeZoneType.actionSafe),
         showTitleSafe: _enabledSafeZones.contains(SafeZoneType.titleSafe),
@@ -60,8 +57,8 @@ class _PreviewViewportState extends ConsumerState<PreviewViewport> {
         showRuleOfThirds: _enabledSafeZones.contains(SafeZoneType.thirds),
       );
 
-  /// Frame duration in milliseconds at 30fps (≈33.33ms).
-  static const int _frameDurationMs = 33;
+  int get _frameDurationMs =>
+      (1000 / (ref.read(currentProjectProvider)?.fps ?? 30)).round();
 
   /// LRU cache of the last 10 rendered frames keyed by time position.
   final _frameCache = _LruCache<int, Uint8List>(maxSize: 10);
@@ -183,6 +180,7 @@ class _PreviewViewportState extends ConsumerState<PreviewViewport> {
   @override
   Widget build(BuildContext context) {
     final editorState = ref.watch(editorProvider);
+    final project = ref.watch(currentProjectProvider);
 
     return Container(
       color: Colors.black,
@@ -195,7 +193,8 @@ class _PreviewViewportState extends ConsumerState<PreviewViewport> {
           Expanded(
             child: Center(
               child: AspectRatio(
-                aspectRatio: 16 / 9,
+                aspectRatio:
+                    (project?.width ?? 1920) / (project?.height ?? 1080),
                 child: Container(
                   decoration: BoxDecoration(
                     color: Colors.black,
@@ -210,13 +209,6 @@ class _PreviewViewportState extends ConsumerState<PreviewViewport> {
                       // Safe zones overlay
                       if (_showSafeZones)
                         SafeZonesOverlay(config: _safeZoneConfig),
-
-                      // Zebra (overexposure) overlay
-                      if (_showZebra)
-                        CustomPaint(
-                          painter: _ZebraOverlayPainter(),
-                          size: Size.infinite,
-                        ),
 
                       // Text overlay handles for selected text clips
                       _buildTextOverlayHandles(context, editorState),
@@ -359,20 +351,10 @@ class _PreviewViewportState extends ConsumerState<PreviewViewport> {
             },
           ),
 
-          // Zebra toggle
-          _OverlayToggleButton(
-            icon: Icons.warning_amber,
-            label: 'Zebra',
-            isActive: _showZebra,
-            onTap: () {
-              setState(() => _showZebra = !_showZebra);
-            },
-          ),
-
           const Spacer(),
 
           // Active overlay indicators
-          if (_showSafeZones || _showZebra)
+          if (_showSafeZones)
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
               decoration: BoxDecoration(
@@ -382,7 +364,6 @@ class _PreviewViewportState extends ConsumerState<PreviewViewport> {
               child: Text(
                 [
                   if (_showSafeZones) 'SAFE',
-                  if (_showZebra) 'ZEBRA',
                 ].join(' + '),
                 style: const TextStyle(
                   color: AppTheme.primaryLight,
@@ -577,33 +558,36 @@ class _PreviewViewportState extends ConsumerState<PreviewViewport> {
 
   Widget _buildImageUnavailable(BuildContext context, String fileName) {
     return Container(
-      color: const Color(0xFF111122),
+      color: AppTheme.background,
       child: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(
-              Icons.broken_image_outlined,
-              size: 40,
-              color: AppTheme.textDisabled,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Image unavailable',
-              style: context.textTheme.titleSmall?.copyWith(
-                color: AppTheme.textSecondary,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              fileName,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: context.textTheme.bodySmall?.copyWith(
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(
+                Icons.broken_image_outlined,
+                size: 40,
                 color: AppTheme.textDisabled,
               ),
-            ),
-          ],
+              const SizedBox(height: 8),
+              Text(
+                'Image unavailable',
+                style: context.textTheme.titleSmall?.copyWith(
+                  color: AppTheme.textSecondary,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                fileName,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: context.textTheme.bodySmall?.copyWith(
+                  color: AppTheme.textDisabled,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -611,32 +595,35 @@ class _PreviewViewportState extends ConsumerState<PreviewViewport> {
 
   Widget _buildPlaceholder(BuildContext context, EditorState state) {
     return Container(
-      color: const Color(0xFF111122),
+      color: AppTheme.background,
       child: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.movie_creation_outlined,
-              size: 64,
-              color: AppTheme.textDisabled,
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'Preview',
-              style: context.textTheme.titleMedium?.copyWith(
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.movie_creation_outlined,
+                size: 64,
                 color: AppTheme.textDisabled,
               ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              Duration(milliseconds: state.currentTimeMs).formatted,
-              style: context.textTheme.bodySmall?.copyWith(
-                fontFamily: 'monospace',
-                color: AppTheme.textSecondary,
+              const SizedBox(height: 16),
+              Text(
+                'Preview',
+                style: context.textTheme.titleMedium?.copyWith(
+                  color: AppTheme.textDisabled,
+                ),
               ),
-            ),
-          ],
+              const SizedBox(height: 8),
+              Text(
+                Duration(milliseconds: state.currentTimeMs).formatted,
+                style: context.textTheme.bodySmall?.copyWith(
+                  fontFamily: 'monospace',
+                  color: AppTheme.textSecondary,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -911,39 +898,6 @@ class _OverlayToggleButton extends StatelessWidget {
 // ═══════════════════════════════════════════════════════════════════════
 // Zebra Overlay Painter
 // ═══════════════════════════════════════════════════════════════════════
-
-/// A zebra-stripe overlay that indicates overexposed areas.
-///
-/// In a real implementation, the engine would provide a luminance map
-/// identifying overexposed pixels. Here we render a diagonal stripe
-/// pattern as a visual placeholder that demonstrates the overlay UI.
-class _ZebraOverlayPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    if (size.isEmpty) return;
-
-    final paint = Paint()
-      ..color = const Color(0x55FF3333) // Semi-transparent red
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2.0;
-
-    // Draw diagonal zebra stripes at 45 degrees
-    const stripeSpacing = 12.0;
-    final diagonalLength = size.width + size.height;
-
-    for (double offset = 0; offset < diagonalLength; offset += stripeSpacing) {
-      final startX = offset.clamp(0.0, size.width);
-      final startY = (offset - startX).clamp(0.0, size.height);
-      final endX = (offset - size.height).clamp(0.0, size.width);
-      final endY = (offset - endX).clamp(0.0, size.height);
-
-      canvas.drawLine(Offset(startX, startY), Offset(endX, endY), paint);
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _ZebraOverlayPainter oldDelegate) => false;
-}
 
 /// Simple LRU cache backed by a [LinkedHashMap].
 ///

@@ -96,7 +96,8 @@ class _TimelinePanelState extends ConsumerState<TimelinePanel> {
 
     final pixelsPerMs =
         AppConstants.timelinePixelsPerMs * editorState.zoomLevel;
-    final duration = editorState.durationMs > 0 ? editorState.durationMs : 30000;
+    final duration =
+        editorState.durationMs > 0 ? editorState.durationMs : 30000;
     final totalWidth = duration * pixelsPerMs;
     final tracksHeight = tracks.length * AppTheme.trackHeight;
 
@@ -107,7 +108,9 @@ class _TimelinePanelState extends ConsumerState<TimelinePanel> {
 
     final hasTracks = tracks.isNotEmpty;
     return Container(
-      height: AppTheme.timelineMinHeight,
+      height: MediaQuery.sizeOf(context).height < 500
+          ? 120
+          : AppTheme.timelineMinHeight,
       decoration: const BoxDecoration(
         color: AppTheme.surface,
         border: Border(top: BorderSide(color: AppTheme.border, width: 1)),
@@ -165,8 +168,8 @@ class _TimelinePanelState extends ConsumerState<TimelinePanel> {
                                           onScaleUpdate: (details) {
                                             if ((details.scale - 1.0).abs() <
                                                 0.01) return;
-                                            final notifier =
-                                                ref.read(editorProvider.notifier);
+                                            final notifier = ref
+                                                .read(editorProvider.notifier);
                                             final currentZoom =
                                                 editorState.zoomLevel;
                                             // Scale >1 means zoom in, <1 means zoom out.
@@ -178,7 +181,8 @@ class _TimelinePanelState extends ConsumerState<TimelinePanel> {
                                           child: SizedBox(
                                             width: totalWidth,
                                             child: Stack(
-                                              children: tracks.asMap()
+                                              children: tracks
+                                                  .asMap()
                                                   .entries
                                                   .map((entry) {
                                                 final index = entry.key;
@@ -194,7 +198,8 @@ class _TimelinePanelState extends ConsumerState<TimelinePanel> {
                                                   assetNames: assetNames,
                                                   waveformCache: _waveformCache,
                                                   onClipTap: (clipId) => ref
-                                                      .read(editorProvider.notifier)
+                                                      .read(editorProvider
+                                                          .notifier)
                                                       .selectClip(clipId),
                                                   onClipDragUpdate:
                                                       (clipId, newStartMs) {
@@ -730,8 +735,7 @@ class _DraggableClipWidgetState extends State<_DraggableClipWidget> {
                   widget.waveformPeaks!.isNotEmpty)
                 Positioned.fill(
                   child: ClipRRect(
-                    borderRadius:
-                        BorderRadius.circular(AppTheme.radiusSmall),
+                    borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
                     child: AudioWaveformWidget(
                       peaks: widget.waveformPeaks!,
                       color: AppTheme.audioTrackColor.withValues(alpha: 0.6),
@@ -859,8 +863,7 @@ class _PlayheadIndicator extends StatelessWidget {
         final offset =
             scrollController.hasClients ? scrollController.offset : 0.0;
         final x = currentTimeMs * pixelsPerMs - offset;
-        final timeLabel =
-            Duration(milliseconds: currentTimeMs).shortFormatted;
+        final timeLabel = Duration(milliseconds: currentTimeMs).shortFormatted;
         return Stack(
           clipBehavior: Clip.none,
           children: [
@@ -1028,25 +1031,21 @@ class _TrackHeaderItem extends StatelessWidget {
                   icon: track.visible ? AppIcons.visible : AppIcons.hidden,
                   tooltip: track.visible ? 'Hide track' : 'Show track',
                   size: 14,
-                  color: track.visible
-                      ? AppTheme.primary
-                      : AppTheme.textDisabled,
+                  color:
+                      track.visible ? AppTheme.primary : AppTheme.textDisabled,
                   onTap: onToggleVisibility,
                 ),
                 _TimelineIconButton(
                   icon: track.locked ? AppIcons.lock : AppIcons.unlock,
                   tooltip: track.locked ? 'Unlock track' : 'Lock track',
                   size: 14,
-                  color: track.locked
-                      ? AppTheme.error
-                      : AppTheme.textDisabled,
+                  color: track.locked ? AppTheme.error : AppTheme.textDisabled,
                   onTap: onToggleLock,
                 ),
                 if (isAudio) ...[
                   _TimelineIconButton(
                     icon: AppIcons.audio,
-                    tooltip:
-                        muted ? 'Unmute audio track' : 'Mute audio track',
+                    tooltip: muted ? 'Unmute audio track' : 'Mute audio track',
                     size: 14,
                     color: muted ? AppTheme.error : AppTheme.textDisabled,
                     onTap: onToggleMute,

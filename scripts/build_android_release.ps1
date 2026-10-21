@@ -93,7 +93,7 @@ try {
     )
     & $FlutterCommand pub get
     if ($LASTEXITCODE -ne 0) { throw "Flutter dependency resolution failed." }
-    & $FlutterCommand build apk --release --dart-define=FFMPEG_LICENSE_PROFILE=lgpl-2.1
+    & $FlutterCommand build apk --release --target-platform android-arm64,android-x64 -Pdisable-abi-filtering=true --dart-define=FFMPEG_LICENSE_PROFILE=lgpl-2.1
     if ($LASTEXITCODE -ne 0) { throw "Flutter APK build failed." }
 } finally {
     [Environment]::SetEnvironmentVariable(

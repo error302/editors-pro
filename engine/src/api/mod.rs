@@ -25,27 +25,26 @@ use crate::audio::waveform::WaveformData;
 use crate::decoder::hardware::HardwareDecoder;
 use crate::decoder::VideoInfo;
 use crate::effects::filters::FilterType;
-use crate::proxy::{ProxyManager, ProxyQuality};
 use crate::export_engine::{
     check_storage_space, ExportPipeline, ExportProgress, ExportResult, ExportSettings, ExportStage,
-    VideoEncoder,
+    MuxedEncoder,
 };
 use crate::project::format::EppFormat;
 use crate::project::{MediaAsset, MediaType, Project, ProjectSettings};
+use crate::proxy::{ProxyManager, ProxyQuality};
 use crate::renderer::PreviewRenderer;
+use crate::system::SystemMetrics;
 use crate::timeline::clip::Clip;
 use crate::timeline::command::{
     AddClipCommand, AddEffectCommand, AddKeyframeCommand, AddTransitionCommand, Command,
-    CommandHistory, MoveClipCommand, RemoveClipCommand, RemoveEffectCommand,
-    RemoveKeyframeCommand, SetEffectParameterCommand, SetSpeedCurveCommand,
-    SetTrackVolumeCommand, SplitClipCommand, ToggleTrackVisibilityCommand, TrimClipCommand,
-    UpdateKeyframeCommand,
+    CommandHistory, MoveClipCommand, RemoveClipCommand, RemoveEffectCommand, RemoveKeyframeCommand,
+    SetEffectParameterCommand, SetSpeedCurveCommand, SetTrackVolumeCommand, SplitClipCommand,
+    ToggleTrackVisibilityCommand, TrimClipCommand, UpdateKeyframeCommand,
 };
 use crate::timeline::keyframe::{Keyframe, KEYFRAME_PROPERTIES};
 use crate::timeline::speed_curve::{EasingType, SpeedCurve, SpeedSegment};
 use crate::timeline::track::TrackType;
 use crate::timeline::Timeline;
-use crate::system::SystemMetrics;
 use crate::EngineError;
 
 static EXTERNAL_EXPORT_CANCEL_REQUESTED: std::sync::atomic::AtomicBool =
@@ -66,7 +65,6 @@ pub struct EditorsProEngine {
     renderer: PreviewRenderer,
     command_history: CommandHistory,
     audio_decoder: AudioDecoder,
-    audio_mixer: AudioMixer,
     initialized: bool,
     /// The file path of the video currently loaded in the decoder.
     /// Used to detect clip-switching so the decoder is re-opened when
@@ -142,7 +140,6 @@ impl EditorsProEngine {
             renderer: PreviewRenderer::new(1920, 1080),
             command_history: CommandHistory::new(),
             audio_decoder: AudioDecoder::new(),
-            audio_mixer: AudioMixer::new(44100, 2),
             initialized: false,
             current_file_path: None,
             export_canceled: std::sync::atomic::AtomicBool::new(false),
@@ -280,19 +277,23 @@ impl EditorsProEngine {
                 if self.proxy_manager.should_generate_proxy(w, h) {
                     log::info!(
                         "Auto-proxy: asset {} ({}x{}) exceeds threshold, generating proxy…",
-                        asset_id, w, h
+                        asset_id,
+                        w,
+                        h
                     );
                     match self.generate_proxy(&asset_id, file_path) {
                         Ok(proxy_path) => {
                             log::info!(
                                 "Auto-proxy: generated proxy for asset {} at {}",
-                                asset_id, proxy_path
+                                asset_id,
+                                proxy_path
                             );
                         }
                         Err(e) => {
                             log::warn!(
                                 "Auto-proxy: failed to generate proxy for asset {}: {}",
-                                asset_id, e
+                                asset_id,
+                                e
                             );
                         }
                     }
@@ -480,9 +481,9 @@ impl EditorsProEngine {
                 .find(|c| c.contains_time(time_ms));
 
             active_clip.and_then(|clip| {
-                project.find_media_asset(&clip.asset_id).map(|asset| {
-                    (clip.clone(), asset.file_path.clone(), asset.media_type)
-                })
+                project
+                    .find_media_asset(&clip.asset_id)
+                    .map(|asset| (clip.clone(), asset.file_path.clone(), asset.media_type))
             })
         };
 
@@ -528,8 +529,7 @@ impl EditorsProEngine {
         let source_time = if media_type == MediaType::Image {
             0
         } else {
-            clip.trim_start_ms
-                + (relative_time as f32 * clip.speed_at(relative_time)) as u64
+            clip.trim_start_ms + (relative_time as f32 * clip.speed_at(relative_time)) as u64
         };
         let cache_key = format!("{}:{}", clip.asset_id, source_time);
 
@@ -622,18 +622,18 @@ impl EditorsProEngine {
         self.export_canceled
             .store(false, std::sync::atomic::Ordering::Relaxed);
 
-        let mut encoder = VideoEncoder::new(&settings)?;
+        let mut encoder = MuxedEncoder::new(&settings)?;
         encoder.open(output_path)?;
 
         let start_time = std::time::Instant::now();
+        let mut audio_time_ms = 0;
 
         for frame_num in 0..total_frames {
             // Check for cancellation
             if self
                 .export_canceled
                 .load(std::sync::atomic::Ordering::Relaxed)
-                || EXTERNAL_EXPORT_CANCEL_REQUESTED
-                    .load(std::sync::atomic::Ordering::Acquire)
+                || EXTERNAL_EXPORT_CANCEL_REQUESTED.load(std::sync::atomic::Ordering::Acquire)
             {
                 log::info!(
                     "Export canceled by user at frame {}/{}",
@@ -658,9 +658,32 @@ impl EditorsProEngine {
                 .resize_frame(&rgba_frame, settings.width, settings.height);
 
             // Encode the frame
-            if let Err(e) = encoder.encode_rgba_frame(&resized.data, frame_num as i64) {
+            if let Err(e) = encoder.encode_video_frame(&resized.data, frame_num as i64) {
                 encoder.cancel();
                 return Err(format!("Encoding error at frame {}: {}", frame_num, e));
+            }
+
+            // Mix and mux bounded audio chunks alongside video. The previous
+            // video-only encoder silently discarded every audio track.
+            let video_end_ms = pipeline.time_at_frame(frame_num + 1).min(duration_ms);
+            while settings.include_audio && audio_time_ms < video_end_ms {
+                let chunk_ms = (duration_ms - audio_time_ms).min(100);
+                let audio_result = self
+                    .mix_audio_at_format(
+                        audio_time_ms,
+                        chunk_ms,
+                        settings.audio_sample_rate,
+                        settings.audio_channels,
+                    )
+                    .and_then(|mixed| encoder.encode_audio_samples(&mixed.samples));
+                if let Err(error) = audio_result {
+                    encoder.cancel();
+                    return Err(format!(
+                        "Audio encoding failed at {}ms: {}",
+                        audio_time_ms, error
+                    ));
+                }
+                audio_time_ms += chunk_ms;
             }
 
             // Report progress (throttled to every 10 frames to avoid overhead)
@@ -717,9 +740,9 @@ impl EditorsProEngine {
                 .find(|c| c.contains_time(time_ms));
 
             active_clip.and_then(|clip| {
-                project.find_media_asset(&clip.asset_id).map(|asset| {
-                    (clip.clone(), asset.file_path.clone(), asset.media_type)
-                })
+                project
+                    .find_media_asset(&clip.asset_id)
+                    .map(|asset| (clip.clone(), asset.file_path.clone(), asset.media_type))
             })
         };
 
@@ -969,7 +992,12 @@ impl EditorsProEngine {
 
         log::debug!(
             "Picked color at ({}, {}) time {}ms: RGB({:.0}, {:.0}, {:.0})",
-            x, y, time_ms, r, g, b
+            x,
+            y,
+            time_ms,
+            r,
+            g,
+            b
         );
 
         Ok((r, g, b))
@@ -1001,7 +1029,8 @@ impl EditorsProEngine {
             ..Default::default()
         };
 
-        self.transcription_engine.transcribe(&file_path, &config, None)
+        self.transcription_engine
+            .transcribe(&file_path, &config, None)
     }
 
     /// Toggle the enabled state of an effect on a clip
@@ -1046,7 +1075,8 @@ impl EditorsProEngine {
 
         // Add chroma key to the effect catalog
         let chroma_key_config = crate::effects::chroma_key::ChromaKeyConfig::default();
-        let chroma_key_effect = crate::effects::chroma_key::create_chroma_key_effect(&chroma_key_config);
+        let chroma_key_effect =
+            crate::effects::chroma_key::create_chroma_key_effect(&chroma_key_config);
         catalog.push(FilterTypeInfo {
             name: "Chroma Key".to_string(),
             icon: "chroma_key".to_string(),
@@ -1397,12 +1427,15 @@ impl EditorsProEngine {
     /// Import subtitles from an SRT file
     pub fn import_subtitles(&self, file_path: &str) -> Result<Vec<SubtitleEntry>, String> {
         let entries = crate::subtitle::parser::parse_srt_file(file_path)?;
-        Ok(entries.into_iter().map(|e| SubtitleEntry {
-            index: e.index,
-            start_ms: e.start_ms,
-            end_ms: e.end_ms,
-            text: e.text,
-        }).collect())
+        Ok(entries
+            .into_iter()
+            .map(|e| SubtitleEntry {
+                index: e.index,
+                start_ms: e.start_ms,
+                end_ms: e.end_ms,
+                text: e.text,
+            })
+            .collect())
     }
 
     // ─── Audio Operations ─────────────────────────────────────────────
@@ -1491,6 +1524,19 @@ impl EditorsProEngine {
         start_ms: u64,
         duration_ms: u64,
     ) -> Result<AudioBuffer, String> {
+        self.mix_audio_at_format(start_ms, duration_ms, 44100, 2)
+    }
+
+    fn mix_audio_at_format(
+        &mut self,
+        start_ms: u64,
+        duration_ms: u64,
+        sample_rate: u32,
+        channels: u32,
+    ) -> Result<AudioBuffer, String> {
+        if channels != 2 {
+            return Err("Timeline audio export currently requires stereo output".to_string());
+        }
         let (audio_clips_data, video_clips_data, ducking_configs, _project_sample_rate) = {
             let project = self.project.as_ref().ok_or("No project open")?;
 
@@ -1596,7 +1642,15 @@ impl EditorsProEngine {
         }
 
         // Mix all sources
-        let mixed = self.audio_mixer.mix_sources(&sources, duration_ms);
+        let mixer = AudioMixer::new(sample_rate, channels);
+        for source in &mut sources {
+            source.buffer = mixer.resample(&source.buffer, sample_rate);
+        }
+        let mixed = if sources.is_empty() {
+            AudioBuffer::new(sample_rate, channels, duration_ms)
+        } else {
+            mixer.mix_sources(&sources, duration_ms)
+        };
 
         // Phase F.5: update the cached loudness reading
         let now_ms = std::time::SystemTime::now()
@@ -1609,11 +1663,8 @@ impl EditorsProEngine {
         if now_ms.saturating_sub(last_ms) >= 500 {
             self.last_loudness_analysis_ms
                 .store(now_ms, std::sync::atomic::Ordering::Relaxed);
-            let _ = self.analyze_samples_loudness(
-                &mixed.samples,
-                mixed.sample_rate,
-                mixed.channels,
-            );
+            let _ =
+                self.analyze_samples_loudness(&mixed.samples, mixed.sample_rate, mixed.channels);
         }
 
         // Apply ducking if configured
@@ -1624,7 +1675,10 @@ impl EditorsProEngine {
                 // calling get_audio_samples.
                 let trigger_clips = {
                     let project = self.project.as_ref().ok_or("No project open")?;
-                    project.timeline().tracks.iter()
+                    project
+                        .timeline()
+                        .tracks
+                        .iter()
                         .find(|t| &t.id == track_id)
                         .map(|t| t.clips.clone())
                 };
@@ -1795,11 +1849,7 @@ impl EditorsProEngine {
         let keyframe_id = keyframe.id.clone();
 
         let project = self.project.as_mut().ok_or("No project open")?;
-        let command = AddKeyframeCommand::new(
-            clip_id.to_string(),
-            property.to_string(),
-            keyframe,
-        );
+        let command = AddKeyframeCommand::new(clip_id.to_string(), property.to_string(), keyframe);
         self.command_history
             .execute(Box::new(command), project.timeline_mut())?;
 
@@ -1876,15 +1926,20 @@ impl EditorsProEngine {
             .find_clip(clip_id)
             .ok_or_else(|| format!("Clip {} not found", clip_id))?;
 
-        let track = clip.keyframe_track(property)
+        let track = clip
+            .keyframe_track(property)
             .ok_or_else(|| format!("Unknown keyframe property: {}", property))?;
 
-        Ok(track.keyframes.iter().map(|kf| KeyframeInfo {
-            id: kf.id.clone(),
-            time_ms: kf.time_ms,
-            value: kf.value,
-            easing_name: kf.easing.display_name().to_string(),
-        }).collect())
+        Ok(track
+            .keyframes
+            .iter()
+            .map(|kf| KeyframeInfo {
+                id: kf.id.clone(),
+                time_ms: kf.time_ms,
+                value: kf.value,
+                easing_name: kf.easing.display_name().to_string(),
+            })
+            .collect())
     }
 
     /// Get the speed curve for a clip
@@ -1932,7 +1987,12 @@ impl EditorsProEngine {
             adapter_name: self.renderer.gpu_adapter_name().unwrap_or_default(),
             backend: self.renderer.gpu_backend_name().unwrap_or_default(),
             vram_bytes: 0, // VRAM query not yet implemented in wgpu
-            supported_effects: self.renderer.gpu_accelerated_effects().into_iter().map(String::from).collect(),
+            supported_effects: self
+                .renderer
+                .gpu_accelerated_effects()
+                .into_iter()
+                .map(String::from)
+                .collect(),
             is_hardware_encoder_available: false, // HW encoder detection not yet implemented
         }
     }
@@ -1980,11 +2040,7 @@ impl EditorsProEngine {
     /// Creates a lower-resolution copy of the source video for smooth
     /// editing. The proxy is stored in the cache directory.
     /// Returns the path to the generated proxy file.
-    pub fn generate_proxy(
-        &mut self,
-        asset_id: &str,
-        source_path: &str,
-    ) -> Result<String, String> {
+    pub fn generate_proxy(&mut self, asset_id: &str, source_path: &str) -> Result<String, String> {
         let cache_dir = if self.cache_dir.is_empty() {
             // Use a default cache directory
             let dir = std::env::temp_dir().join("editors-pro").join("cache");
@@ -1996,12 +2052,8 @@ impl EditorsProEngine {
         };
 
         let quality = self.proxy_manager.quality();
-        let metadata = crate::proxy::generator::generate_proxy(
-            source_path,
-            asset_id,
-            quality,
-            &cache_dir,
-        )?;
+        let metadata =
+            crate::proxy::generator::generate_proxy(source_path, asset_id, quality, &cache_dir)?;
 
         let proxy_path = metadata.proxy_path.clone();
         self.proxy_manager.register_proxy(metadata);
@@ -2014,7 +2066,9 @@ impl EditorsProEngine {
     ///
     /// Returns `None` if no proxy exists for this asset.
     pub fn get_proxy_path(&self, asset_id: &str) -> Option<String> {
-        self.proxy_manager.get_proxy_path(asset_id).map(String::from)
+        self.proxy_manager
+            .get_proxy_path(asset_id)
+            .map(String::from)
     }
 
     /// Set the proxy quality setting.
@@ -2074,13 +2128,18 @@ impl EditorsProEngine {
 
     /// Get the preview path for an asset (proxy if available, original otherwise).
     pub fn preview_path(&self, asset_id: &str, original_path: &str) -> String {
-        self.proxy_manager.preview_path(asset_id, original_path).to_string()
+        self.proxy_manager
+            .preview_path(asset_id, original_path)
+            .to_string()
     }
 
     /// Enable or disable automatic proxy generation on media import.
     pub fn set_auto_proxy(&mut self, enabled: bool) {
         self.auto_proxy_enabled = enabled;
-        log::info!("Auto-proxy {}", if enabled { "enabled" } else { "disabled" });
+        log::info!(
+            "Auto-proxy {}",
+            if enabled { "enabled" } else { "disabled" }
+        );
     }
 
     /// Check whether automatic proxy generation is enabled.
@@ -2155,13 +2214,19 @@ impl EditorsProEngine {
     /// Analyze loudness of the currently-cached audio for a given asset.
     /// Returns integrated LUFS, RMS dB, peak dB, and true-peak.
     /// Returns None if no audio is cached for the asset.
-    pub fn analyze_asset_loudness(&self, asset_id: &str, sample_rate: u32) -> Option<LoudnessResult> {
+    pub fn analyze_asset_loudness(
+        &self,
+        asset_id: &str,
+        sample_rate: u32,
+    ) -> Option<LoudnessResult> {
         let buffer = self.audio_cache.get(asset_id)?;
         // Sum to mono if stereo
         let mono: Vec<f32> = if buffer.channels == 1 {
             buffer.samples.clone()
         } else {
-            buffer.samples.chunks(buffer.channels.try_into().unwrap())
+            buffer
+                .samples
+                .chunks(buffer.channels.try_into().unwrap())
                 .map(|frame| frame.iter().sum::<f32>() / buffer.channels as f32)
                 .collect()
         };
@@ -2179,11 +2244,17 @@ impl EditorsProEngine {
     /// Phase F.3: analyze arbitrary f32 samples (mono or interleaved stereo).
     /// Used by the audio meter bridge when the caller has raw PCM samples
     /// (e.g., from get_audio_samples) but no asset_id.
-    pub fn analyze_samples_loudness(&self, samples: &[f32], sample_rate: u32, channels: u32) -> LoudnessResult {
+    pub fn analyze_samples_loudness(
+        &self,
+        samples: &[f32],
+        sample_rate: u32,
+        channels: u32,
+    ) -> LoudnessResult {
         let mono: Vec<f32> = if channels <= 1 {
             samples.to_vec()
         } else {
-            samples.chunks(channels as usize)
+            samples
+                .chunks(channels as usize)
                 .map(|frame| frame.iter().sum::<f32>() / channels as f32)
                 .collect()
         };
@@ -2207,25 +2278,37 @@ impl EditorsProEngine {
 
     /// Set the pan for a track. -1.0 = full left, 0.0 = center, +1.0 = full right.
     pub fn set_track_pan(&mut self, track_id: &str, pan: f32) {
-        let state = self.track_mixer_state.entry(track_id.to_string()).or_default();
+        let state = self
+            .track_mixer_state
+            .entry(track_id.to_string())
+            .or_default();
         state.pan = pan.clamp(-1.0, 1.0);
     }
 
     /// Get the pan for a track. Returns 0.0 (center) if not set.
     pub fn get_track_pan(&self, track_id: &str) -> f32 {
-        self.track_mixer_state.get(track_id).map(|s| s.pan).unwrap_or(0.0)
+        self.track_mixer_state
+            .get(track_id)
+            .map(|s| s.pan)
+            .unwrap_or(0.0)
     }
 
     /// Set the solo flag for a track. When any track is soloed, all
     /// non-soloed tracks are muted during mixing.
     pub fn set_track_solo(&mut self, track_id: &str, solo: bool) {
-        let state = self.track_mixer_state.entry(track_id.to_string()).or_default();
+        let state = self
+            .track_mixer_state
+            .entry(track_id.to_string())
+            .or_default();
         state.solo = solo;
     }
 
     /// Get the solo flag for a track. Returns false if not set.
     pub fn get_track_solo(&self, track_id: &str) -> bool {
-        self.track_mixer_state.get(track_id).map(|s| s.solo).unwrap_or(false)
+        self.track_mixer_state
+            .get(track_id)
+            .map(|s| s.solo)
+            .unwrap_or(false)
     }
 
     /// Returns true if any track is soloed. Used by the mixer to decide
@@ -2238,12 +2321,20 @@ impl EditorsProEngine {
 
     /// Set the EQ settings for a track. Stored per-track; applied during
     /// mixing when the track is rendered.
-    pub fn set_track_eq_settings(&mut self, track_id: &str, settings: crate::audio::effects::EqSettings) {
-        self.track_eq_settings.insert(track_id.to_string(), settings);
+    pub fn set_track_eq_settings(
+        &mut self,
+        track_id: &str,
+        settings: crate::audio::effects::EqSettings,
+    ) {
+        self.track_eq_settings
+            .insert(track_id.to_string(), settings);
     }
 
     /// Get the EQ settings for a track. Returns None if no EQ is configured.
-    pub fn get_track_eq_settings(&self, track_id: &str) -> Option<&crate::audio::effects::EqSettings> {
+    pub fn get_track_eq_settings(
+        &self,
+        track_id: &str,
+    ) -> Option<&crate::audio::effects::EqSettings> {
         self.track_eq_settings.get(track_id)
     }
 
@@ -2251,15 +2342,23 @@ impl EditorsProEngine {
 
     /// Write processed audio samples back to the engine's audio cache.
     /// Used by the EQ panel after applying effects: fetch → EQ → write back.
-    pub fn set_audio_samples(&mut self, asset_id: &str, samples: Vec<f32>, sample_rate: u32, channels: u32) {
+    pub fn set_audio_samples(
+        &mut self,
+        asset_id: &str,
+        samples: Vec<f32>,
+        sample_rate: u32,
+        channels: u32,
+    ) {
         if let Some(buffer) = self.audio_cache.get_mut(asset_id) {
             buffer.samples = samples;
             buffer.sample_rate = sample_rate;
             buffer.channels = channels;
         } else {
             // Insert a new buffer if the asset isn't cached yet.
-            let duration_ms = (samples.len() as f64 / channels as f64 / sample_rate as f64 * 1000.0) as u64;
-            let mut buffer = crate::audio::mixer::AudioBuffer::new(sample_rate, channels, duration_ms);
+            let duration_ms =
+                (samples.len() as f64 / channels as f64 / sample_rate as f64 * 1000.0) as u64;
+            let mut buffer =
+                crate::audio::mixer::AudioBuffer::new(sample_rate, channels, duration_ms);
             buffer.samples = samples;
             self.audio_cache.insert(asset_id.to_string(), buffer);
         }
@@ -2286,7 +2385,9 @@ impl EditorsProEngine {
     }
 
     pub fn get_active_lut(&self) -> Option<(&crate::effects::lut::Lut, f32)> {
-        self.active_lut.as_ref().map(|lut| (lut, self.active_lut_intensity))
+        self.active_lut
+            .as_ref()
+            .map(|lut| (lut, self.active_lut_intensity))
     }
 }
 
@@ -2631,7 +2732,11 @@ impl SpeedCurveInfo {
     /// Create from a SpeedCurve
     pub fn from_curve(curve: &SpeedCurve) -> Self {
         Self {
-            segments: curve.segments.iter().map(SpeedSegmentInfo::from_segment).collect(),
+            segments: curve
+                .segments
+                .iter()
+                .map(SpeedSegmentInfo::from_segment)
+                .collect(),
         }
     }
 }

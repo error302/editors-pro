@@ -7,6 +7,7 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
@@ -87,7 +88,13 @@ class ExportService : Service() {
             ACTION_START -> {
                 currentProgress = 0
                 currentStage = "Preparing"
-                startForeground(NOTIFICATION_ID, buildNotification())
+                if (Build.VERSION.SDK_INT >= 35) {
+                    startForeground(NOTIFICATION_ID, buildNotification(), ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROCESSING)
+                } else if (Build.VERSION.SDK_INT >= 29) {
+                    startForeground(NOTIFICATION_ID, buildNotification(), ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
+                } else {
+                    startForeground(NOTIFICATION_ID, buildNotification())
+                }
             }
             ACTION_UPDATE_PROGRESS -> {
                 currentProgress = intent.getIntExtra(EXTRA_PROGRESS, 0)
@@ -140,15 +147,6 @@ class ExportService : Service() {
             )
         }
 
-        // Cancel intent
-        val cancelIntent = Intent(this, ExportService::class.java).apply {
-            action = ACTION_CANCEL
-        }
-        val cancelPendingIntent = PendingIntent.getService(
-            this, 1, cancelIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("EDITORS-PRO")
             .setContentText("$currentStage — $currentProgress%")
@@ -156,11 +154,9 @@ class ExportService : Service() {
             .setProgress(100, currentProgress, false)
             .setOngoing(true)
             .setContentIntent(pendingIntent)
-            .addAction(
-                android.R.drawable.ic_menu_close_clear_cancel,
-                "Cancel",
-                cancelPendingIntent
-            )
+            // Cancellation belongs to the export engine in the editor. Stopping
+            // only this notification service would leave encoding running.
+            .addAction(android.R.drawable.ic_menu_view, "Open editor", pendingIntent)
             .setCategory(NotificationCompat.CATEGORY_PROGRESS)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .build()

@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 /// Service that manages the Android foreground service for video export.
@@ -21,7 +22,12 @@ class ExportForegroundService {
   ExportForegroundService._();
   static final ExportForegroundService instance = ExportForegroundService._();
 
-  static const _channel = MethodChannel('com.editorspro.editors_pro/export');
+  static const _channel = MethodChannel('com.editorspro/editors_pro/export');
+
+  @visibleForTesting
+  bool? androidPlatformOverride;
+
+  bool get _isAndroid => androidPlatformOverride ?? Platform.isAndroid;
 
   bool _isRunning = false;
 
@@ -35,7 +41,7 @@ class ExportForegroundService {
   /// the app is minimized.
   Future<void> start() async {
     if (_isRunning) return;
-    if (!Platform.isAndroid) return;
+    if (!_isAndroid) return;
 
     try {
       await _channel.invokeMethod('startExport');
@@ -54,7 +60,7 @@ class ExportForegroundService {
   /// [progress] should be 0-100.
   /// [stage] should be a human-readable string like "Encoding" or "Finalizing".
   Future<void> updateProgress(int progress, String stage) async {
-    if (!_isRunning || !Platform.isAndroid) return;
+    if (!_isRunning || !_isAndroid) return;
 
     try {
       await _channel.invokeMethod('updateProgress', {
@@ -70,7 +76,7 @@ class ExportForegroundService {
   ///
   /// This stops the foreground service and shows a completion notification.
   Future<void> complete(String filePath, String fileSize) async {
-    if (!_isRunning || !Platform.isAndroid) return;
+    if (!_isRunning || !_isAndroid) return;
 
     try {
       await _channel.invokeMethod('complete', {
@@ -85,7 +91,7 @@ class ExportForegroundService {
 
   /// Cancel the export and stop the foreground service.
   Future<void> cancel() async {
-    if (!_isRunning || !Platform.isAndroid) return;
+    if (!_isRunning || !_isAndroid) return;
 
     try {
       await _channel.invokeMethod('cancel');

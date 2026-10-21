@@ -124,6 +124,8 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
         children: [
           // Top toolbar
           const EditorToolbar(),
+          if (MediaQuery.sizeOf(context).height >= 500)
+            _buildViewerToolbar(editorState, isNarrowScreen),
 
           // Main content area
           Expanded(
@@ -147,82 +149,8 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
                           child: SafeZonesOverlay(
                             config:
                                 _safeZoneConfigFor(editorState.safeZoneMode),
-                            previewAspectRatio: 16 / 9,
-                          ),
-                        ),
-                      // GPU status badge — top-right of viewport
-                      Positioned(
-                        top: 8,
-                        right: 8,
-                        child: const GpuStatusBadge(),
-                      ),
-                      // Proxy status badge — next to GPU badge
-                      Positioned(
-                        top: 8,
-                        right: 58,
-                        child: const ProxyStatusBadge(),
-                      ),
-                      // Phase F.2: Safe zones indicator badge (left of proxy badge)
-                      if (editorState.showSafeZones)
-                        Positioned(
-                          top: 8,
-                          right: 108,
-                          child: _SafeZoneBadge(mode: editorState.safeZoneMode),
-                        ),
-                      // Phase F.2: Safe zones toggle — bottom-left of viewport
-                      Positioned(
-                        bottom: 8,
-                        left: 8,
-                        child: FloatingActionButton.small(
-                          heroTag: 'safezones_fab',
-                          tooltip:
-                              'Safe zones: ${editorState.safeZoneMode.name}',
-                          backgroundColor: editorState.showSafeZones
-                              ? AppTheme.primary
-                              : AppTheme.surface,
-                          foregroundColor: editorState.showSafeZones
-                              ? Colors.white
-                              : AppTheme.textSecondary,
-                          onPressed: () => ref
-                              .read(editorProvider.notifier)
-                              .cycleSafeZoneMode(),
-                          child: const Icon(Icons.crop_free, size: 18),
-                        ),
-                      ),
-                      // Phase F.2: Audio Meter Bridge toggle — bottom-right of viewport
-                      Positioned(
-                        bottom: 8,
-                        right: 8,
-                        child: FloatingActionButton.small(
-                          heroTag: 'audiometer_fab',
-                          tooltip: 'Audio meter bridge',
-                          backgroundColor: editorState.showAudioMeterBridge
-                              ? AppTheme.primary
-                              : AppTheme.surface,
-                          foregroundColor: editorState.showAudioMeterBridge
-                              ? Colors.white
-                              : AppTheme.textSecondary,
-                          onPressed: () => ref
-                              .read(editorProvider.notifier)
-                              .toggleAudioMeterBridge(),
-                          child: const Icon(Icons.graphic_eq, size: 18),
-                        ),
-                      ),
-                      // Phase E.9: on narrow screens, show a floating action
-                      // button that opens the InspectorPanel as a draggable
-                      // bottom sheet. Without this, phone users have no way
-                      // to edit clip properties.
-                      if (isNarrowScreen)
-                        Positioned(
-                          top: 8,
-                          left: 8,
-                          child: FloatingActionButton.small(
-                            heroTag: 'inspector_fab',
-                            tooltip: 'Inspector',
-                            backgroundColor: AppTheme.primary,
-                            foregroundColor: Colors.white,
-                            onPressed: () => _showInspectorBottomSheet(context),
-                            child: const Icon(Icons.tune),
+                            previewAspectRatio: (project?.width ?? 1920) /
+                                (project?.height ?? 1080),
                           ),
                         ),
                       // Phase E.10: importing overlay — shown whenever
@@ -294,6 +222,86 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
     );
   }
 
+  Widget _buildViewerToolbar(EditorState state, bool compact) {
+    return Container(
+      height: 48,
+      decoration: const BoxDecoration(
+        color: AppTheme.surface,
+        border: Border(bottom: BorderSide(color: AppTheme.border)),
+      ),
+      child: Row(children: [
+        const SizedBox(width: 16),
+        const Icon(Icons.crop_landscape,
+            size: 16, color: AppTheme.textSecondary),
+        const SizedBox(width: 8),
+        const Expanded(
+            child: Text('Viewer',
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600))),
+        if (!compact) ...[
+          const GpuStatusBadge(),
+          const SizedBox(width: 8),
+          const ProxyStatusBadge(),
+          const SizedBox(width: 8),
+        ],
+        IconButton(
+          tooltip: 'Safe zones: ${state.safeZoneMode.name}',
+          isSelected: state.showSafeZones,
+          onPressed: () =>
+              ref.read(editorProvider.notifier).cycleSafeZoneMode(),
+          icon: const Icon(Icons.crop_free, size: 19),
+        ),
+        IconButton(
+          tooltip: 'Audio meters',
+          isSelected: state.showAudioMeterBridge,
+          onPressed: () =>
+              ref.read(editorProvider.notifier).toggleAudioMeterBridge(),
+          icon: const Icon(Icons.graphic_eq, size: 19),
+        ),
+        if (compact)
+          IconButton(
+            tooltip: 'Inspector',
+            onPressed: () => _showInspectorBottomSheet(context),
+            icon: const Icon(Icons.tune, size: 19),
+          ),
+        const SizedBox(width: 4),
+      ]),
+    );
+  }
+
+  void _showEditingTools() {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      showDragHandle: true,
+      backgroundColor: AppTheme.surface,
+      builder: (context) => FractionallySizedBox(
+        heightFactor: 0.8,
+        child: Consumer(
+            builder: (context, ref, _) => Column(children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 8, 8),
+                    child: Row(children: [
+                      const Expanded(
+                          child: Text('Editing tools',
+                              style: TextStyle(fontWeight: FontWeight.w600))),
+                      IconButton(
+                          tooltip: 'Close tools',
+                          onPressed: () => Navigator.pop(context),
+                          icon: const Icon(Icons.close)),
+                    ]),
+                  ),
+                  Expanded(
+                      child: SizedBox(
+                          width: double.infinity,
+                          child: _buildLeftPanel(
+                              context, ref.watch(editorProvider),
+                              isTablet: true))),
+                ])),
+      ),
+    );
+  }
+
   Widget _buildMobileImportBar() {
     final mediaCount = ref.watch(mediaAssetsProvider).length;
 
@@ -338,6 +346,12 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
             icon: Icons.video_library_outlined,
             tooltip: 'Media bin ($mediaCount)',
             onPressed: _showMobileMediaLibrary,
+          ),
+          const SizedBox(width: 8),
+          _mobileImportAction(
+            icon: Icons.auto_fix_high_outlined,
+            tooltip: 'Editing tools',
+            onPressed: _showEditingTools,
           ),
         ],
       ),
@@ -1359,7 +1373,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
     final assets = ref.watch(mediaAssetsProvider);
 
     if (assets.isEmpty) {
-      return Center(
+      return SingleChildScrollView(
         child: Padding(
           padding: const EdgeInsets.all(24),
           child: Column(
@@ -1560,7 +1574,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
     }
 
     if (clipId == null) {
-      return Center(
+      return SingleChildScrollView(
         child: Padding(
           padding: const EdgeInsets.all(24),
           child: Column(
@@ -1615,7 +1629,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
     }
 
     if (clipId == null) {
-      return Center(
+      return SingleChildScrollView(
         child: Padding(
           padding: const EdgeInsets.all(24),
           child: Column(

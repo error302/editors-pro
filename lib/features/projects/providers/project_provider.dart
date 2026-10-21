@@ -49,12 +49,13 @@ class ProjectNotifier extends StateNotifier<ProjectState> {
 
   /// Load all projects from the database on app startup.
   Future<void> loadProjects() async {
-    state = state.copyWith(isLoading: true, error: null);
+    state = state.copyWith(isLoading: true, clearError: true);
     try {
       final projects = await _repo.getAllProjects();
       state = state.copyWith(
         recentProjects: projects,
         isLoading: false,
+        clearError: true,
       );
     } catch (e) {
       developer.log('loadProjects failed: $e', name: 'ProjectNotifier');

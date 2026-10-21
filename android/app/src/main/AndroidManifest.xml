@@ -2,7 +2,8 @@
     xmlns:tools="http://schemas.android.com/tools">
     <!-- Foreground service for export (keeps encoding alive when minimized) -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROCESSING" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <!-- Network for future cloud features -->
@@ -83,7 +84,7 @@
         <service
             android:name=".ExportService"
             android:exported="false"
-            android:foregroundServiceType="mediaPlayback" />
+            android:foregroundServiceType="dataSync|mediaProcessing" />
 
         <meta-data
             android:name="flutterEmbedding"

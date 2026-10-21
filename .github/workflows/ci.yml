@@ -111,6 +111,10 @@ jobs:
             exit "$test_status"
           fi
 
+      - name: Verify real media import and audible timeline export
+        if: ${{ success() || failure() }}
+        run: cargo test --manifest-path engine/Cargo.toml --test audio_import_test --test still_image_test
+
       # Keep formatting strict without allowing legacy formatting debt to
       # suppress the compiler, lint, and test diagnostics above.
       - name: Cargo fmt --check
@@ -612,6 +616,10 @@ jobs:
             echo "Unsupported 32-bit ARM libraries unexpectedly packaged in AAB" >&2
             exit 1
           fi
+
+      - name: Verify every packaged native library, fonts and APK signature
+        shell: pwsh
+        run: ./scripts/verify_android_apk.ps1 -ApkPath build/app/outputs/flutter-apk/app-release.apk -AndroidSdkRoot $env:ANDROID_HOME
 
       - name: Upload FFmpeg LGPL source and build materials
         uses: actions/upload-artifact@v4

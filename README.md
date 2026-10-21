@@ -1,6 +1,6 @@
 # EDITORS-PRO
 
-Professional-grade mobile video editor built with **Flutter + Rust** for Android.
+Android video editor under development, built with **Flutter + Rust**. See [submission readiness](docs/SUBMISSION_READINESS.md) for verified evidence and release blockers. The feature inventory below describes implementation intent and is not a release certification.
 
 ## Architecture
 
@@ -237,7 +237,7 @@ The persona has a 7-rung ladder (YAGNI → reuse → NLE-native → platform-nat
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/kesi-11/EDITORS-PRO.git
+git clone https://github.com/error302/editors-pro.git
 cd EDITORS-PRO
 
 # 2. Get Flutter dependencies

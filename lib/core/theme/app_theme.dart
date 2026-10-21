@@ -1,25 +1,19 @@
 import 'package:flutter/material.dart';
 
-/// EDITORS-PRO Design System v3 — CapCut-inspired clean dark
-///
-/// Redesigned following taste-skill audit principles:
-/// - Single accent color (no rainbow gradients)
-/// - Pure tinted-black surfaces (not purple-tinted)
-/// - Generous spacing, flat surfaces with subtle borders
-/// - Tabular figures for timecodes/data
+/// Neutral workbench surfaces keep attention on footage and photographs.
 class AppTheme {
   AppTheme._();
 
   // ─── Brand Color (single accent) ───────────────────────────────
   /// Primary accent — a clean, confident blue used for ALL interactive
   /// highlights. One accent, consistently applied.
-  static const Color primary = Color(0xFF3B82F6);
+  static const Color primary = Color(0xFF527FC4);
 
   /// Lighter shade for hovers and fills
-  static const Color primaryLight = Color(0xFF60A5FA);
+  static const Color primaryLight = Color(0xFF91B6EE);
 
   /// Deep shade for pressed states
-  static const Color primaryDark = Color(0xFF2563EB);
+  static const Color primaryDark = Color(0xFF3E65A3);
 
   // ─── Semantic Colors (desaturated, used sparingly) ─────────────
   static const Color success = Color(0xFF22C55E);
@@ -29,25 +23,25 @@ class AppTheme {
 
   // ─── Surface Tones (neutral tinted-black) ──────────────────────
   /// App background — true near-black, no purple tint
-  static const Color background = Color(0xFF000000);
+  static const Color background = Color(0xFF111214);
 
   /// Primary surface — toolbars, panels
-  static const Color surface = Color(0xFF0F0F0F);
+  static const Color surface = Color(0xFF191B1E);
 
   /// Elevated surface — cards, popovers
-  static const Color surfaceVariant = Color(0xFF1A1A1A);
+  static const Color surfaceVariant = Color(0xFF23262B);
 
   /// Card background
-  static const Color cardColor = Color(0xFF1F1F1F);
+  static const Color cardColor = Color(0xFF1D2024);
 
   /// Border / divider — subtle
-  static const Color border = Color(0xFF2A2A2A);
-  static const Color borderLight = Color(0xFF333333);
+  static const Color border = Color(0xFF30343A);
+  static const Color borderLight = Color(0xFF434952);
 
   // ─── Text Tones ────────────────────────────────────────────────
-  static const Color textPrimary = Color(0xFFFFFFFF);
-  static const Color textSecondary = Color(0xFFA0A0A0);
-  static const Color textDisabled = Color(0xFF555555);
+  static const Color textPrimary = Color(0xFFEDEFF2);
+  static const Color textSecondary = Color(0xFFADB4BE);
+  static const Color textDisabled = Color(0xFF7F8895);
 
   // ─── Track Colors (timeline) — desaturated, professional ───────
   static const Color videoTrackColor = Color(0xFF4B9CD3);
@@ -86,20 +80,20 @@ class AppTheme {
 
   // ─── Shadows & Glows (subtle, tinted) ──────────────────────────
   static List<BoxShadow> primaryGlow({double opacity = 0.3}) => [
-    BoxShadow(
-      color: primary.withOpacity(opacity),
-      blurRadius: 16,
-      offset: const Offset(0, 2),
-    ),
-  ];
+        BoxShadow(
+          color: primary.withOpacity(opacity),
+          blurRadius: 16,
+          offset: const Offset(0, 2),
+        ),
+      ];
 
   static List<BoxShadow> accentGlow({double opacity = 0.2}) => [
-    BoxShadow(
-      color: primary.withOpacity(opacity),
-      blurRadius: 12,
-      offset: const Offset(0, 1),
-    ),
-  ];
+        BoxShadow(
+          color: primary.withOpacity(opacity),
+          blurRadius: 12,
+          offset: const Offset(0, 1),
+        ),
+      ];
 
   static List<BoxShadow> softShadow = [
     BoxShadow(
@@ -149,7 +143,6 @@ class AppTheme {
     colorSchemeSeed: primary,
     scaffoldBackgroundColor: background,
     fontFamily: 'Inter',
-
     appBarTheme: const AppBarTheme(
       backgroundColor: surface,
       foregroundColor: textPrimary,
@@ -162,22 +155,22 @@ class AppTheme {
         color: textPrimary,
       ),
     ),
-
     cardTheme: CardThemeData(
       color: cardColor,
       elevation: 0,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(radiusMedium),
       ),
-      margin: const EdgeInsets.symmetric(horizontal: spacing16, vertical: spacing8),
+      margin:
+          const EdgeInsets.symmetric(horizontal: spacing16, vertical: spacing8),
     ),
-
     elevatedButtonTheme: ElevatedButtonThemeData(
       style: ElevatedButton.styleFrom(
         backgroundColor: primary,
         foregroundColor: Colors.white,
         elevation: 0,
-        padding: const EdgeInsets.symmetric(horizontal: spacing20, vertical: spacing12),
+        padding: const EdgeInsets.symmetric(
+            horizontal: spacing20, vertical: spacing12),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(radiusMedium),
         ),
@@ -188,12 +181,12 @@ class AppTheme {
         ),
       ),
     ),
-
     outlinedButtonTheme: OutlinedButtonThemeData(
       style: OutlinedButton.styleFrom(
         foregroundColor: textPrimary,
         side: const BorderSide(color: borderLight, width: 1),
-        padding: const EdgeInsets.symmetric(horizontal: spacing20, vertical: spacing12),
+        padding: const EdgeInsets.symmetric(
+            horizontal: spacing20, vertical: spacing12),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(radiusMedium),
         ),
@@ -204,7 +197,6 @@ class AppTheme {
         ),
       ),
     ),
-
     textButtonTheme: TextButtonThemeData(
       style: TextButton.styleFrom(
         foregroundColor: primaryLight,
@@ -215,12 +207,10 @@ class AppTheme {
         ),
       ),
     ),
-
     iconTheme: const IconThemeData(
       color: textSecondary,
       size: 24,
     ),
-
     bottomNavigationBarTheme: const BottomNavigationBarThemeData(
       backgroundColor: surface,
       selectedItemColor: primary,
@@ -228,13 +218,11 @@ class AppTheme {
       type: BottomNavigationBarType.fixed,
       elevation: 0,
     ),
-
     dividerTheme: const DividerThemeData(
       color: border,
       thickness: 1,
       space: 1,
     ),
-
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
       fillColor: surfaceVariant,
@@ -247,9 +235,9 @@ class AppTheme {
         borderSide: const BorderSide(color: primary, width: 1.5),
       ),
       hintStyle: const TextStyle(color: textDisabled),
-      contentPadding: const EdgeInsets.symmetric(horizontal: spacing16, vertical: spacing12),
+      contentPadding: const EdgeInsets.symmetric(
+          horizontal: spacing16, vertical: spacing12),
     ),
-
     sliderTheme: SliderThemeData(
       activeTrackColor: primary,
       thumbColor: Colors.white,
@@ -258,7 +246,6 @@ class AppTheme {
       thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 7),
       overlayShape: const RoundSliderOverlayShape(overlayRadius: 16),
     ),
-
     snackBarTheme: SnackBarThemeData(
       backgroundColor: surfaceVariant,
       contentTextStyle: const TextStyle(color: textPrimary),
@@ -267,21 +254,18 @@ class AppTheme {
       ),
       behavior: SnackBarBehavior.floating,
     ),
-
     dialogTheme: DialogThemeData(
       backgroundColor: surface,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(radiusLarge),
       ),
     ),
-
     bottomSheetTheme: const BottomSheetThemeData(
       backgroundColor: surface,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(radiusLarge)),
       ),
     ),
-
     chipTheme: ChipThemeData(
       backgroundColor: surfaceVariant,
       selectedColor: primary.withOpacity(0.15),
@@ -291,29 +275,46 @@ class AppTheme {
       ),
       side: BorderSide.none,
     ),
-
     tabBarTheme: TabBarThemeData(
       labelColor: primary,
       unselectedLabelColor: textSecondary,
       indicatorColor: primary,
       indicatorSize: TabBarIndicatorSize.label,
       labelStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
-      unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w400, fontSize: 14),
+      unselectedLabelStyle:
+          const TextStyle(fontWeight: FontWeight.w400, fontSize: 14),
     ),
-
     textTheme: const TextTheme(
-      headlineLarge: TextStyle(fontSize: 28, fontWeight: FontWeight.w700, color: textPrimary, letterSpacing: -0.5),
-      headlineMedium: TextStyle(fontSize: 24, fontWeight: FontWeight.w700, color: textPrimary, letterSpacing: -0.3),
-      headlineSmall: TextStyle(fontSize: 20, fontWeight: FontWeight.w600, color: textPrimary),
-      titleLarge: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: textPrimary),
-      titleMedium: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: textPrimary),
-      titleSmall: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: textPrimary),
-      bodyLarge: TextStyle(fontSize: 16, fontWeight: FontWeight.w400, color: textPrimary),
-      bodyMedium: TextStyle(fontSize: 14, fontWeight: FontWeight.w400, color: textPrimary),
-      bodySmall: TextStyle(fontSize: 12, fontWeight: FontWeight.w400, color: textSecondary),
-      labelLarge: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: textPrimary),
-      labelMedium: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: textSecondary),
-      labelSmall: TextStyle(fontSize: 10, fontWeight: FontWeight.w500, color: textDisabled),
+      headlineLarge: TextStyle(
+          fontSize: 28,
+          fontWeight: FontWeight.w700,
+          color: textPrimary,
+          letterSpacing: -0.5),
+      headlineMedium: TextStyle(
+          fontSize: 24,
+          fontWeight: FontWeight.w700,
+          color: textPrimary,
+          letterSpacing: -0.3),
+      headlineSmall: TextStyle(
+          fontSize: 20, fontWeight: FontWeight.w600, color: textPrimary),
+      titleLarge: TextStyle(
+          fontSize: 18, fontWeight: FontWeight.w600, color: textPrimary),
+      titleMedium: TextStyle(
+          fontSize: 16, fontWeight: FontWeight.w600, color: textPrimary),
+      titleSmall: TextStyle(
+          fontSize: 14, fontWeight: FontWeight.w600, color: textPrimary),
+      bodyLarge: TextStyle(
+          fontSize: 16, fontWeight: FontWeight.w400, color: textPrimary),
+      bodyMedium: TextStyle(
+          fontSize: 14, fontWeight: FontWeight.w400, color: textPrimary),
+      bodySmall: TextStyle(
+          fontSize: 12, fontWeight: FontWeight.w400, color: textSecondary),
+      labelLarge: TextStyle(
+          fontSize: 14, fontWeight: FontWeight.w600, color: textPrimary),
+      labelMedium: TextStyle(
+          fontSize: 12, fontWeight: FontWeight.w500, color: textSecondary),
+      labelSmall: TextStyle(
+          fontSize: 10, fontWeight: FontWeight.w500, color: textDisabled),
     ),
   );
 
@@ -324,7 +325,6 @@ class AppTheme {
     colorSchemeSeed: primary,
     scaffoldBackgroundColor: lightBackground,
     fontFamily: 'Inter',
-
     appBarTheme: const AppBarTheme(
       backgroundColor: lightSurface,
       foregroundColor: lightTextPrimary,
@@ -337,22 +337,22 @@ class AppTheme {
         color: lightTextPrimary,
       ),
     ),
-
     cardTheme: CardThemeData(
       color: lightCardColor,
       elevation: 0,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(radiusMedium),
       ),
-      margin: const EdgeInsets.symmetric(horizontal: spacing16, vertical: spacing8),
+      margin:
+          const EdgeInsets.symmetric(horizontal: spacing16, vertical: spacing8),
     ),
-
     elevatedButtonTheme: ElevatedButtonThemeData(
       style: ElevatedButton.styleFrom(
         backgroundColor: primary,
         foregroundColor: Colors.white,
         elevation: 0,
-        padding: const EdgeInsets.symmetric(horizontal: spacing20, vertical: spacing12),
+        padding: const EdgeInsets.symmetric(
+            horizontal: spacing20, vertical: spacing12),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(radiusMedium),
         ),
@@ -363,12 +363,12 @@ class AppTheme {
         ),
       ),
     ),
-
     outlinedButtonTheme: OutlinedButtonThemeData(
       style: OutlinedButton.styleFrom(
         foregroundColor: lightTextPrimary,
         side: const BorderSide(color: lightBorderLight, width: 1),
-        padding: const EdgeInsets.symmetric(horizontal: spacing20, vertical: spacing12),
+        padding: const EdgeInsets.symmetric(
+            horizontal: spacing20, vertical: spacing12),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(radiusMedium),
         ),
@@ -379,7 +379,6 @@ class AppTheme {
         ),
       ),
     ),
-
     textButtonTheme: TextButtonThemeData(
       style: TextButton.styleFrom(
         foregroundColor: primaryDark,
@@ -390,12 +389,10 @@ class AppTheme {
         ),
       ),
     ),
-
     iconTheme: const IconThemeData(
       color: lightTextSecondary,
       size: 24,
     ),
-
     bottomNavigationBarTheme: const BottomNavigationBarThemeData(
       backgroundColor: lightSurface,
       selectedItemColor: primary,
@@ -403,13 +400,11 @@ class AppTheme {
       type: BottomNavigationBarType.fixed,
       elevation: 0,
     ),
-
     dividerTheme: const DividerThemeData(
       color: lightBorder,
       thickness: 1,
       space: 1,
     ),
-
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
       fillColor: lightSurfaceVariant,
@@ -422,9 +417,9 @@ class AppTheme {
         borderSide: const BorderSide(color: primary, width: 1.5),
       ),
       hintStyle: const TextStyle(color: lightTextDisabled),
-      contentPadding: const EdgeInsets.symmetric(horizontal: spacing16, vertical: spacing12),
+      contentPadding: const EdgeInsets.symmetric(
+          horizontal: spacing16, vertical: spacing12),
     ),
-
     sliderTheme: SliderThemeData(
       activeTrackColor: primary,
       thumbColor: lightSurface,
@@ -433,7 +428,6 @@ class AppTheme {
       thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 7),
       overlayShape: const RoundSliderOverlayShape(overlayRadius: 16),
     ),
-
     snackBarTheme: SnackBarThemeData(
       backgroundColor: lightSurfaceVariant,
       contentTextStyle: const TextStyle(color: lightTextPrimary),
@@ -442,21 +436,18 @@ class AppTheme {
       ),
       behavior: SnackBarBehavior.floating,
     ),
-
     dialogTheme: DialogThemeData(
       backgroundColor: lightSurface,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(radiusLarge),
       ),
     ),
-
     bottomSheetTheme: const BottomSheetThemeData(
       backgroundColor: lightSurface,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(radiusLarge)),
       ),
     ),
-
     chipTheme: ChipThemeData(
       backgroundColor: lightSurfaceVariant,
       selectedColor: primary.withOpacity(0.15),
@@ -466,29 +457,46 @@ class AppTheme {
       ),
       side: BorderSide.none,
     ),
-
     tabBarTheme: TabBarThemeData(
       labelColor: primary,
       unselectedLabelColor: lightTextSecondary,
       indicatorColor: primary,
       indicatorSize: TabBarIndicatorSize.label,
       labelStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
-      unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w400, fontSize: 14),
+      unselectedLabelStyle:
+          const TextStyle(fontWeight: FontWeight.w400, fontSize: 14),
     ),
-
     textTheme: const TextTheme(
-      headlineLarge: TextStyle(fontSize: 28, fontWeight: FontWeight.w700, color: lightTextPrimary, letterSpacing: -0.5),
-      headlineMedium: TextStyle(fontSize: 24, fontWeight: FontWeight.w700, color: lightTextPrimary, letterSpacing: -0.3),
-      headlineSmall: TextStyle(fontSize: 20, fontWeight: FontWeight.w600, color: lightTextPrimary),
-      titleLarge: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: lightTextPrimary),
-      titleMedium: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: lightTextPrimary),
-      titleSmall: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: lightTextPrimary),
-      bodyLarge: TextStyle(fontSize: 16, fontWeight: FontWeight.w400, color: lightTextPrimary),
-      bodyMedium: TextStyle(fontSize: 14, fontWeight: FontWeight.w400, color: lightTextPrimary),
-      bodySmall: TextStyle(fontSize: 12, fontWeight: FontWeight.w400, color: lightTextSecondary),
-      labelLarge: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: lightTextPrimary),
-      labelMedium: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: lightTextSecondary),
-      labelSmall: TextStyle(fontSize: 10, fontWeight: FontWeight.w500, color: lightTextDisabled),
+      headlineLarge: TextStyle(
+          fontSize: 28,
+          fontWeight: FontWeight.w700,
+          color: lightTextPrimary,
+          letterSpacing: -0.5),
+      headlineMedium: TextStyle(
+          fontSize: 24,
+          fontWeight: FontWeight.w700,
+          color: lightTextPrimary,
+          letterSpacing: -0.3),
+      headlineSmall: TextStyle(
+          fontSize: 20, fontWeight: FontWeight.w600, color: lightTextPrimary),
+      titleLarge: TextStyle(
+          fontSize: 18, fontWeight: FontWeight.w600, color: lightTextPrimary),
+      titleMedium: TextStyle(
+          fontSize: 16, fontWeight: FontWeight.w600, color: lightTextPrimary),
+      titleSmall: TextStyle(
+          fontSize: 14, fontWeight: FontWeight.w600, color: lightTextPrimary),
+      bodyLarge: TextStyle(
+          fontSize: 16, fontWeight: FontWeight.w400, color: lightTextPrimary),
+      bodyMedium: TextStyle(
+          fontSize: 14, fontWeight: FontWeight.w400, color: lightTextPrimary),
+      bodySmall: TextStyle(
+          fontSize: 12, fontWeight: FontWeight.w400, color: lightTextSecondary),
+      labelLarge: TextStyle(
+          fontSize: 14, fontWeight: FontWeight.w600, color: lightTextPrimary),
+      labelMedium: TextStyle(
+          fontSize: 12, fontWeight: FontWeight.w500, color: lightTextSecondary),
+      labelSmall: TextStyle(
+          fontSize: 10, fontWeight: FontWeight.w500, color: lightTextDisabled),
     ),
   );
 }

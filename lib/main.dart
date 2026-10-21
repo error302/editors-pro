@@ -3,6 +3,7 @@ import 'dart:ui';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -14,6 +15,12 @@ import 'features/onboarding/providers/onboarding_provider.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
+  LicenseRegistry.addLicense(() async* {
+    yield LicenseEntryWithLineBreaks(
+      ['Inter'],
+      await rootBundle.loadString('assets/fonts/Inter-LICENSE.txt'),
+    );
+  });
   const ffmpegLicenseProfile = String.fromEnvironment(
     'FFMPEG_LICENSE_PROFILE',
     defaultValue: 'legacy-test',

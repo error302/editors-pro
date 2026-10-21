@@ -42,24 +42,34 @@ class EditorState {
   final bool showInspector;
   final double playbackSpeed;
   final String? lastError;
+
   /// Whether audio playback is active (synchronized with video)
   final bool isAudioPlaying;
+
   /// Master volume level for audio playback (0.0 to 1.0)
   final double masterVolume;
+
   /// Whether the editor is currently fetching frames in the playback loop
   final bool isDecodingFrame;
+
   /// Whether GPU rendering is available on this device
   final bool gpuAvailable;
+
   /// Detailed GPU adapter information (null when GPU is unavailable)
   final GpuInfo? gpuInfo;
+
   /// Whether a hardware encoder is available for accelerated export
   final bool hardwareEncoderAvailable;
+
   /// Whether GPU acceleration is currently enabled by the user
   final bool gpuAccelerationEnabled;
+
   /// Phase F.2: whether the safe-zones overlay is visible on the preview.
   final bool showSafeZones;
+
   /// Phase F.2: which safe-zone config to show (broadcast / social / composition).
   final SafeZoneMode safeZoneMode;
+
   /// Phase F.2: whether the audio meter bridge is visible at the bottom.
   final bool showAudioMeterBridge;
 
@@ -135,8 +145,10 @@ class EditorState {
       isDecodingFrame: isDecodingFrame ?? this.isDecodingFrame,
       gpuAvailable: gpuAvailable ?? this.gpuAvailable,
       gpuInfo: clearGpuInfo ? null : (gpuInfo ?? this.gpuInfo),
-      hardwareEncoderAvailable: hardwareEncoderAvailable ?? this.hardwareEncoderAvailable,
-      gpuAccelerationEnabled: gpuAccelerationEnabled ?? this.gpuAccelerationEnabled,
+      hardwareEncoderAvailable:
+          hardwareEncoderAvailable ?? this.hardwareEncoderAvailable,
+      gpuAccelerationEnabled:
+          gpuAccelerationEnabled ?? this.gpuAccelerationEnabled,
       showSafeZones: showSafeZones ?? this.showSafeZones,
       safeZoneMode: safeZoneMode ?? this.safeZoneMode,
       showAudioMeterBridge: showAudioMeterBridge ?? this.showAudioMeterBridge,
@@ -149,10 +161,13 @@ class EditorState {
 enum SafeZoneMode {
   /// Title-safe (90%) + action-safe (80%) + center crosshair.
   broadcast,
+
   /// Title-safe (80% for captions) + center crosshair.
   social,
+
   /// Rule-of-thirds + center crosshair.
   composition,
+
   /// No overlays.
   off,
 }
@@ -203,8 +218,8 @@ class EditorNotifier extends StateNotifier<EditorState> {
   /// Initialize the editor state from the engine.
   Future<void> initialize() async {
     if (!_engineReady) return;
-    await _syncDurationFromEngine();
     state = const EditorState();
+    await _syncDurationFromEngine();
     // Check GPU availability on init
     await checkGpuAvailability();
   }
@@ -253,7 +268,8 @@ class EditorNotifier extends StateNotifier<EditorState> {
 
     // Use ~60Hz tick for smooth video playhead advancement
     const tickMs = 16;
-    _playbackTimer = Timer.periodic(const Duration(milliseconds: tickMs), (timer) {
+    _playbackTimer =
+        Timer.periodic(const Duration(milliseconds: tickMs), (timer) {
       if (!state.isPlaying) {
         timer.cancel();
         _playbackTimer = null;
@@ -282,7 +298,8 @@ class EditorNotifier extends StateNotifier<EditorState> {
   /// Seek to a specific time position
   void seekTo(int timeMs) {
     state = state.copyWith(
-      currentTimeMs: timeMs.clamp(0, state.durationMs > 0 ? state.durationMs : 300000),
+      currentTimeMs:
+          timeMs.clamp(0, state.durationMs > 0 ? state.durationMs : 300000),
     );
   }
 
@@ -433,7 +450,8 @@ class EditorNotifier extends StateNotifier<EditorState> {
     if (clipId == null) return;
     try {
       final api = EngineService.instance.api;
-      await api.splitClip(clipId: clipId, timeMs: BigInt.from(state.currentTimeMs));
+      await api.splitClip(
+          clipId: clipId, timeMs: BigInt.from(state.currentTimeMs));
       await _syncDurationFromEngine();
       _refreshEngineState();
       await _ref.read(projectProvider.notifier).syncFromEngine();
@@ -569,7 +587,8 @@ class EditorNotifier extends StateNotifier<EditorState> {
   }
 
   /// Create a new project via the Rust engine.
-  Future<ProjectInfo?> createProject(String name, {int? width, int? height, double? fps}) async {
+  Future<ProjectInfo?> createProject(String name,
+      {int? width, int? height, double? fps}) async {
     if (!_engineReady) return null;
     try {
       final api = EngineService.instance.api;
@@ -583,7 +602,8 @@ class EditorNotifier extends StateNotifier<EditorState> {
         );
       }
 
-      final projectInfo = await api.createProject(name: name, settings: settings);
+      final projectInfo =
+          await api.createProject(name: name, settings: settings);
       await _syncDurationFromEngine();
       _refreshEngineState();
       return projectInfo;
@@ -662,11 +682,13 @@ class EditorNotifier extends StateNotifier<EditorState> {
   }
 
   /// Configure audio ducking for a track.
-  Future<void> setDucking(String trackId, {required bool enabled, double duckLevel = 0.3}) async {
+  Future<void> setDucking(String trackId,
+      {required bool enabled, double duckLevel = 0.3}) async {
     if (!_engineReady) return;
     try {
       final api = EngineService.instance.api;
-      await api.setDucking(trackId: trackId, enabled: enabled, duckLevel: duckLevel);
+      await api.setDucking(
+          trackId: trackId, enabled: enabled, duckLevel: duckLevel);
     } catch (e) {
       developer.log('setDucking failed: $e', name: 'EditorNotifier');
       state = state.copyWith(lastError: 'Set ducking failed: $e');
@@ -1326,7 +1348,8 @@ class EditorNotifier extends StateNotifier<EditorState> {
 }
 
 /// Provider for editor state
-final editorProvider = StateNotifierProvider<EditorNotifier, EditorState>((ref) {
+final editorProvider =
+    StateNotifierProvider<EditorNotifier, EditorState>((ref) {
   return EditorNotifier(ref);
 });
 
@@ -1343,7 +1366,8 @@ final durationTimeProvider = Provider<String>((ref) {
 });
 
 /// Provider for waveform data, keyed by asset ID
-final waveformProvider = FutureProvider.family<List<double>, String>((ref, assetId) async {
+final waveformProvider =
+    FutureProvider.family<List<double>, String>((ref, assetId) async {
   final notifier = ref.read(editorProvider.notifier);
   return notifier.getWaveform(assetId);
 });

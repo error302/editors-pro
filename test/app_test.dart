@@ -111,10 +111,9 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
-            projectRepositoryProvider
-                .overrideWith(
-                  (ref) => _FakeProjectRepository(projects: projects),
-                ),
+            projectRepositoryProvider.overrideWith(
+              (ref) => _FakeProjectRepository(projects: projects),
+            ),
             sharedPreferencesProvider.overrideWithValue(preferences),
           ],
           child: const EditorsProApp(),
@@ -191,20 +190,22 @@ void main() {
       expect(materialApp.debugShowCheckedModeBanner, isFalse);
     });
 
-    testWidgets('home screen shows Recent and Templates tabs', (tester) async {
+    testWidgets('home screen shows Projects and Canvas presets tabs',
+        (tester) async {
       await pumpApp(tester);
 
-      expect(find.text('Recent'), findsOneWidget);
-      expect(find.text('Templates'), findsOneWidget);
+      expect(find.text('Projects'), findsOneWidget);
+      expect(find.text('Canvas presets'), findsOneWidget);
     });
 
     testWidgets('home screen shows empty state when no projects',
         (tester) async {
       await pumpApp(tester);
 
-      expect(find.text('Start Creating'), findsOneWidget);
+      expect(find.text('A new story starts here'), findsOneWidget);
       expect(
-        find.text('Import a video to get started — no setup required'),
+        find.text(
+            'Create a project, then bring in your videos, photos and audio. Your edits stay on this device.'),
         findsOneWidget,
       );
     });
@@ -276,6 +277,34 @@ void main() {
       );
 
       expect(find.text('Mobile edit'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('search filters saved projects and clearing restores the list',
+        (tester) async {
+      await pumpApp(tester, projects: [
+        for (final name in ['Coastal study', 'Portrait session'])
+          ProjectModel(
+              id: name,
+              name: name,
+              createdAt: 1,
+              updatedAt: 1,
+              width: 1920,
+              height: 1080,
+              fps: 30),
+      ]);
+      await tester.tap(find.byTooltip('Search projects'));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField), 'COAST');
+      await tester.pumpAndSettle();
+      expect(find.text('Coastal study'), findsOneWidget);
+      expect(find.text('Portrait session'), findsNothing);
+      await tester.enterText(find.byType(TextField), 'missing');
+      await tester.pumpAndSettle();
+      expect(find.text('No projects match your search'), findsOneWidget);
+      await tester.tap(find.byTooltip('Clear search'));
+      await tester.pumpAndSettle();
+      expect(find.text('Portrait session'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
   });
