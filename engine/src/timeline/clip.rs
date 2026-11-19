@@ -129,10 +129,18 @@ impl Clip {
     /// Split this clip at the given timeline timestamp
     /// Returns two new clips if the split point is valid
     pub fn split_at(&self, time_ms: u64) -> Result<(Clip, Clip), String> {
+        let speed = self.constant_speed_for_edit()?;
+        if self.is_edit_locked() {
+            return Err("Clip is locked".into());
+        }
+        let end = self.checked_end_ms()?;
+        let source_duration = Self::source_delta(self.duration_ms, speed)?;
+        self.trim_start_ms.checked_add(source_duration).and_then(|v| v.checked_add(self.trim_end_ms))
+            .ok_or("Source trim overflow")?;
         if time_ms <= self.start_ms {
             return Err("Split point is at or before clip start".to_string());
         }
-        if time_ms >= self.end_ms() {
+        if time_ms >= end {
             return Err("Split point is at or after clip end".to_string());
         }
 
@@ -140,19 +148,95 @@ impl Clip {
         let right_duration = self.effective_duration() - left_duration;
 
         // Left clip: same start, shorter duration
-        let mut left = self.clone();
-        left.id = uuid::Uuid::new_v4().to_string();
+        let mut left = self.independent_copy();
         left.duration_ms = left_duration;
+        left.trim_end_ms = self.trim_end_ms.checked_add(Self::source_delta(right_duration, speed)?)
+            .ok_or("Source trim overflow")?;
+        left.transition_out = None;
 
         // Right clip: starts at split point, rest of duration
-        let mut right = self.clone();
-        right.id = uuid::Uuid::new_v4().to_string();
+        let mut right = self.independent_copy();
         right.start_ms = time_ms;
         right.duration_ms = right_duration;
         // The right clip's trim_start advances by the left portion's source duration
-        right.trim_start_ms = self.trim_start_ms + left_duration;
+        right.trim_start_ms = self.trim_start_ms.checked_add(Self::source_delta(left_duration, speed)?)
+            .ok_or("Source trim overflow")?;
+        right.transition_in = None;
 
         Ok((left, right))
+    }
+
+    pub(crate) fn is_edit_locked(&self) -> bool {
+        self.properties.get("locked").and_then(serde_json::Value::as_bool) == Some(true)
+    }
+
+    pub(super) fn checked_end_ms(&self) -> Result<u64, String> {
+        if self.duration_ms == 0 { return Err("Clip duration must be positive".into()); }
+        self.start_ms.checked_add(self.duration_ms).ok_or_else(|| "Clip end overflow".into())
+    }
+
+    /// Editing source ranges is supported only when every segment has the
+    /// same finite positive speed. Variable curves need integrated retiming.
+    pub(super) fn constant_speed_for_edit(&self) -> Result<f64, String> {
+        let first = self.speed_curve.segments.first().ok_or("Clip has no speed segments")?;
+        let speed = first.start_speed;
+        if !speed.is_finite() || speed <= 0.0 || self.speed_curve.segments.iter().any(|s|
+            s.start_ms >= s.end_ms || s.start_speed != speed || s.end_speed != speed) {
+            return Err("This edit requires a finite positive constant speed; variable ramps are unsupported".into());
+        }
+        Ok(f64::from(speed))
+    }
+
+    pub(super) fn source_delta(timeline_ms: u64, speed: f64) -> Result<u64, String> {
+        let delta = timeline_ms as f64 * speed;
+        if !delta.is_finite() || delta >= u64::MAX as f64 {
+            return Err("Source duration overflow".into());
+        }
+        Ok(delta.floor() as u64)
+    }
+
+    /// Clone all edit data with independently addressable nested entities.
+    /// Keep `look:<preset>:` because it encodes the native look group.
+    pub(super) fn independent_copy(&self) -> Self {
+        let mut copy = self.clone();
+        copy.id = uuid::Uuid::new_v4().to_string();
+        for effect in &mut copy.effects {
+            let suffix = uuid::Uuid::new_v4();
+            effect.id = if let Some(rest) = effect.id.strip_prefix("look:") {
+                format!("look:{}:{}", rest.split(':').next().unwrap_or_default(), suffix)
+            } else { suffix.to_string() };
+        }
+        for property in super::keyframe::KEYFRAME_PROPERTIES {
+            if let Some(track) = copy.keyframes.track_for(property) {
+                for keyframe in &mut track.keyframes { keyframe.id = uuid::Uuid::new_v4().to_string(); }
+            }
+        }
+        for transition in [&mut copy.transition_in, &mut copy.transition_out].into_iter().flatten() {
+            transition.id = uuid::Uuid::new_v4().to_string();
+            if transition.from_clip_id == self.id { transition.from_clip_id = copy.id.clone(); }
+            if transition.to_clip_id == self.id { transition.to_clip_id = copy.id.clone(); }
+        }
+        copy
+    }
+
+    /// Keyframes use absolute project timestamps, so move their clock with
+    /// the clip. Work on a candidate clone so overflow never partly mutates.
+    pub(super) fn shift_to(&mut self, start_ms: u64) -> Result<(), String> {
+        let mut keyframes = self.keyframes.clone();
+        for property in super::keyframe::KEYFRAME_PROPERTIES {
+            if let Some(track) = keyframes.track_for(property) {
+                for keyframe in &mut track.keyframes {
+                    keyframe.time_ms = if start_ms >= self.start_ms {
+                        keyframe.time_ms.checked_add(start_ms - self.start_ms)
+                    } else { keyframe.time_ms.checked_sub(self.start_ms - start_ms) }
+                        .ok_or("Keyframe timestamp overflow while shifting clip")?;
+                }
+            }
+        }
+        start_ms.checked_add(self.duration_ms).ok_or("Clip end overflow")?;
+        self.start_ms = start_ms;
+        self.keyframes = keyframes;
+        Ok(())
     }
 
     /// Create a copy of this clip with a different constant speed
@@ -173,27 +257,37 @@ impl Clip {
 
     /// Create a copy with different trim points
     pub fn with_trim(&self, trim_start_ms: u64, trim_end_ms: u64) -> Self {
+        self.try_with_trim(trim_start_ms, trim_end_ms).unwrap_or_else(|error| {
+            log::warn!("Trim rejected: {}", error);
+            self.clone()
+        })
+    }
+
+    /// Absolute trims are measured in source milliseconds. Reconstruct the
+    /// original source extent so repeating a trim never trims a second time.
+    pub(super) fn try_with_trim(&self, trim_start_ms: u64, trim_end_ms: u64) -> Result<Self, String> {
+        let speed = self.constant_speed_for_edit()?;
+        self.checked_end_ms()?;
         let mut new_clip = self.clone();
-        let original_source = self.source_duration_ms();
-
-        // Validate trim doesn't exceed source length
-        let total_trim = trim_start_ms + trim_end_ms;
+        let original_source = Self::source_delta(self.duration_ms, speed)?
+            .checked_add(self.trim_start_ms).and_then(|v| v.checked_add(self.trim_end_ms))
+            .ok_or("Source duration overflow")?;
+        let total_trim = trim_start_ms.checked_add(trim_end_ms).ok_or("Source trim overflow")?;
         if total_trim >= original_source {
-            log::warn!("Trim exceeds source duration, clamping");
-            return new_clip;
+            return Err("Trim must leave a positive source range".into());
         }
-
+        if trim_start_ms == self.trim_start_ms && trim_end_ms == self.trim_end_ms {
+            return Ok(new_clip);
+        }
+        let duration = (original_source - total_trim) as f64 / speed;
+        if !duration.is_finite() || duration < 1.0 || duration >= u64::MAX as f64 {
+            return Err("Trim duration is invalid or overflows".into());
+        }
         new_clip.trim_start_ms = trim_start_ms;
         new_clip.trim_end_ms = trim_end_ms;
-
-        // Recalculate timeline duration based on trimmed source and speed
-        let trimmed_source = original_source - total_trim;
-        let avg_speed = new_clip.speed_curve.average_speed();
-        if avg_speed > 0.0 {
-            new_clip.duration_ms = (trimmed_source as f32 / avg_speed) as u64;
-        }
-
-        new_clip
+        new_clip.duration_ms = duration.floor() as u64;
+        new_clip.checked_end_ms()?;
+        Ok(new_clip)
     }
 
     /// Set a custom property on this clip

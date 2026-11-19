@@ -4,8 +4,10 @@ import android.media.AudioAttributes
 import android.media.AudioFormat
 import android.media.AudioTrack
 import android.os.Bundle
+import android.os.Build
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.plugin.common.MethodChannel
+import io.flutter.plugin.common.StandardMethodCodec
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
@@ -26,6 +28,10 @@ class MainActivity : FlutterActivity() {
         super.onCreate(savedInstanceState)
 
         val messenger = flutterEngine!!.dartExecutor.binaryMessenger
+        ExportCapabilitiesIntegration.register(messenger)
+
+        // Completed-export app handoffs (separate from export/storage channels).
+        SocialShareIntegration.register(this, messenger)
 
         // Set up method channel for export foreground service
         MethodChannel(messenger, EXPORT_CHANNEL)
@@ -64,6 +70,11 @@ class MainActivity : FlutterActivity() {
                             sampleRate = call.argument<Int>("sampleRate") ?: 44100
                             channels = call.argument<Int>("channels") ?: 2
 
+                            require(sampleRate > 0 && (channels == 1 || channels == 2)) { "Audio requires mono/stereo and a positive sample rate" }
+                            audioTrack?.pause()
+                            audioTrack?.flush()
+                            audioTrack?.release()
+                            audioTrack = null
                             val channelConfig = if (channels == 1)
                                 AudioFormat.CHANNEL_OUT_MONO
                             else
@@ -75,6 +86,7 @@ class MainActivity : FlutterActivity() {
                                 AudioFormat.ENCODING_PCM_FLOAT
                             )
 
+                            require(bufferSize > 0) { "AudioTrack does not support this format" }
                             audioTrack = AudioTrack.Builder()
                                 .setAudioAttributes(
                                     AudioAttributes.Builder()
@@ -93,6 +105,7 @@ class MainActivity : FlutterActivity() {
                                 .setTransferMode(AudioTrack.MODE_STREAM)
                                 .build()
 
+                            check(audioTrack?.state == AudioTrack.STATE_INITIALIZED) { "AudioTrack initialization failed" }
                             result.success(true)
                         } catch (e: Exception) {
                             result.error("INIT_ERROR", e.message, null)
@@ -102,18 +115,25 @@ class MainActivity : FlutterActivity() {
                     "writeSamples" -> {
                         try {
                             val bytes = call.argument<ByteArray>("samples")
-                            if (bytes != null && audioTrack != null) {
-                                val floatBuffer = ByteBuffer.wrap(bytes)
-                                    .order(ByteOrder.LITTLE_ENDIAN)
-                                val floatArray = FloatArray(bytes.size / 4)
-                                floatBuffer.asFloatBuffer().get(floatArray)
-
-                                audioTrack?.write(floatArray, 0, floatArray.size, AudioTrack.WRITE_NON_BLOCKING)
-                            }
-                            result.success(null)
+                                ?: throw IllegalArgumentException("PCM samples are required")
+                            val track = audioTrack ?: throw IllegalStateException("AudioTrack is not initialized")
+                            require(bytes.size % 4 == 0) { "PCM must contain complete float32 samples" }
+                            val floatArray = FloatArray(bytes.size / 4)
+                            ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN).asFloatBuffer().get(floatArray)
+                            require(floatArray.all { it.isFinite() }) { "PCM contains a non-finite sample" }
+                            // Never block the UI thread. Dart retains and retries every
+                            // unaccepted sample, including while priming before play().
+                            val written = track.write(floatArray, 0, floatArray.size, AudioTrack.WRITE_NON_BLOCKING)
+                            if (written < 0) result.error("WRITE_ERROR", "AudioTrack.write returned $written", null)
+                            else result.success(written)
                         } catch (e: Exception) {
                             result.error("WRITE_ERROR", e.message, null)
                         }
+                    }
+                    "getPlaybackPositionFrames" -> {
+                        val track = audioTrack
+                        if (track == null) result.error("NOT_INITIALIZED", "AudioTrack is not initialized", null)
+                        else result.success(track.playbackHeadPosition.toLong() and 0xffffffffL)
                     }
 
                     "play" -> {
@@ -136,6 +156,8 @@ class MainActivity : FlutterActivity() {
 
                     "stop" -> {
                         try {
+                            audioTrack?.pause()
+                            audioTrack?.flush()
                             audioTrack?.stop()
                             result.success(null)
                         } catch (e: Exception) {
@@ -145,8 +167,10 @@ class MainActivity : FlutterActivity() {
 
                     "seekTo" -> {
                         try {
-                            audioTrack?.stop()
+                            val resume = audioTrack?.playState == AudioTrack.PLAYSTATE_PLAYING
+                            audioTrack?.pause()
                             audioTrack?.flush()
+                            if (resume) audioTrack?.play()
                             result.success(null)
                         } catch (e: Exception) {
                             result.error("SEEK_ERROR", e.message, null)
@@ -165,7 +189,8 @@ class MainActivity : FlutterActivity() {
 
                     "release" -> {
                         try {
-                            audioTrack?.stop()
+                            audioTrack?.pause()
+                            audioTrack?.flush()
                             audioTrack?.release()
                             audioTrack = null
                             result.success(null)
@@ -179,9 +204,10 @@ class MainActivity : FlutterActivity() {
             }
 
         // Set up method channel for SAF/MediaStore storage integration
-        MethodChannel(messenger, STORAGE_CHANNEL)
+        MethodChannel(messenger, STORAGE_CHANNEL, StandardMethodCodec.INSTANCE, messenger.makeBackgroundTaskQueue())
             .setMethodCallHandler { call, result ->
                 when (call.method) {
+                    "getAndroidSdkVersion" -> result.success(Build.VERSION.SDK_INT)
                     "copyContentUriToTempFile" -> {
                         val uriString = call.argument<String>("uri")
                         if (uriString != null) {

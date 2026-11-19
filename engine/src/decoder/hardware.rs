@@ -323,68 +323,95 @@ impl HardwareDecoder {
     /// Inner decode implementation (called after concurrency guard)
     fn decode_frame_at_inner(&mut self, time_ms: u64) -> Result<FrameData, String> {
         let video_idx = self.video_stream_index.ok_or("No video stream index")?;
-
-        // Prepare the cached scaler before borrowing the input context for
-        // packet iteration.
-        let _ = self.scaler_for_current_decoder()?;
-        let format_context = self.format_context.as_mut().ok_or("No format context")?;
-
-        // Seek to the target timestamp
-        let stream = format_context
+        let time_base = self
+            .format_context
+            .as_ref()
+            .ok_or("No format context")?
             .stream(video_idx)
-            .ok_or("Video stream not found")?;
-        let time_base = stream.time_base();
-        let seek_target = (time_ms as i64 * time_base.denominator() as i64)
-            / (1000 * time_base.numerator() as i64);
-
-        format_context
-            .seek(seek_target, ..seek_target + 1000)
+            .ok_or("Video stream not found")?
+            .time_base();
+        // ffmpeg-next Input::seek selects stream -1, so timestamps must use
+        // AV_TIME_BASE microseconds. Bound the seek at the requested time to
+        // start at a preceding keyframe, then decode to the actual source frame.
+        let seek_target = time_ms.saturating_mul(1000).min(i64::MAX as u64) as i64;
+        self.format_context
+            .as_mut()
+            .ok_or("No format context")?
+            .seek(seek_target, ..seek_target)
             .map_err(|e| format!("Seek failed: {}", e))?;
+        self.decoder.as_mut().ok_or("No decoder")?.flush();
 
         let mut received = ffmpeg::util::frame::Video::empty();
-        let mut frame = ffmpeg::util::frame::Video::empty();
-
-        for (stream, packet) in format_context.packets() {
-            if stream.index() != video_idx {
-                continue;
-            }
-
-            let decoder = self.decoder.as_mut().ok_or("No decoder")?;
-            decoder
-                .send_packet(&packet)
-                .map_err(|e| format!("Send packet failed: {}", e))?;
-
-            while decoder.receive_frame(&mut received).is_ok() {
-                let pts_ms =
-                    (received.pts().unwrap_or(0) as i64 * time_base.numerator() as i64 * 1000)
+        let mut selected = ffmpeg::util::frame::Video::empty();
+        let mut selected_time_ms = None;
+        loop {
+            match self
+                .decoder
+                .as_mut()
+                .ok_or("No decoder")?
+                .receive_frame(&mut received)
+            {
+                Ok(()) => {
+                    let pts = received
+                        .timestamp()
+                        .or(received.pts())
+                        .ok_or("Decoded frame has no timestamp")?;
+                    let pts_ms = (pts * time_base.numerator() as i64 * 1000)
                         / time_base.denominator().max(1) as i64;
-
-                if pts_ms >= time_ms as i64 - 50 {
-                    // Borrow the cached scaler mutably for this run.
-                    let scaler = self.scaler.as_mut().ok_or("Scaler not initialized")?;
-                    scaler
-                        .run(&received, &mut frame)
-                        .map_err(|e| format!("Scale failed: {}", e))?;
-
-                    // Phase C.15: allocate from the global pool so the
-                    // 8 MB RGBA buffer is recycled across decode calls.
-                    let frame_width = frame.width();
-                    let frame_height = frame.height();
-                    let mut out_frame = FrameData::with_pool(frame_width, frame_height);
-                    out_frame.truncate_to_frame_size();
-                    let src = frame.data(0);
-                    let dst = &mut out_frame.data;
-                    if dst.len() >= src.len() {
-                        dst[..src.len()].copy_from_slice(src);
+                    if pts_ms > time_ms.min(i64::MAX as u64) as i64 {
+                        if selected_time_ms.is_none() {
+                            std::mem::swap(&mut selected, &mut received);
+                            selected_time_ms = Some(pts_ms);
+                        }
+                        break;
                     }
-                    out_frame.timestamp_ms = pts_ms as u64;
-                    out_frame.is_keyframe = received.is_key();
-                    return Ok(out_frame);
+                    std::mem::swap(&mut selected, &mut received);
+                    selected_time_ms = Some(pts_ms);
+                    if pts_ms == time_ms as i64 {
+                        break;
+                    }
+                    continue;
                 }
+                Err(ffmpeg::Error::Eof) => break,
+                Err(ffmpeg::Error::Other {
+                    errno: ffmpeg::sys::EAGAIN,
+                }) => {}
+                Err(error) => return Err(format!("Receive frame failed: {}", error)),
+            }
+            let packet = self
+                .format_context
+                .as_mut()
+                .ok_or("No format context")?
+                .packets()
+                .find(|(stream, _)| stream.index() == video_idx)
+                .map(|(_, packet)| packet);
+            let decoder = self.decoder.as_mut().ok_or("No decoder")?;
+            match packet {
+                Some(packet) => decoder
+                    .send_packet(&packet)
+                    .map_err(|e| format!("Send packet failed: {}", e))?,
+                None => decoder
+                    .send_eof()
+                    .map_err(|e| format!("Drain decoder failed: {}", e))?,
             }
         }
-
-        Err("No frame found at the specified timestamp".to_string())
+        let pts_ms = selected_time_ms.ok_or("No frame found at the specified timestamp")?;
+        let mut frame = ffmpeg::util::frame::Video::empty();
+        self.scaler_for_current_decoder()?
+            .run(&selected, &mut frame)
+            .map_err(|e| format!("Scale failed: {}", e))?;
+        let mut out_frame = FrameData::with_pool(frame.width(), frame.height());
+        out_frame.truncate_to_frame_size();
+        let row_bytes = frame.width() as usize * 4;
+        for row in 0..frame.height() as usize {
+            let source = row * frame.stride(0);
+            let destination = row * row_bytes;
+            out_frame.data[destination..destination + row_bytes]
+                .copy_from_slice(&frame.data(0)[source..source + row_bytes]);
+        }
+        out_frame.timestamp_ms = pts_ms.max(0) as u64;
+        out_frame.is_keyframe = selected.is_key();
+        Ok(out_frame)
     }
 
     /// Generate thumbnail images at regular intervals

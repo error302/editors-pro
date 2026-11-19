@@ -14,7 +14,7 @@ import 'dart:io' show Directory, File;
 
 import 'package:drift/drift.dart';
 import 'package:editors_pro/src/rust/api/bridge_api.dart' as bridge
-    show BridgeProjectSettings, MediaAssetInfo;
+    show BridgeProjectSettings, MediaAssetInfo, cloneSavedProject;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
@@ -23,13 +23,24 @@ import 'package:uuid/uuid.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/services/database_provider.dart';
 import '../../core/services/engine_service.dart';
+import '../../core/services/project_preview_service.dart';
 import '../../core/services/project_snapshots.dart';
 import '../../data/database/app_database.dart';
 import '../../data/models/project_model.dart';
 
+typedef SavedProjectCloner = Future<Map<String, dynamic>> Function({
+  required String sourcePath,
+  required String outputPath,
+  required String projectId,
+  required String name,
+});
+
 class ProjectRepository {
-  ProjectRepository(this._db, Ref _);
+  ProjectRepository(this._db, this._ref, {SavedProjectCloner? cloner})
+      : _cloner = cloner ?? bridge.cloneSavedProject;
   final AppDatabase _db;
+  final Ref _ref;
+  final SavedProjectCloner _cloner;
 
   final _uuid = const Uuid();
 
@@ -48,44 +59,25 @@ class ProjectRepository {
     final now = DateTime.now().millisecondsSinceEpoch;
     final id = _uuid.v4();
 
-    // Persist to database
-    await _db.upsertProject(
-      ProjectEntriesCompanion(
-        id: Value(id),
-        name: Value(name),
-        width: Value(width),
-        height: Value(height),
-        fps: Value(fps),
-        createdAt: Value(now),
-        updatedAt: Value(now),
+    // Initialize in the Rust engine
+    if (!EngineService.instance.isInitialized) {
+      throw StateError('The editing engine is not ready.');
+    }
+    await EngineService.instance.api.createProject(
+      name: name,
+      settings: bridge.BridgeProjectSettings(
+        width: width,
+        height: height,
+        fps: fps,
       ),
     );
-
-    // Initialize in the Rust engine
-    if (EngineService.instance.isInitialized) {
-      try {
-        await EngineService.instance.api.createProject(
-          name: name,
-          settings: bridge.BridgeProjectSettings(
-            width: width,
-            height: height,
-            fps: fps,
-          ),
-        );
-      } catch (e) {
-        developer.log(
-          'Engine createProject failed: $e',
-          name: 'ProjectRepository',
-        );
-      }
-    }
 
     // Create default tracks in the model
     final videoTrackId = _uuid.v4();
     final audioTrackId = _uuid.v4();
     final textTrackId = _uuid.v4();
 
-    return ProjectModel(
+    final project = ProjectModel(
       id: id,
       name: name,
       createdAt: now,
@@ -114,6 +106,8 @@ class ProjectRepository {
         ),
       ],
     );
+    await saveProjectToEngine(project);
+    return (await getProject(id))!;
   }
 
   // ─── Read ──────────────────────────────────────────────────────
@@ -178,10 +172,18 @@ class ProjectRepository {
       await _db.upsertProject(
         ProjectEntriesCompanion(
           id: Value(project.id),
+          name: Value(project.name),
+          width: Value(project.width),
+          height: Value(project.height),
+          fps: Value(project.fps),
+          durationMs: Value(project.durationMs),
+          createdAt: Value(project.createdAt),
+          thumbnailPath: const Value(null),
           eppFilePath: Value(eppPath),
           updatedAt: Value(DateTime.now().millisecondsSinceEpoch),
         ),
       );
+      _ref.read(projectPreviewServiceProvider).invalidate(project.id);
     } catch (e) {
       developer.log(
         'saveProjectToEngine failed: $e',
@@ -216,7 +218,9 @@ class ProjectRepository {
 
   /// Load a project's full timeline state from the Rust engine (.epp).
   Future<void> loadProjectFromEngine(String eppFilePath) async {
-    if (!EngineService.instance.isInitialized) return;
+    if (!EngineService.instance.isInitialized) {
+      throw StateError('The editing engine is not ready.');
+    }
     try {
       await EngineService.instance.api.loadProject(filePath: eppFilePath);
     } catch (e) {
@@ -224,6 +228,7 @@ class ProjectRepository {
         'loadProjectFromEngine failed: $e',
         name: 'ProjectRepository',
       );
+      rethrow;
     }
   }
 
@@ -293,6 +298,7 @@ class ProjectRepository {
       await _db.deleteAssetsForProject(projectId);
       await _db.deleteProject(projectId);
     });
+    await _ref.read(projectPreviewServiceProvider).removeProject(projectId);
   }
 
   // ─── Conversion helpers ────────────────────────────────────────
@@ -345,6 +351,74 @@ class ProjectRepository {
 /// Engine activation lives outside [ProjectRepository]'s interface so
 /// editor test repositories do not need to depend on native project APIs.
 extension ProjectRepositoryEngineActivation on ProjectRepository {
+  /// The native clone preserves the edited timeline and assigns new asset IDs.
+  /// Source files remain shared; database ownership is never reassigned.
+  Future<ProjectModel> duplicateSavedProject(String projectId) async {
+    final source = await getProject(projectId);
+    if (source == null) throw StateError('The original project is missing.');
+    final documents = await getApplicationDocumentsDirectory();
+    final projects =
+        p.normalize(p.join(documents.path, AppConstants.projectsDir));
+    final input =
+        p.normalize(source.eppFilePath ?? p.join(projects, '$projectId.epp'));
+    if (!p.isWithin(projects, input) || !await File(input).exists()) {
+      throw StateError('The original saved timeline is missing.');
+    }
+    final id = _uuid.v4();
+    final output = p.join(projects, '$id.epp');
+    final cloned = await _cloner(
+      sourcePath: input,
+      outputPath: output,
+      projectId: id,
+      name: '${source.name} (copy)',
+    );
+    try {
+      final now = (cloned['created_at'] as num).toInt();
+      final timeline = (cloned['timeline'] as Map).cast<String, dynamic>();
+      final settings = (cloned['settings'] as Map).cast<String, dynamic>();
+      await _db.transaction(() async {
+        await _db.into(_db.projectEntries).insert(
+          ProjectEntriesCompanion(
+            id: Value(id),
+            name: Value('${source.name} (copy)'),
+            width: Value((settings['width'] as num).toInt()),
+            height: Value((settings['height'] as num).toInt()),
+            fps: Value((settings['fps'] as num).toDouble()),
+            durationMs: Value((timeline['duration_ms'] as num).toInt()),
+            createdAt: Value(now),
+            updatedAt: Value(now),
+            eppFilePath: Value(output),
+          ),
+        );
+        for (final entry in cloned['media_assets'] as List) {
+          final asset = (entry as Map).cast<String, dynamic>();
+          await _db.into(_db.mediaAssetEntries).insert(
+            MediaAssetEntriesCompanion(
+              id: Value(asset['id'] as String),
+              projectId: Value(id),
+              filePath: Value(asset['file_path'] as String),
+              fileName: Value(asset['file_name'] as String),
+              mediaType: Value(asset['media_type'] as String),
+              durationMs: Value((asset['duration_ms'] as num?)?.toInt()),
+              width: Value((asset['width'] as num?)?.toInt()),
+              height: Value((asset['height'] as num?)?.toInt()),
+              fileSizeBytes: Value((asset['file_size_bytes'] as num).toInt()),
+              codec: Value(asset['codec'] as String?),
+              bitrate: Value((asset['bitrate'] as num?)?.toInt()),
+              importedAt: Value(now),
+            ),
+          );
+        }
+      });
+    } catch (_) {
+      // This UUID path was created exclusively by this clone operation.
+      final copy = File(output);
+      if (await copy.exists()) await copy.delete();
+      rethrow;
+    }
+    return (await getProject(id))!;
+  }
+
   /// Make a persisted project the engine's active project before editing.
   /// Projects that have not been saved yet start as an empty native project.
   Future<void> activateProjectInEngine(ProjectModel project) async {
@@ -373,6 +447,14 @@ extension ProjectRepositoryEngineActivation on ProjectRepository {
     if (await eppFile.exists()) {
       await service.api.loadProject(filePath: eppPath);
     } else {
+      if (project.eppFilePath != null ||
+          project.durationMs > 0 ||
+          project.tracks.any((track) => track.clips.isNotEmpty) ||
+          project.mediaAssets.isNotEmpty) {
+        throw StateError(
+          'The saved project file is missing. The timeline has not been replaced.',
+        );
+      }
       await Directory(projectsDirectory).create(recursive: true);
       await service.api.createProject(
         name: project.name,

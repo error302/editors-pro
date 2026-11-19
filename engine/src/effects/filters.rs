@@ -308,12 +308,18 @@ fn apply_hue(data: &mut [u8], shift: f32) {
 /// `radius` controls the blur kernel size (0.0 = no blur, 20.0 = max).
 /// Uses a horizontal + vertical pass for O(n) per pixel instead of O(n²).
 fn apply_box_blur(data: &mut [u8], width: u32, height: u32, radius: f32) {
-    let kernel_size = (radius * 2.0).ceil() as usize + 1;
+    // A centered box kernel must have an odd width. Fractional radii used
+    // to produce an even kernel, moving highlights down and right.
+    let kernel_size = radius.ceil() as usize * 2 + 1;
     if kernel_size < 2 { return; }
+    // Fractional radii weight the two outside samples equally, retaining
+    // the half-step strength control without introducing a spatial shift.
+    let weights: Vec<f32> = (0..kernel_size)
+        .map(|k| (radius + 1.0 - k.abs_diff(kernel_size / 2) as f32).clamp(0.0, 1.0))
+        .collect();
 
     let w = width as usize;
     let h = height as usize;
-    let total_pixels = w * h;
 
     // Create a working buffer for the intermediate result
     let mut temp = vec![0u8; data.len()];
@@ -322,19 +328,19 @@ fn apply_box_blur(data: &mut [u8], width: u32, height: u32, radius: f32) {
     let half = kernel_size / 2;
     for y in 0..h {
         for x in 0..w {
-            let mut r_sum = 0u32;
-            let mut g_sum = 0u32;
-            let mut b_sum = 0u32;
-            let mut count = 0u32;
+            let mut r_sum = 0.0;
+            let mut g_sum = 0.0;
+            let mut b_sum = 0.0;
+            let mut count = 0.0;
 
-            for k in 0..kernel_size {
+            for (k, &weight) in weights.iter().enumerate() {
                 let nx = x as isize + k as isize - half as isize;
                 if nx >= 0 && nx < w as isize {
                     let idx = (y * w + nx as usize) * 4;
-                    r_sum += data[idx] as u32;
-                    g_sum += data[idx + 1] as u32;
-                    b_sum += data[idx + 2] as u32;
-                    count += 1;
+                    r_sum += data[idx] as f32 * weight;
+                    g_sum += data[idx + 1] as f32 * weight;
+                    b_sum += data[idx + 2] as f32 * weight;
+                    count += weight;
                 }
             }
 
@@ -349,19 +355,19 @@ fn apply_box_blur(data: &mut [u8], width: u32, height: u32, radius: f32) {
     // Vertical pass: read from `temp`, write to `data`
     for y in 0..h {
         for x in 0..w {
-            let mut r_sum = 0u32;
-            let mut g_sum = 0u32;
-            let mut b_sum = 0u32;
-            let mut count = 0u32;
+            let mut r_sum = 0.0;
+            let mut g_sum = 0.0;
+            let mut b_sum = 0.0;
+            let mut count = 0.0;
 
-            for k in 0..kernel_size {
+            for (k, &weight) in weights.iter().enumerate() {
                 let ny = y as isize + k as isize - half as isize;
                 if ny >= 0 && ny < h as isize {
                     let idx = (ny as usize * w + x) * 4;
-                    r_sum += temp[idx] as u32;
-                    g_sum += temp[idx + 1] as u32;
-                    b_sum += temp[idx + 2] as u32;
-                    count += 1;
+                    r_sum += temp[idx] as f32 * weight;
+                    g_sum += temp[idx + 1] as f32 * weight;
+                    b_sum += temp[idx + 2] as f32 * weight;
+                    count += weight;
                 }
             }
 
@@ -475,8 +481,10 @@ fn apply_invert(data: &mut [u8]) {
 /// `intensity` controls how dark the edges become (0.0 = no darkening, 1.0 = fully black).
 /// `radius` controls the size of the unaffected center (0.0 = tiny center, 1.0 = no vignette).
 fn apply_vignette(data: &mut [u8], width: u32, height: u32, intensity: f32, radius: f32) {
-    let cx = width as f32 / 2.0;
-    let cy = height as f32 / 2.0;
+    // Pixel coordinates span 0..width-1, not 0..width. Keep opposite
+    // corners equidistant from the optical center on even and odd frames.
+    let cx = width.saturating_sub(1) as f32 / 2.0;
+    let cy = height.saturating_sub(1) as f32 / 2.0;
     let max_dist = (cx * cx + cy * cy).sqrt();
     let inner_radius = max_dist * radius;
     let outer_radius = max_dist;
@@ -530,91 +538,68 @@ pub struct FilterPreset {
 }
 
 impl FilterPreset {
-    /// Get built-in filter presets
+    /// Restrained recipes using the same implemented filters as manual adjustments.
     pub fn built_in_presets() -> Vec<FilterPreset> {
+        use FilterType::*;
+        let recipe = |id: &str, name: &str, description: &str, filters, values: Vec<(&str, f32)>| FilterPreset {
+            id: id.into(), name: name.into(), description: description.into(), filters,
+            parameter_overrides: values.into_iter().map(|(key, value)| (key.into(), value)).collect(),
+        };
         vec![
-            FilterPreset {
-                id: "cinematic".to_string(),
-                name: "Cinematic".to_string(),
-                description: "Warm cinematic look with reduced saturation".to_string(),
-                filters: vec![FilterType::Saturation, FilterType::Contrast],
-                parameter_overrides: vec![
-                    ("saturation".to_string(), 0.8),
-                    ("contrast".to_string(), 0.15),
-                ],
-            },
-            FilterPreset {
-                id: "vintage".to_string(),
-                name: "Vintage".to_string(),
-                description: "Faded vintage look with sepia tones".to_string(),
-                filters: vec![FilterType::Sepia, FilterType::Contrast, FilterType::Brightness],
-                parameter_overrides: vec![
-                    ("sepia".to_string(), 0.6),
-                    ("contrast".to_string(), -0.1),
-                    ("brightness".to_string(), 0.05),
-                ],
-            },
-            FilterPreset {
-                id: "dramatic".to_string(),
-                name: "Dramatic".to_string(),
-                description: "High contrast dramatic look".to_string(),
-                filters: vec![FilterType::Contrast, FilterType::Saturation, FilterType::Vignette],
-                parameter_overrides: vec![
-                    ("contrast".to_string(), 0.4),
-                    ("saturation".to_string(), 1.3),
-                    ("vignette".to_string(), 0.6),
-                ],
-            },
-            FilterPreset {
-                id: "cool".to_string(),
-                name: "Cool".to_string(),
-                description: "Cool blue tones".to_string(),
-                filters: vec![FilterType::Temperature, FilterType::Contrast],
-                parameter_overrides: vec![
-                    ("temperature".to_string(), -0.3),
-                    ("contrast".to_string(), 0.1),
-                ],
-            },
-            FilterPreset {
-                id: "warm".to_string(),
-                name: "Warm".to_string(),
-                description: "Warm golden tones".to_string(),
-                filters: vec![FilterType::Temperature, FilterType::Saturation],
-                parameter_overrides: vec![
-                    ("temperature".to_string(), 0.3),
-                    ("saturation".to_string(), 1.2),
-                ],
-            },
-            FilterPreset {
-                id: "noir".to_string(),
-                name: "Noir".to_string(),
-                description: "Classic black and white with high contrast".to_string(),
-                filters: vec![FilterType::Grayscale, FilterType::Contrast, FilterType::Vignette],
-                parameter_overrides: vec![
-                    ("grayscale".to_string(), 1.0),
-                    ("contrast".to_string(), 0.3),
-                    ("vignette".to_string(), 0.4),
-                ],
-            },
+            recipe("clean", "Clean", "Subtle brightness, contrast and color", vec![Brightness, Contrast, Saturation],
+                vec![("brightness", 0.012), ("contrast", 0.04), ("saturation", 1.04)]),
+            recipe("cinematic", "Cinematic", "Muted color, gentle warmth and contrast", vec![Temperature, Saturation, Contrast],
+                vec![("temperature", 0.10), ("saturation", 0.88), ("contrast", 0.10)]),
+            recipe("vintage", "Vintage", "Soft contrast with a light sepia tint", vec![Sepia, Contrast, Brightness],
+                vec![("sepia", 0.22), ("contrast", -0.07), ("brightness", 0.025)]),
+            recipe("dramatic", "Dramatic", "Deeper contrast, richer color and soft dark edges", vec![Contrast, Saturation, Vignette],
+                vec![("contrast", 0.20), ("saturation", 1.08), ("vignette", 0.18), ("vignette_radius", 0.65)]),
+            recipe("cool", "Cool", "A restrained blue tint with gentle contrast", vec![Temperature, Contrast],
+                vec![("temperature", -0.18), ("contrast", 0.05)]),
+            recipe("warm", "Warm", "Gentle golden warmth with richer color", vec![Temperature, Saturation],
+                vec![("temperature", 0.18), ("saturation", 1.07)]),
+            recipe("noir", "Noir", "Black and white with contrast and soft dark edges", vec![Grayscale, Contrast, Vignette],
+                vec![("grayscale", 1.0), ("contrast", 0.16), ("vignette", 0.14), ("vignette_radius", 0.65)]),
+            recipe("soft_film", "Soft Film", "Lifted shadows, softer contrast and muted color", vec![Contrast, Brightness, Saturation],
+                vec![("contrast", -0.12), ("brightness", 0.015), ("saturation", 0.92)]),
         ]
     }
 
-    /// Create an Effect list from this preset
     pub fn to_effects(&self) -> Vec<Effect> {
+        self.to_effects_with_intensity(1.0, true).expect("valid full-strength recipe")
+    }
+
+    /// Look membership and recipe metadata survive project serialization in the
+    /// existing effect ID/parameter contract, including older .epp readers.
+    pub fn to_effects_with_intensity(&self, intensity: f32, enabled: bool) -> Result<Vec<Effect>, String> {
+        if !intensity.is_finite() || !(0.0..=1.0).contains(&intensity) {
+            return Err("Look intensity must be a finite number from 0 to 1".into());
+        }
         self.filters.iter().enumerate().map(|(i, filter_type)| {
             let mut effect = filter_type.to_effect();
+            effect.id = format!("look:{}:{}", self.id, effect.id);
+            effect.enabled = enabled;
             effect.order = i as u32;
-
-            // Apply parameter overrides
-            for (param_name, value) in &self.parameter_overrides {
-                if let Some(param) = effect.parameters.iter_mut().find(|p| p.name == *param_name) {
-                    param.set_value(*value);
+            for (name, target) in &self.parameter_overrides {
+                if let Some(parameter) = effect.parameters.iter_mut().find(|p| p.name == *name) {
+                    let neutral = match name.as_str() {
+                        "saturation" => 1.0,
+                        "vignette_radius" => *target,
+                        _ => 0.0,
+                    };
+                    parameter.set_value(neutral + (*target - neutral) * intensity);
                 }
             }
-
-            effect
+            effect.parameters.push(EffectParameter::new("__look_intensity", "Look intensity", intensity, 0.0, 1.0, 0.01));
+            effect.parameters.push(EffectParameter::new("__look_version", "Recipe version", 1.0, 1.0, 1.0, 1.0));
+            Ok(effect)
         }).collect()
     }
+}
+
+/// Group membership is explicit and never inferred from a filter's display name.
+pub fn is_look_effect(effect: &Effect) -> bool {
+    effect.id.starts_with("look:")
 }
 
 #[cfg(test)]
@@ -761,7 +746,7 @@ mod tests {
         let preset = FilterPreset::built_in_presets().into_iter()
             .find(|p| p.id == "cinematic").unwrap();
         let effects = preset.to_effects();
-        assert_eq!(effects.len(), 2);
+        assert_eq!(effects.len(), 3);
         assert_eq!(effects[0].order, 0);
         assert_eq!(effects[1].order, 1);
     }

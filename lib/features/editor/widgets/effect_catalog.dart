@@ -1,615 +1,356 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../core/extensions/context_extensions.dart';
+import '../../../core/services/user_look_service.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../data/models/project_model.dart';
+import '../../../src/rust/api/bridge_api.dart';
 import '../../projects/providers/project_provider.dart';
 import '../providers/editor_provider.dart';
 
-/// Effect catalog panel — displays available filters and presets
-/// that can be applied to the selected clip.
+/// Native looks, adjustment controls and reusable recipes share the preview dock.
 class EffectCatalog extends ConsumerStatefulWidget {
   const EffectCatalog({super.key});
-
   @override
   ConsumerState<EffectCatalog> createState() => _EffectCatalogState();
 }
 
-class _EffectCatalogState extends ConsumerState<EffectCatalog>
-    with SingleTickerProviderStateMixin {
-  late TabController _tabController;
-  List<Map<String, String>> _filterCatalog = [];
-  List<Map<String, String>> _presets = [];
-  bool _isLoading = true;
-  String _selectedFilterCategory = 'All';
-  String _selectedPresetCategory = 'All';
-
-  // ── Fallback data when the engine returns nothing ────────────────
-
-  static const _fallbackFilters = [
-    {'name': 'Brightness', 'icon_key': 'brightness', 'category': 'Basic'},
-    {'name': 'Contrast', 'icon_key': 'contrast', 'category': 'Basic'},
-    {'name': 'Saturation', 'icon_key': 'saturation', 'category': 'Basic'},
-    {'name': 'Hue Shift', 'icon_key': 'hue', 'category': 'Color'},
-    {'name': 'Temperature', 'icon_key': 'temperature', 'category': 'Color'},
-    {'name': 'Blur', 'icon_key': 'blur', 'category': 'Stylize'},
-    {'name': 'Sharpen', 'icon_key': 'sharpen', 'category': 'Stylize'},
-    {'name': 'Vignette', 'icon_key': 'vignette', 'category': 'Stylize'},
-    {'name': 'Grayscale', 'icon_key': 'grayscale', 'category': 'Stylize'},
-    {'name': 'Sepia', 'icon_key': 'sepia', 'category': 'Stylize'},
-    {'name': 'Invert', 'icon_key': 'invert', 'category': 'Stylize'},
-    {'name': 'Chroma Key', 'icon_key': 'chroma_key', 'category': 'Keying'},
-  ];
-
-  static const _fallbackPresets = [
-    {
-      'id': 'cinematic',
-      'name': 'Cinematic',
-      'description': 'Warm tones with deep shadows',
-      'category': 'Film',
-    },
-    {
-      'id': 'vintage',
-      'name': 'Vintage',
-      'description': 'Faded warm tones with grain',
-      'category': 'Film',
-    },
-    {
-      'id': 'bw_classic',
-      'name': 'B&W Classic',
-      'description': 'Classic black and white',
-      'category': 'Film',
-    },
-    {
-      'id': 'cool_blue',
-      'name': 'Cool Blue',
-      'description': 'Cool blue color grade',
-      'category': 'Color',
-    },
-    {
-      'id': 'warm_golden',
-      'name': 'Warm Golden',
-      'description': 'Warm golden hour look',
-      'category': 'Color',
-    },
-    {
-      'id': 'high_contrast',
-      'name': 'High Contrast',
-      'description': 'Punchy high contrast',
-      'category': 'Stylize',
-    },
-    {
-      'id': 'fade',
-      'name': 'Fade',
-      'description': 'Lifted blacks, faded look',
-      'category': 'Stylize',
-    },
-    {
-      'id': 'teal_orange',
-      'name': 'Teal & Orange',
-      'description': 'Hollywood color grade',
-      'category': 'Film',
-    },
-  ];
-
-  // ── Categories derived from data ─────────────────────────────────
-
-  List<String> get _filterCategories {
-    final cats = _filterCatalog.map((f) => f['category']!).toSet().toList();
-    cats.sort();
-    return ['All', ...cats];
-  }
-
-  List<String> get _presetCategories {
-    final cats = _presets.map((p) => p['category']!).toSet().toList();
-    cats.sort();
-    return ['All', ...cats];
-  }
-
-  List<Map<String, String>> get _filteredFilters {
-    if (_selectedFilterCategory == 'All') return _filterCatalog;
-    return _filterCatalog
-        .where((f) => f['category'] == _selectedFilterCategory)
-        .toList();
-  }
-
-  List<Map<String, String>> get _filteredPresets {
-    if (_selectedPresetCategory == 'All') return _presets;
-    return _presets
-        .where((p) => p['category'] == _selectedPresetCategory)
-        .toList();
-  }
+class _EffectCatalogState extends ConsumerState<EffectCatalog> {
+  final _adjustmentsScroll = ScrollController();
+  final _draftValues = <String, double>{};
+  List<FilterTypeInfo> _filters = [];
+  List<FilterPresetInfo> _looks = [];
+  List<EffectInfo> _effects = [];
+  List<UserLook> _myLooks = [];
+  bool _loading = true;
+  bool _busy = false;
+  String? _error;
+  String? _libraryError;
+  String? _lookId;
+  String? _focusedEffectId;
+  double _intensity = 1;
+  bool _lookEnabled = true;
+  int _effectRequest = 0;
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
-    _tabController.addListener(() {
-      if (!_tabController.indexIsChanging) setState(() {});
-    });
     _loadCatalog();
+    _loadMyLooks();
   }
 
   @override
   void dispose() {
-    _tabController.dispose();
+    _adjustmentsScroll.dispose();
     super.dispose();
   }
 
   Future<void> _loadCatalog() async {
-    final notifier = ref.read(editorProvider.notifier);
-    final rawFilters = await notifier.getFilterCatalog();
-    final rawPresets = await notifier.getFilterPresets();
-    if (mounted) {
+    setState(() { _loading = true; _error = null; });
+    try {
+      final editor = ref.read(editorProvider.notifier);
+      final filters = await editor.getFilterCatalog();
+      final looks = await editor.getFilterPresets();
+      if (filters.isEmpty || looks.isEmpty) throw StateError('The engine returned an empty catalog');
+      if (!mounted) return;
+      setState(() { _filters = filters; _looks = looks; _loading = false; });
+      await _loadEffects();
+    } catch (error) {
+      if (mounted) setState(() { _error = 'Effects unavailable: $error'; _loading = false; });
+    }
+  }
+
+  Future<void> _loadMyLooks() async {
+    try {
+      final looks = await ref.read(userLookServiceProvider).load();
+      if (mounted) setState(() { _myLooks = looks; _libraryError = null; });
+    } catch (error) {
+      if (mounted) setState(() => _libraryError = 'Could not load saved looks: $error');
+    }
+  }
+
+  Future<void> _loadEffects() async {
+    final request = ++_effectRequest;
+    final clipId = ref.read(editorProvider).selectedClipId;
+    try {
+      final effects = await ref.read(editorProvider.notifier).getSelectedClipEffects();
+      if (!mounted || request != _effectRequest || !_sameClip(clipId)) return;
+      EffectInfo? look;
+      for (final effect in effects) {
+        if (effect.id.startsWith('look:')) { look = effect; break; }
+      }
+      var intensity = 1.0;
+      for (final parameter in look?.parameters ?? <EffectParameterInfo>[]) {
+        if (parameter.name == '__look_intensity') intensity = parameter.value;
+      }
       setState(() {
-        _filterCatalog = rawFilters.isEmpty
-            ? _fallbackFilters
-            : _normalizeFilters(rawFilters);
-        _presets = rawPresets.isEmpty
-            ? _fallbackPresets
-            : _normalizePresets(rawPresets);
-        _isLoading = false;
+        _effects = effects;
+        _draftValues.clear();
+        _lookId = look?.id.split(':').elementAtOrNull(1);
+        _intensity = intensity.clamp(0.0, 1.0);
+        _lookEnabled = look?.enabled ?? true;
       });
-    }
-  }
-
-  /// Convert dynamic engine results into typed maps.
-  List<Map<String, String>> _normalizeFilters(List<dynamic> raw) {
-    return raw.map((f) {
-      if (f is Map<String, dynamic>) {
-        return {
-          'name': (f['name'] as String?) ?? 'Unknown',
-          'icon_key':
-              (f['icon_key'] as String?) ?? (f['icon'] as String?) ?? 'filter',
-          'category': (f['category'] as String?) ?? 'Basic',
-        };
-      }
-      // If the engine returns objects with property access
-      return {
-        'name': _field(f, 'name') ?? 'Unknown',
-        'icon_key': _field(f, 'icon_key') ?? _field(f, 'icon') ?? 'filter',
-        'category': _field(f, 'category') ?? 'Basic',
-      };
-    }).toList();
-  }
-
-  List<Map<String, String>> _normalizePresets(List<dynamic> raw) {
-    return raw.map((p) {
-      if (p is Map<String, dynamic>) {
-        return {
-          'id': (p['id'] as String?) ?? '',
-          'name': (p['name'] as String?) ?? 'Unknown',
-          'description': (p['description'] as String?) ?? '',
-          'category': (p['category'] as String?) ?? 'Film',
-        };
-      }
-      return {
-        'id': _field(p, 'id') ?? '',
-        'name': _field(p, 'name') ?? 'Unknown',
-        'description': _field(p, 'description') ?? '',
-        'category': _field(p, 'category') ?? 'Film',
-      };
-    }).toList();
-  }
-
-  /// Try reading a field from a dynamic object via property access or map key.
-  String? _field(dynamic obj, String key) {
-    try {
-      // Map-like
-      if (obj is Map) return obj[key]?.toString();
-    } catch (_) {}
-    return null;
-  }
-
-  // ── Clip name lookup ─────────────────────────────────────────────
-
-  String? _clipName() {
-    final editorState = ref.read(editorProvider);
-    final clipId = editorState.selectedClipId;
-    if (clipId == null) return null;
-
-    final project = ref.read(currentProjectProvider);
-    if (project == null) return clipId;
-
-    // Find the clip across all tracks
-    ClipModel? clip;
-    for (final track in project.tracks) {
-      try {
-        clip = track.clips.firstWhere((c) => c.id == clipId);
-        break;
-      } catch (_) {}
-    }
-    if (clip == null) return clipId;
-
-    // Look up the asset for a human-readable name
-    try {
-      final asset =
-          project.mediaAssets.firstWhere((a) => a.id == clip!.assetId);
-      return asset.fileName;
     } catch (_) {
-      return clipId;
+      if (!mounted || request != _effectRequest || !_sameClip(clipId)) return;
+      setState(() { _effects = []; _lookId = null; _draftValues.clear(); });
     }
   }
 
-  // ── Build ────────────────────────────────────────────────────────
+  bool _sameClip(String? clipId) => clipId == ref.read(editorProvider).selectedClipId;
 
-  @override
-  Widget build(BuildContext context) {
-    final editorState = ref.watch(editorProvider);
-    final hasClip = editorState.selectedClipId != null;
-    final clipName = _clipName();
-
-    return Column(
-      children: [
-        // Selected clip indicator
-        if (clipName != null)
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: BoxDecoration(
-              color: AppTheme.primary.withValues(alpha: 0.08),
-              border: Border(
-                bottom: BorderSide(
-                  color: AppTheme.textDisabled.withValues(alpha: 0.15),
-                ),
-              ),
-            ),
-            child: Row(
-              children: [
-                const Icon(
-                  Icons.movie_filter_outlined,
-                  size: 16,
-                  color: AppTheme.primary,
-                ),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: Text(
-                    'Applying to: $clipName',
-                    style: context.textTheme.labelMedium?.copyWith(
-                      color: AppTheme.primary,
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-        // Tab bar
-        TabBar(
-          controller: _tabController,
-          tabs: const [
-            Tab(text: 'Filters'),
-            Tab(text: 'Presets'),
-          ],
-          labelColor: AppTheme.primary,
-          unselectedLabelColor: AppTheme.textDisabled,
-          indicatorColor: AppTheme.primary,
-          labelStyle: context.textTheme.labelMedium,
-        ),
-
-        // Category chips
-        _buildCategoryChips(),
-
-        // Tab content
-        Expanded(
-          child: _isLoading
-              ? const Center(child: CircularProgressIndicator())
-              : TabBarView(
-                  controller: _tabController,
-                  children: [
-                    _buildFilterGrid(hasClip),
-                    _buildPresetList(hasClip),
-                  ],
-                ),
-        ),
-      ],
-    );
+  bool _isVisualClip(String? clipId, ProjectModel? project) {
+    if (clipId == null || project == null) return false;
+    return project.tracks.any((track) => track.trackType == TrackType.video &&
+      !track.locked && track.clips.any((clip) => clip.id == clipId && !clip.locked));
   }
 
-  // ── Category chips ───────────────────────────────────────────────
-
-  Widget _buildCategoryChips() {
-    final isFilterTab = _tabController.index == 0;
-    final categories = isFilterTab ? _filterCategories : _presetCategories;
-    final selected =
-        isFilterTab ? _selectedFilterCategory : _selectedPresetCategory;
-
-    if (categories.length <= 1) return const SizedBox.shrink();
-
-    return SizedBox(
-      height: 40,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-        itemCount: categories.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 6),
-        itemBuilder: (context, index) {
-          final cat = categories[index];
-          final isSelected = cat == selected;
-          return FilterChip(
-            label: Text(cat),
-            selected: isSelected,
-            showCheckmark: false,
-            labelStyle: context.textTheme.labelSmall?.copyWith(
-              color: isSelected ? Colors.white : AppTheme.textPrimary,
-            ),
-            backgroundColor: AppTheme.surfaceVariant,
-            selectedColor: AppTheme.primary,
-            side: BorderSide(
-              color: isSelected
-                  ? AppTheme.primary
-                  : AppTheme.textDisabled.withValues(alpha: 0.2),
-            ),
-            visualDensity: VisualDensity.compact,
-            onSelected: (_) {
-              setState(() {
-                if (isFilterTab) {
-                  _selectedFilterCategory = cat;
-                } else {
-                  _selectedPresetCategory = cat;
-                }
-              });
-            },
-          );
-        },
-      ),
-    );
+  bool get _canEdit {
+    final state = ref.read(editorProvider);
+    return !_busy && !state.isImporting && !state.isExporting &&
+      _isVisualClip(state.selectedClipId, ref.read(currentProjectProvider));
   }
 
-  // ── Filter grid ──────────────────────────────────────────────────
-
-  Widget _buildFilterGrid(bool hasClip) {
-    final filters = _filteredFilters;
-    if (filters.isEmpty) {
-      return Center(
-        child: Text('No filters available', style: context.textTheme.bodySmall),
-      );
-    }
-
-    return GridView.builder(
-      padding: const EdgeInsets.all(8),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 3,
-        childAspectRatio: 1.0,
-        crossAxisSpacing: 6,
-        mainAxisSpacing: 6,
-      ),
-      itemCount: filters.length,
-      itemBuilder: (context, index) {
-        final filter = filters[index];
-        final name = filter['name'] ?? 'Unknown';
-        final icon = filter['icon_key'] ?? 'filter';
-
-        return _FilterCard(
-          name: name,
-          icon: icon,
-          enabled: hasClip,
-          onTap: () => _addFilter(name),
-        );
-      },
-    );
+  void _message(String message) {
+    if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
   }
 
-  // ── Preset list ──────────────────────────────────────────────────
-
-  Widget _buildPresetList(bool hasClip) {
-    final presets = _filteredPresets;
-    if (presets.isEmpty) {
-      return Center(
-        child: Text('No presets available', style: context.textTheme.bodySmall),
-      );
-    }
-
-    return ListView.builder(
-      padding: const EdgeInsets.all(8),
-      itemCount: presets.length,
-      itemBuilder: (context, index) {
-        final preset = presets[index];
-        final id = preset['id'] ?? '';
-        final name = preset['name'] ?? 'Unknown';
-        final description = preset['description'] ?? '';
-        final category = preset['category'] ?? '';
-
-        return Card(
-          color: AppTheme.surfaceVariant,
-          margin: const EdgeInsets.only(bottom: 6),
-          child: ListTile(
-            dense: true,
-            leading: _PresetIcon(category: category),
-            title: Text(name, style: context.textTheme.bodyMedium),
-            subtitle: description.isNotEmpty
-                ? Text(description, style: context.textTheme.bodySmall)
-                : null,
-            trailing: Icon(
-              Icons.auto_fix_high,
-              size: 18,
-              color: hasClip ? AppTheme.primary : AppTheme.textDisabled,
-            ),
-            onTap: hasClip ? () => _applyPreset(id, name) : null,
-          ),
-        );
-      },
-    );
-  }
-
-  // ── Engine calls ─────────────────────────────────────────────────
-
-  Future<void> _addFilter(String filterName) async {
-    final notifier = ref.read(editorProvider.notifier);
+  Future<void> _applyLook(String id, {double? intensity, bool? enabled}) async {
+    if (!_canEdit) return;
+    final clipId = ref.read(editorProvider).selectedClipId;
+    setState(() => _busy = true);
     try {
-      final effectId = await notifier.addEffect(filterName);
+      final success = await ref.read(editorProvider.notifier).setFilterLook(id,
+        intensity: intensity ?? _intensity, enabled: enabled ?? true);
       if (!mounted) return;
-      if (effectId != null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Applied $filterName'),
-            duration: const Duration(seconds: 2),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+      if (!success && _sameClip(clipId)) _message(ref.read(editorProvider).lastError ?? 'Could not apply look');
+      await _loadEffects();
+    } finally { if (mounted) setState(() => _busy = false); }
+  }
+
+  Future<void> _addFilter(FilterTypeInfo filter) async {
+    if (!_canEdit) return;
+    final clipId = ref.read(editorProvider).selectedClipId;
+    setState(() => _busy = true);
+    try {
+      final id = await ref.read(editorProvider.notifier).addEffect(filter.name);
+      if (!mounted || !_sameClip(clipId)) return;
+      if (id == null) {
+        _message(ref.read(editorProvider).lastError ?? 'Could not add adjustment');
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to apply $filterName'),
-            duration: const Duration(seconds: 3),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+        setState(() => _focusedEffectId = id);
+        await _loadEffects();
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted && _adjustmentsScroll.hasClients) _adjustmentsScroll.jumpTo(0);
+        });
       }
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Failed: $e'),
-          duration: const Duration(seconds: 3),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-    }
+    } finally { if (mounted) setState(() => _busy = false); }
   }
 
-  Future<void> _applyPreset(String presetId, String presetName) async {
-    final notifier = ref.read(editorProvider.notifier);
+  Future<void> _mutateEffect(String? clipId, Future<bool> Function(EditorNotifier) mutate) async {
+    if (!_canEdit || !_sameClip(clipId)) return;
+    setState(() => _busy = true);
     try {
-      await notifier.applyFilterPreset(presetId);
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Applied $presetName'),
-          duration: const Duration(seconds: 2),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Failed: $e'),
-          duration: const Duration(seconds: 3),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-    }
+      final success = await mutate(ref.read(editorProvider.notifier));
+      if (!mounted || !_sameClip(clipId)) return;
+      if (!success) _message(ref.read(editorProvider).lastError ?? 'Could not update adjustment');
+      await _loadEffects();
+    } finally { if (mounted) setState(() => _busy = false); }
   }
-}
 
-// ── Filter card widget ──────────────────────────────────────────────
+  Future<void> _saveCurrentLook() async {
+    if (!_canEdit) return;
+    final clipId = ref.read(editorProvider).selectedClipId;
+    var draft = '';
+    final name = await showDialog<String>(context: context, builder: (context) => AlertDialog(
+      title: const Text('Save look'),
+      content: SingleChildScrollView(child: TextField(key: const ValueKey('look-name'),
+        autofocus: true, maxLength: 80, onChanged: (value) => draft = value,
+        decoration: const InputDecoration(labelText: 'Name'),
+        onSubmitted: (value) { if (value.trim().isNotEmpty) Navigator.pop(context, value.trim()); })),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+        TextButton(onPressed: () { if (draft.trim().isNotEmpty) Navigator.pop(context, draft.trim()); }, child: const Text('Save')),
+      ],
+    ));
+    if (!mounted || name == null) return;
+    if (!_sameClip(clipId) || !_canEdit) { _message('Select the original clip to save its look'); return; }
+    setState(() => _busy = true);
+    try {
+      final effects = await ref.read(editorProvider.notifier).getSelectedClipEffects();
+      if (!mounted || !_sameClip(clipId)) return;
+      await ref.read(userLookServiceProvider).save(name: name, effects: effects);
+      await _loadMyLooks();
+      _message('Look saved on this device');
+    } catch (error) { _message('Could not save look: $error'); }
+    finally { if (mounted) setState(() => _busy = false); }
+  }
 
-class _FilterCard extends StatelessWidget {
-  const _FilterCard({
-    required this.name,
-    required this.icon,
-    required this.enabled,
-    required this.onTap,
-  });
-  final String name;
-  final String icon;
-  final bool enabled;
-  final VoidCallback onTap;
+  Future<void> _applySavedLook(UserLook look) async {
+    if (!_canEdit) return;
+    final clipId = ref.read(editorProvider).selectedClipId;
+    setState(() => _busy = true);
+    try {
+      final success = await ref.read(editorProvider.notifier).applyUserLook(look.recipeJson);
+      if (!mounted || !_sameClip(clipId)) return;
+      if (!success) _message(ref.read(editorProvider).lastError ?? 'Could not apply saved look');
+      await _loadEffects();
+    } finally { if (mounted) setState(() => _busy = false); }
+  }
+
+  Future<void> _deleteSavedLook(UserLook look) async {
+    try {
+      await ref.read(userLookServiceProvider).delete(look.id);
+      await _loadMyLooks();
+    } catch (error) { _message('Could not delete look: $error'); }
+  }
+
+  Future<void> _importLook() async {
+    var draft = '';
+    final recipe = await showDialog<String>(context: context, builder: (context) => AlertDialog(
+      title: const Text('Import look'),
+      content: SizedBox(width: 440, child: SingleChildScrollView(child: TextField(
+        key: const ValueKey('import-look-json'), onChanged: (value) => draft = value, minLines: 3, maxLines: 8,
+        decoration: const InputDecoration(labelText: 'Paste a look recipe (JSON)')))),
+      actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+        TextButton(onPressed: () => Navigator.pop(context, draft), child: const Text('Import'))],
+    ));
+    if (!mounted || recipe == null) return;
+    try {
+      await ref.read(userLookServiceProvider).importLook(recipe);
+      await _loadMyLooks();
+      _message('Look imported on this device');
+    } catch (error) { _message('Could not import look: $error'); }
+  }
+
+  Future<void> _exportLook(UserLook look) async {
+    final recipe = ref.read(userLookServiceProvider).exportLook(look);
+    await showDialog<void>(context: context, builder: (context) => AlertDialog(
+      title: Text('Export ${look.name}'),
+      content: SizedBox(width: 440, child: SingleChildScrollView(child: SelectableText(recipe))),
+      actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close')),
+        TextButton(onPressed: () async {
+          await Clipboard.setData(ClipboardData(text: recipe));
+          if (context.mounted) Navigator.pop(context);
+          _message('Look recipe copied. Share it with another editor to import.');
+        }, child: const Text('Copy recipe'))],
+    ));
+  }
+
+  Widget _selectionNotice(bool supports) => supports ? const SizedBox.shrink() : const Padding(
+    padding: EdgeInsets.all(12), child: Text(
+      'Select a photo or video clip on an unlocked video track to use looks and adjustments.'));
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: enabled ? onTap : null,
-      borderRadius: BorderRadius.circular(8),
-      child: Container(
-        decoration: BoxDecoration(
-          color: AppTheme.surfaceVariant,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(
-            color: enabled
-                ? AppTheme.textDisabled.withValues(alpha: 0.2)
-                : Colors.transparent,
-            width: 1,
-          ),
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              _iconData,
-              size: 24,
-              color: enabled ? AppTheme.textPrimary : AppTheme.textDisabled,
-            ),
-            const SizedBox(height: 4),
-            Text(
-              name,
-              style: context.textTheme.labelSmall?.copyWith(
-                color: enabled ? AppTheme.textPrimary : AppTheme.textDisabled,
-              ),
-              textAlign: TextAlign.center,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ],
-        ),
-      ),
-    );
+    final state = ref.watch(editorProvider);
+    final supports = _isVisualClip(state.selectedClipId, ref.watch(currentProjectProvider));
+    final enabled = supports && !_busy && !state.isImporting && !state.isExporting;
+    ref.listen(editorProvider.select((state) => state.selectedClipId), (_, __) {
+      _focusedEffectId = null;
+      _draftValues.clear();
+      _loadEffects();
+    });
+    ref.listen(editorProvider.select((state) => state.renderRevision), (_, __) => _loadEffects());
+    if (_loading) return const Center(child: CircularProgressIndicator());
+    if (_error != null) return SingleChildScrollView(padding: const EdgeInsets.all(16),
+      child: Column(mainAxisSize: MainAxisSize.min, children: [
+        const Icon(Icons.warning_amber_outlined), const SizedBox(height: 12),
+        Text(_error!, textAlign: TextAlign.center), const SizedBox(height: 12),
+        OutlinedButton.icon(onPressed: _loadCatalog, icon: const Icon(Icons.refresh), label: const Text('Retry')),
+      ]));
+    return DefaultTabController(length: 3, child: Column(children: [
+      const TabBar(isScrollable: true, tabAlignment: TabAlignment.start,
+        tabs: [Tab(text: 'Looks'), Tab(text: 'Adjustments'), Tab(text: 'My looks')]),
+      if (_busy) const LinearProgressIndicator(minHeight: 2),
+      Expanded(child: TabBarView(children: [
+        _buildLooks(enabled, supports, state.selectedClipId),
+        _buildAdjustments(enabled, supports, state.selectedClipId),
+        _buildMyLooks(enabled, supports),
+      ])),
+    ]));
   }
 
-  IconData get _iconData {
-    switch (icon) {
-      case 'brightness':
-        return Icons.brightness_6;
-      case 'contrast':
-        return Icons.contrast;
-      case 'saturation':
-        return Icons.water_drop;
-      case 'hue':
-        return Icons.palette;
-      case 'blur':
-        return Icons.blur_on;
-      case 'sharpen':
-        return Icons.deblur;
-      case 'grayscale':
-        return Icons.gradient;
-      case 'sepia':
-        return Icons.filter_vintage;
-      case 'invert':
-        return Icons.invert_colors;
-      case 'vignette':
-        return Icons.vignette;
-      case 'temperature':
-        return Icons.thermostat;
-      case 'chroma_key':
-        return Icons.colorize;
-      default:
-        return Icons.auto_fix_high;
-    }
-  }
-}
-
-// ── Preset category icon ────────────────────────────────────────────
-
-class _PresetIcon extends StatelessWidget {
-  const _PresetIcon({required this.category});
-  final String category;
-
-  @override
-  Widget build(BuildContext context) {
-    return CircleAvatar(
-      radius: 16,
-      backgroundColor: AppTheme.primary.withValues(alpha: 0.12),
-      child: Icon(
-        _icon,
-        size: 16,
-        color: AppTheme.primary,
-      ),
-    );
+  Widget _buildLooks(bool enabled, bool supports, String? clipId) {
+    final lookId = _lookId;
+    return ListView(padding: const EdgeInsets.all(8), children: [
+      _selectionNotice(supports),
+      if (lookId != null) ...[
+        Row(children: [const Expanded(child: Text('Intensity')), Text('${(_intensity * 100).round()}%')]),
+        Slider(value: _intensity, min: 0, max: 1,
+          onChanged: enabled ? (value) { if (_sameClip(clipId)) setState(() => _intensity = value); } : null,
+          onChangeEnd: enabled ? (value) { if (_sameClip(clipId)) _applyLook(lookId, intensity: value, enabled: _lookEnabled); } : null),
+        SwitchListTile(contentPadding: EdgeInsets.zero, title: const Text('Look enabled'), value: _lookEnabled,
+          onChanged: enabled ? (value) { if (_sameClip(clipId)) _applyLook(lookId, enabled: value); } : null),
+        Align(alignment: Alignment.centerLeft, child: TextButton(
+          onPressed: enabled ? () => _applyLook('') : null, child: const Text('Reset look'))),
+      ],
+      ..._looks.map((look) => Card(
+        color: look.id == lookId ? AppTheme.primary.withValues(alpha: 0.14) : AppTheme.surfaceVariant,
+        child: ListTile(selected: look.id == lookId,
+          leading: Icon(look.id == lookId ? Icons.check_circle : Icons.photo_filter_outlined),
+          title: Text(look.name), subtitle: Text(look.description),
+          onTap: enabled ? () => _applyLook(look.id, intensity: look.id == lookId ? _intensity : 1) : null))),
+    ]);
   }
 
-  IconData get _icon {
-    switch (category) {
-      case 'Film':
-        return Icons.movie_outlined;
-      case 'Color':
-        return Icons.palette_outlined;
-      case 'Stylize':
-        return Icons.auto_awesome_outlined;
-      default:
-        return Icons.auto_fix_high;
-    }
+  Widget _buildAdjustments(bool enabled, bool supports, String? clipId) {
+    final manual = _effects.where((effect) => !effect.id.startsWith('look:')).toList();
+    manual.sort((a, b) => a.id == _focusedEffectId ? -1 : b.id == _focusedEffectId ? 1 : 0);
+    return ListView(controller: _adjustmentsScroll, padding: const EdgeInsets.all(8), children: [
+      _selectionNotice(supports),
+      if (manual.isNotEmpty) ...[
+        const Padding(padding: EdgeInsets.all(8), child: Text('Current adjustments', style: TextStyle(fontWeight: FontWeight.w600))),
+        ...manual.map((effect) => _adjustmentCard(effect, enabled, clipId)),
+      ],
+      const Padding(padding: EdgeInsets.all(8), child: Text('Add an adjustment, then move its sliders here to change the image.')),
+      ..._filters.map((filter) => ListTile(key: ValueKey('add-adjustment-${filter.name}'),
+        title: Text(filter.displayName), subtitle: Text(filter.category), trailing: const Icon(Icons.add_circle_outline),
+        onTap: enabled ? () => _addFilter(filter) : null)),
+    ]);
   }
+
+  Widget _adjustmentCard(EffectInfo effect, bool enabled, String? clipId) => Card(child: Padding(
+    padding: const EdgeInsets.all(12), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Row(children: [Expanded(child: Text(effect.name, style: const TextStyle(fontWeight: FontWeight.w600))),
+        Switch(value: effect.enabled, onChanged: enabled ? (_) => _mutateEffect(clipId, (editor) => editor.toggleEffect(effect.id)) : null),
+        IconButton(tooltip: 'Remove ${effect.name}', icon: const Icon(Icons.close, size: 20),
+          onPressed: enabled ? () => _mutateEffect(clipId, (editor) => editor.removeEffect(effect.id)) : null),
+      ]),
+      if (effect.parameters.where((p) => !p.name.startsWith('__')).isEmpty)
+        const Text('This adjustment has no numeric controls.'),
+      ...effect.parameters.where((p) => !p.name.startsWith('__') && p.value.isFinite && p.minValue.isFinite && p.maxValue.isFinite && p.maxValue > p.minValue).map((p) {
+        final key = '${effect.id}-${p.name}';
+        final value = (_draftValues[key] ?? p.value).clamp(p.minValue, p.maxValue);
+        return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [Expanded(child: Text(p.displayName)), Text(value.toStringAsFixed(2), style: const TextStyle(fontFeatures: [FontFeature.tabularFigures()]))]),
+          Slider(key: ValueKey('adjustment-$key'), value: value, min: p.minValue, max: p.maxValue,
+            onChanged: enabled && effect.enabled ? (value) { if (_sameClip(clipId)) setState(() => _draftValues[key] = value); } : null,
+            onChangeEnd: enabled && effect.enabled ? (value) => _mutateEffect(clipId, (editor) => editor.setEffectParameter(effect.id, p.name, value)) : null),
+        ]);
+      }),
+    ])));
+
+  Widget _buildMyLooks(bool enabled, bool supports) => ListView(padding: const EdgeInsets.all(12), children: [
+    _selectionNotice(supports),
+    const Text('Save an adjustment stack to reuse on another clip. Looks stay on this device; export a recipe to share it.'),
+    const SizedBox(height: 8),
+    Wrap(spacing: 8, runSpacing: 8, children: [
+      OutlinedButton.icon(onPressed: enabled && _effects.isNotEmpty ? _saveCurrentLook : null,
+        icon: const Icon(Icons.bookmark_add_outlined, size: 18), label: const Text('Save current look')),
+      OutlinedButton.icon(onPressed: _busy ? null : _importLook,
+        icon: const Icon(Icons.input, size: 18), label: const Text('Import look')),
+    ]),
+    if (_libraryError != null) ...[
+      Text(_libraryError!), TextButton(onPressed: _loadMyLooks, child: const Text('Retry saved looks')),
+    ] else if (_myLooks.isEmpty)
+      const Padding(padding: EdgeInsets.symmetric(vertical: 20), child: Text('No saved looks yet.')),
+    ..._myLooks.map((look) => ListTile(contentPadding: EdgeInsets.zero,
+      title: Text(look.name), subtitle: const Text('Tap to apply to the selected clip'),
+      onTap: enabled ? () => _applySavedLook(look) : null,
+      trailing: PopupMenuButton<String>(tooltip: 'Look options: ${look.name}',
+        onSelected: (action) { if (action == 'delete') _deleteSavedLook(look); else _exportLook(look); },
+        itemBuilder: (_) => [const PopupMenuItem(value: 'export', child: Text('Export recipe')),
+          const PopupMenuItem(value: 'delete', child: Text('Delete look'))]))),
+  ]);
 }

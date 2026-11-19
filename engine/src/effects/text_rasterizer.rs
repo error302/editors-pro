@@ -7,11 +7,16 @@
 use fontdue::layout::{CoordinateSystem, Layout, LayoutSettings, TextStyle};
 use fontdue::Font;
 
-use super::text_render::{TextColor, TextOverlay, TextPosition, TextAnchor, TextOutline, TextShadow, TextBackground};
+use super::text_render::{
+    canonical_font_family, TextAnchor, TextBackground, TextOutline, TextOverlay, TextShadow,
+};
 
 /// Built-in font bytes — DejaVu Sans (Apache 2.0 license, embedded for MVP).
 /// In production, we'd load fonts from the Android assets directory.
 const DEJAVU_SANS_REGULAR: &[u8] = include_bytes!("../../fonts/DejaVuSans.ttf");
+const INTER_REGULAR: &[u8] = include_bytes!("../../../assets/fonts/Inter-Regular.ttf");
+const INTER_SEMIBOLD: &[u8] = include_bytes!("../../../assets/fonts/Inter-SemiBold.ttf");
+const INTER_BOLD: &[u8] = include_bytes!("../../../assets/fonts/Inter-Bold.ttf");
 
 /// CPU text rasterizer that renders [TextOverlay] instances onto RGBA
 /// frame buffers.
@@ -33,7 +38,15 @@ impl TextRasterizer {
 
         Self {
             layout,
-            fonts: vec![font],
+            fonts: vec![
+                font,
+                Font::from_bytes(INTER_REGULAR, fontdue::FontSettings::default())
+                    .expect("Invalid Inter Regular"),
+                Font::from_bytes(INTER_SEMIBOLD, fontdue::FontSettings::default())
+                    .expect("Invalid Inter SemiBold"),
+                Font::from_bytes(INTER_BOLD, fontdue::FontSettings::default())
+                    .expect("Invalid Inter Bold"),
+            ],
         }
     }
 
@@ -67,9 +80,15 @@ impl TextRasterizer {
         self.layout.reset(&LayoutSettings {
             ..Default::default()
         });
+        let font_index = match canonical_font_family(&overlay.font_family) {
+            Some("Inter") => 1,
+            Some("Inter-SemiBold") => 2,
+            Some("Inter-Bold") => 3,
+            _ => 0,
+        };
         self.layout.append(
             &self.fonts,
-            &TextStyle::new(visible_text, overlay.font_size, 0),
+            &TextStyle::new(visible_text, overlay.font_size, font_index),
         );
 
         // Calculate the pixel position based on the overlay's position and anchor
@@ -95,28 +114,56 @@ impl TextRasterizer {
         let text_height = max_y - min_y;
 
         // Calculate anchor-based position
-        let (offset_x, offset_y) = Self::calculate_anchor_offset(
-            overlay.anchor,
-            text_width,
-            text_height,
-        );
+        let (offset_x, offset_y) =
+            Self::calculate_anchor_offset(overlay.anchor, text_width, text_height);
 
         let target_x = (overlay.position.x * w as f32) - offset_x;
         let target_y = (overlay.position.y * h as f32) - offset_y;
 
         // Render background first (if any)
         if let Some(bg) = &overlay.background {
-            self.render_background(bg, frame_rgba, w, h, target_x, target_y, text_width, text_height);
+            self.render_background(
+                bg,
+                frame_rgba,
+                w,
+                h,
+                target_x,
+                target_y,
+                text_width,
+                text_height,
+            );
         }
 
         // Render shadow (if any)
         if let Some(shadow) = &overlay.shadow {
-            self.render_shadow(shadow, frame_rgba, w, h, &glyphs, min_x, min_y, target_x, target_y, text_opacity);
+            self.render_shadow(
+                shadow,
+                frame_rgba,
+                w,
+                h,
+                &glyphs,
+                min_x,
+                min_y,
+                target_x,
+                target_y,
+                text_opacity,
+            );
         }
 
         // Render outline (if any)
         if let Some(outline) = &overlay.outline {
-            self.render_outline(outline, frame_rgba, w, h, &glyphs, min_x, min_y, target_x, target_y, text_opacity);
+            self.render_outline(
+                outline,
+                frame_rgba,
+                w,
+                h,
+                &glyphs,
+                min_x,
+                min_y,
+                target_x,
+                target_y,
+                text_opacity,
+            );
         }
 
         // Render text glyphs
@@ -146,11 +193,19 @@ impl TextRasterizer {
                         continue;
                     }
 
-                    let pixel_alpha = ((alpha as f32 / 255.0) * text_alpha as f32 / 255.0 * 255.0) as u8;
+                    let pixel_alpha =
+                        ((alpha as f32 / 255.0) * text_alpha as f32 / 255.0 * 255.0) as u8;
                     let idx = ((fy as usize) * w + (fx as usize)) * 4;
 
                     if idx + 3 < frame_rgba.len() {
-                        blend_pixel(frame_rgba, idx, text_color[0], text_color[1], text_color[2], pixel_alpha);
+                        blend_pixel(
+                            frame_rgba,
+                            idx,
+                            text_color[0],
+                            text_color[1],
+                            text_color[2],
+                            pixel_alpha,
+                        );
                     }
                 }
             }
@@ -158,16 +213,26 @@ impl TextRasterizer {
     }
 
     /// Calculate the offset for the given anchor point.
-    fn calculate_anchor_offset(anchor: TextAnchor, text_width: f32, text_height: f32) -> (f32, f32) {
+    fn calculate_anchor_offset(
+        anchor: TextAnchor,
+        text_width: f32,
+        text_height: f32,
+    ) -> (f32, f32) {
         let ox = match anchor {
             TextAnchor::TopLeft | TextAnchor::CenterLeft | TextAnchor::BottomLeft => 0.0,
-            TextAnchor::TopCenter | TextAnchor::Center | TextAnchor::BottomCenter => text_width / 2.0,
+            TextAnchor::TopCenter | TextAnchor::Center | TextAnchor::BottomCenter => {
+                text_width / 2.0
+            }
             TextAnchor::TopRight | TextAnchor::CenterRight | TextAnchor::BottomRight => text_width,
         };
         let oy = match anchor {
             TextAnchor::TopLeft | TextAnchor::TopCenter | TextAnchor::TopRight => 0.0,
-            TextAnchor::CenterLeft | TextAnchor::Center | TextAnchor::CenterRight => text_height / 2.0,
-            TextAnchor::BottomLeft | TextAnchor::BottomCenter | TextAnchor::BottomRight => text_height,
+            TextAnchor::CenterLeft | TextAnchor::Center | TextAnchor::CenterRight => {
+                text_height / 2.0
+            }
+            TextAnchor::BottomLeft | TextAnchor::BottomCenter | TextAnchor::BottomRight => {
+                text_height
+            }
         };
         (ox, oy)
     }
@@ -197,7 +262,14 @@ impl TextRasterizer {
             for px in x0..x1 {
                 let idx = (py * w + px) * 4;
                 if idx + 3 < frame_rgba.len() {
-                    blend_pixel(frame_rgba, idx, bg_color[0], bg_color[1], bg_color[2], bg_alpha);
+                    blend_pixel(
+                        frame_rgba,
+                        idx,
+                        bg_color[0],
+                        bg_color[1],
+                        bg_color[2],
+                        bg_alpha,
+                    );
                 }
             }
         }
@@ -240,10 +312,18 @@ impl TextRasterizer {
                     if fx < 0 || fx >= w as i32 || fy < 0 || fy >= h as i32 {
                         continue;
                     }
-                    let pixel_alpha = ((alpha as f32 / 255.0) * shadow_alpha as f32 / 255.0 * 255.0) as u8;
+                    let pixel_alpha =
+                        ((alpha as f32 / 255.0) * shadow_alpha as f32 / 255.0 * 255.0) as u8;
                     let idx = ((fy as usize) * w + (fx as usize)) * 4;
                     if idx + 3 < frame_rgba.len() {
-                        blend_pixel(frame_rgba, idx, shadow_color[0], shadow_color[1], shadow_color[2], pixel_alpha);
+                        blend_pixel(
+                            frame_rgba,
+                            idx,
+                            shadow_color[0],
+                            shadow_color[1],
+                            shadow_color[2],
+                            pixel_alpha,
+                        );
                     }
                 }
             }
@@ -295,7 +375,14 @@ impl TextRasterizer {
 
                             let idx = ((fy as usize) * w + (fx as usize)) * 4;
                             if idx + 3 < frame_rgba.len() {
-                                blend_pixel(frame_rgba, idx, outline_color[0], outline_color[1], outline_color[2], outline_alpha);
+                                blend_pixel(
+                                    frame_rgba,
+                                    idx,
+                                    outline_color[0],
+                                    outline_color[1],
+                                    outline_color[2],
+                                    outline_alpha,
+                                );
                             }
                         }
                     }
@@ -307,7 +394,7 @@ impl TextRasterizer {
     /// Parse a hex color string (e.g., "#FF0000") into [R, G, B].
     fn parse_hex_color(hex: &str) -> [u8; 3] {
         let hex = hex.trim_start_matches('#');
-        if hex.len() >= 6 {
+        if hex.len() == 6 && hex.is_ascii() {
             let r = u8::from_str_radix(&hex[0..2], 16).unwrap_or(255);
             let g = u8::from_str_radix(&hex[2..4], 16).unwrap_or(255);
             let b = u8::from_str_radix(&hex[4..6], 16).unwrap_or(255);
@@ -359,7 +446,10 @@ mod tests {
 
         // At least some pixels should be non-zero (the text was rendered)
         let non_zero = frame.iter().filter(|&&b| b > 0).count();
-        assert!(non_zero > 0, "Text rendering should produce non-zero pixels");
+        assert!(
+            non_zero > 0,
+            "Text rendering should produce non-zero pixels"
+        );
     }
 
     #[test]

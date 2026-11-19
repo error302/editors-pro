@@ -10,13 +10,13 @@ import '../../../data/models/project_model.dart';
 import '../../projects/providers/project_provider.dart';
 import '../providers/editor_provider.dart';
 import 'chroma_key_controls.dart';
-import 'color_grading_panel.dart';
 import 'keyframe_graph_editor.dart';
 import 'transition_picker.dart';
 
 /// Inspector panel - Shows properties of the selected clip or track
 class InspectorPanel extends ConsumerWidget {
-  const InspectorPanel({super.key});
+  const InspectorPanel({super.key, this.scrollController});
+  final ScrollController? scrollController;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -60,6 +60,7 @@ class InspectorPanel extends ConsumerWidget {
     return Container(
       color: AppTheme.surface,
       child: ListView(
+        controller: scrollController,
         padding: const EdgeInsets.all(16),
         children: [
           // Header
@@ -209,16 +210,6 @@ class InspectorPanel extends ConsumerWidget {
           _EffectsSection(clipId: clip.id, initialEffects: clip.effects),
           const SizedBox(height: 16),
 
-          // Color Grading section
-          const _SectionHeader(
-            title: 'Color Grading',
-            icon: Icons.palette,
-            iconColor: Colors.amber,
-          ),
-          const SizedBox(height: 8),
-          _ColorGradingSection(clipId: clip.id),
-          const SizedBox(height: 16),
-
           // Crop & Transform section
           const _SectionHeader(
             title: 'Crop & Transform',
@@ -270,8 +261,8 @@ class InspectorPanel extends ConsumerWidget {
             const _SectionHeader(title: 'Text Properties'),
             const SizedBox(height: 8),
             _TextPropertiesSection(
-              clipId: clip.id,
-              assetId: clip.assetId,
+              key: ValueKey('text-properties-${clip.id}'),
+              clip: clip,
             ),
           ],
         ],
@@ -288,6 +279,7 @@ class InspectorPanel extends ConsumerWidget {
     return Container(
       color: AppTheme.surface,
       child: ListView(
+        controller: scrollController,
         padding: const EdgeInsets.all(16),
         children: [
           // Header
@@ -379,6 +371,7 @@ class InspectorPanel extends ConsumerWidget {
     return Container(
       color: AppTheme.surface,
       child: ListView(
+        controller: scrollController,
         padding: const EdgeInsets.all(16),
         children: [
           const SizedBox(height: 32),
@@ -846,9 +839,11 @@ class _EffectsSectionState extends ConsumerState<_EffectsSection> {
   @override
   void didUpdateWidget(covariant _EffectsSection oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.clipId != widget.clipId) {
+    if (oldWidget.clipId != widget.clipId ||
+        oldWidget.initialEffects != widget.initialEffects) {
       _effects = _effectsFromModels(widget.initialEffects);
-      unawaited(_updateEffectsFromTimeline());
+      if (oldWidget.clipId != widget.clipId)
+        unawaited(_updateEffectsFromTimeline());
     }
   }
 
@@ -858,7 +853,7 @@ class _EffectsSectionState extends ConsumerState<_EffectsSection> {
     try {
       final api = EngineService.instance.api;
       final effects = await api.getClipEffects(clipId: clipId);
-      if (mounted && widget.clipId == clipId && effects.isNotEmpty) {
+      if (mounted && widget.clipId == clipId) {
         setState(() {
           _effects = effects
               .map(
@@ -952,36 +947,50 @@ class _EffectsSectionState extends ConsumerState<_EffectsSection> {
           ),
         ],
 
-        // Applied effects list
-        ..._effects.map(
-          (effect) => _AppliedEffectCard(
-            effect: effect,
-            onParameterChanged: (paramName, value) async {
-              final effectId = effect['id'] as String? ?? '';
-              await ref.read(editorProvider.notifier).setEffectParameter(
-                    effectId,
-                    paramName,
-                    value,
-                  );
-            },
-            onToggleEnabled: () async {
-              final effectId = effect['id'] as String? ?? '';
-              setState(() {
-                effect['enabled'] = !(effect['enabled'] as bool? ?? true);
-              });
-              await ref.read(editorProvider.notifier).toggleEffect(effectId);
-              await _updateEffectsFromTimeline();
-            },
-            onRemove: () async {
-              final effectId = effect['id'] as String? ?? '';
-              setState(() {
-                _effects.removeWhere((item) => item['id'] == effectId);
-              });
-              await ref.read(editorProvider.notifier).removeEffect(effectId);
-              await _updateEffectsFromTimeline();
-            },
+        if (_effects
+            .any((e) => ((e['id'] as String?) ?? '').startsWith('look:')))
+          const Padding(
+            padding: EdgeInsets.only(bottom: 8),
+            child: Text(
+                'Manage the applied look, intensity and reset in Effects > Looks.'),
           ),
-        ),
+
+        // Applied effects list
+        ..._effects
+            .where((e) => !((e['id'] as String?) ?? '').startsWith('look:'))
+            .map(
+              (effect) => _AppliedEffectCard(
+                effect: effect,
+                onParameterChanged: (paramName, value) async {
+                  final effectId = effect['id'] as String? ?? '';
+                  await ref.read(editorProvider.notifier).setEffectParameter(
+                        effectId,
+                        paramName,
+                        value,
+                      );
+                },
+                onToggleEnabled: () async {
+                  final effectId = effect['id'] as String? ?? '';
+                  setState(() {
+                    effect['enabled'] = !(effect['enabled'] as bool? ?? true);
+                  });
+                  await ref
+                      .read(editorProvider.notifier)
+                      .toggleEffect(effectId);
+                  await _updateEffectsFromTimeline();
+                },
+                onRemove: () async {
+                  final effectId = effect['id'] as String? ?? '';
+                  setState(() {
+                    _effects.removeWhere((item) => item['id'] == effectId);
+                  });
+                  await ref
+                      .read(editorProvider.notifier)
+                      .removeEffect(effectId);
+                  await _updateEffectsFromTimeline();
+                },
+              ),
+            ),
 
         const SizedBox(height: 8),
 
@@ -1100,7 +1109,10 @@ class _AppliedEffectCard extends StatelessWidget {
                   },
                 ),
               ] else ...[
-                ...parameters.map((param) {
+                ...parameters
+                    .where((p) => !((p as Map)['name'] as String? ?? '')
+                        .startsWith('__look_'))
+                    .map((param) {
                   final p = param as Map<dynamic, dynamic>;
                   final paramName = p['name'] as String? ?? '';
                   final displayName = p['display_name'] as String? ?? paramName;
@@ -1276,16 +1288,10 @@ class _TransitionsSection extends ConsumerWidget {
   }
 }
 
-/// Text properties section — shows text content editor, font picker, font size
-/// slider, color picker, animation dropdown, and position X/Y fields when a
-/// text clip is selected.
+/// Edits the selected clip's authoritative native text properties.
 class _TextPropertiesSection extends ConsumerStatefulWidget {
-  const _TextPropertiesSection({
-    required this.clipId,
-    required this.assetId,
-  });
-  final String clipId;
-  final String assetId;
+  const _TextPropertiesSection({required this.clip, super.key});
+  final ClipModel clip;
 
   @override
   ConsumerState<_TextPropertiesSection> createState() =>
@@ -1294,57 +1300,56 @@ class _TextPropertiesSection extends ConsumerStatefulWidget {
 
 class _TextPropertiesSectionState
     extends ConsumerState<_TextPropertiesSection> {
-  late TextEditingController _textController;
-  String _selectedFont = 'Inter';
-  double _fontSize = 36.0;
-  String _selectedColor = '#FFFFFF';
-  String _selectedAnimation = 'None';
-  double _positionX = 0.5;
-  double _positionY = 0.5;
-  List<Map<String, String>> _availableFonts = [];
+  late final TextEditingController _textController;
+  late String _selectedFont;
+  late double _fontSize;
+  late String _selectedColor;
+  late double _positionX;
+  late double _positionY;
+  int _pendingUpdates = 0;
 
-  static const List<Map<String, String>> _defaultFonts = [
-    {'name': 'Inter', 'family': 'Inter', 'style': 'Regular'},
-    {'name': 'Roboto', 'family': 'Roboto', 'style': 'Regular'},
-    {'name': 'Open Sans', 'family': 'Open Sans', 'style': 'Regular'},
-    {'name': 'Lato', 'family': 'Lato', 'style': 'Regular'},
-    {'name': 'Montserrat', 'family': 'Montserrat', 'style': 'Regular'},
-    {
-      'name': 'Playfair Display',
-      'family': 'Playfair Display',
-      'style': 'Regular',
-    },
-  ];
-
-  static const List<String> _animations = [
-    'None',
-    'Fade In',
-    'Fade Out',
-    'Typewriter',
-    'Slide In',
-    'Pop In',
-  ];
-
-  static const List<Map<String, String>> _presetColors = [
-    {'name': 'White', 'hex': '#FFFFFF'},
-    {'name': 'Black', 'hex': '#000000'},
-    {'name': 'Red', 'hex': '#FF0000'},
-    {'name': 'Green', 'hex': '#00FF00'},
-    {'name': 'Blue', 'hex': '#0000FF'},
-    {'name': 'Yellow', 'hex': '#FFFF00'},
-    {'name': 'Cyan', 'hex': '#00FFFF'},
-    {'name': 'Magenta', 'hex': '#FF00FF'},
-    {'name': 'Orange', 'hex': '#FF8800'},
-    {'name': 'Purple', 'hex': '#8800FF'},
+  static const _colors = [
+    '#FFFFFF',
+    '#000000',
+    '#FF0000',
+    '#00FF00',
+    '#0000FF',
+    '#FFFF00',
+    '#00FFFF',
+    '#FF00FF',
+    '#FF8800',
+    '#8800FF',
   ];
 
   @override
   void initState() {
     super.initState();
-    _textController = TextEditingController(
-      text: widget.assetId.startsWith('text_') ? 'Your Text' : '',
-    );
-    _loadFonts();
+    _textController = TextEditingController();
+    _hydrate();
+  }
+
+  void _hydrate() {
+    final text = widget.clip.textProperties;
+    if (_textController.text != text.content) {
+      _textController.value = TextEditingValue(
+        text: text.content,
+        selection: TextSelection.collapsed(offset: text.content.length),
+      );
+    }
+    _selectedFont = text.fontFamily;
+    _fontSize = text.fontSize;
+    _selectedColor = text.colorHex;
+    _positionX = text.positionX;
+    _positionY = text.positionY;
+  }
+
+  @override
+  void didUpdateWidget(covariant _TextPropertiesSection oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (_pendingUpdates == 0 &&
+        oldWidget.clip.properties != widget.clip.properties) {
+      _hydrate();
+    }
   }
 
   @override
@@ -1353,325 +1358,127 @@ class _TextPropertiesSectionState
     super.dispose();
   }
 
-  Future<void> _loadFonts() async {
-    try {
-      final fonts = await ref.read(editorProvider.notifier).getAvailableFonts();
-      if (mounted && fonts.isNotEmpty) {
-        setState(() {
-          _availableFonts = fonts
-              .map(
-                (f) => {
-                  'name': f.name,
-                  'family': f.family,
-                  'style': f.style,
-                },
-              )
-              .toList();
-          if (_availableFonts.isNotEmpty) {
-            _selectedFont = _availableFonts.first['family']!;
-          }
-        });
-      } else {
-        setState(() {
-          _availableFonts = _defaultFonts;
-        });
-      }
-    } catch (_) {
-      setState(() {
-        _availableFonts = _defaultFonts;
-      });
+  Future<void> _save({bool positionOnly = false}) async {
+    _pendingUpdates++;
+    final success = await ref.read(editorProvider.notifier).updateTextOverlay(
+          clipId: widget.clip.id,
+          content: positionOnly ? null : _textController.text,
+          fontFamily: positionOnly ? null : _selectedFont,
+          fontSize: positionOnly ? null : _fontSize,
+          colorHex: positionOnly ? null : _selectedColor,
+          positionX: positionOnly ? _positionX : null,
+          positionY: positionOnly ? _positionY : null,
+        );
+    _pendingUpdates--;
+    if (!mounted) return;
+    if (!success) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Text changes could not be saved.')),
+      );
     }
   }
 
-  Future<void> _updateTextStyle() async {
-    await ref.read(editorProvider.notifier).updateTextStyle(
-          clipId: widget.clipId,
-          fontFamily: _selectedFont,
-          fontSize: _fontSize,
-          colorHex: _selectedColor,
-        );
-  }
-
-  Future<void> _updateTextPosition() async {
-    await ref.read(editorProvider.notifier).updateTextPosition(
-          clipId: widget.clipId,
-          positionX: _positionX,
-          positionY: _positionY,
-        );
-  }
-
-  Color _parseHexColor(String hex) {
-    final hexStr = hex.replaceFirst('#', '');
-    return Color(int.parse('FF$hexStr', radix: 16));
+  Widget _slider(String label, double value, double min, double max,
+      ValueChanged<double> change) {
+    return Row(children: [
+      SizedBox(
+          width: 60, child: Text(label, style: context.textTheme.bodySmall)),
+      Expanded(
+          child: Slider(
+        key: ValueKey('text-$label'),
+        value: value,
+        min: min,
+        max: max,
+        onChanged: change,
+      )),
+      SizedBox(
+          width: 40,
+          child: Text(
+            label == 'Size'
+                ? value.round().toString()
+                : value.toStringAsFixed(2),
+            style: context.textTheme.labelSmall,
+            textAlign: TextAlign.right,
+          )),
+    ]);
   }
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Text content editor
-        TextField(
-          controller: _textController,
-          maxLines: 2,
-          minLines: 1,
-          style: context.textTheme.bodyMedium,
-          decoration: InputDecoration(
-            hintText: 'Text content...',
-            hintStyle: const TextStyle(color: AppTheme.textDisabled),
-            filled: true,
-            fillColor: AppTheme.surfaceVariant,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
-              borderSide: BorderSide.none,
-            ),
-            contentPadding: const EdgeInsets.all(10),
-          ),
-          onChanged: (_) => _updateTextStyle(),
-        ),
-        const SizedBox(height: 10),
-
-        // Font picker dropdown
-        Row(
-          children: [
-            SizedBox(
-              width: 60,
-              child: Text('Font', style: context.textTheme.bodySmall),
-            ),
-            Expanded(
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8),
-                decoration: BoxDecoration(
-                  color: AppTheme.surfaceVariant,
-                  borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
-                ),
-                child: DropdownButtonHideUnderline(
-                  child: DropdownButton<String>(
-                    value: _selectedFont,
-                    isExpanded: true,
-                    icon: const Icon(
-                      Icons.arrow_drop_down,
-                      size: 16,
-                      color: AppTheme.textSecondary,
-                    ),
-                    style: context.textTheme.bodySmall,
-                    dropdownColor: AppTheme.surfaceVariant,
-                    items: _availableFonts.map((font) {
-                      return DropdownMenuItem<String>(
-                        value: font['family'],
-                        child: Text(
-                          font['name']!,
-                          style: const TextStyle(
-                            color: AppTheme.textPrimary,
-                            fontSize: 12,
-                          ),
-                        ),
-                      );
-                    }).toList(),
-                    onChanged: (value) {
-                      if (value != null) {
-                        setState(() => _selectedFont = value);
-                        _updateTextStyle();
-                      }
-                    },
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-
-        // Font size slider
-        Row(
-          children: [
-            SizedBox(
-              width: 60,
-              child: Text('Size', style: context.textTheme.bodySmall),
-            ),
-            Expanded(
-              child: Slider(
-                value: _fontSize,
-                min: 8.0,
-                max: 120.0,
-                divisions: 56,
-                onChanged: (value) {
-                  setState(() => _fontSize = value);
-                  _updateTextStyle();
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      TextField(
+        key: const ValueKey('text-content'),
+        controller: _textController,
+        maxLines: 4,
+        minLines: 1,
+        maxLength: 16000,
+        style: context.textTheme.bodyMedium,
+        decoration:
+            const InputDecoration(labelText: 'Text content', counterText: ''),
+        onChanged: (_) => _save(),
+      ),
+      const SizedBox(height: 10),
+      DropdownButton<String>(
+        key: const ValueKey('text-font'),
+        value: _selectedFont,
+        isExpanded: true,
+        dropdownColor: AppTheme.surfaceVariant,
+        items: TextClipProperties.supportedFonts
+            .map((font) => DropdownMenuItem(
+                  value: font['family'],
+                  child: Text(font['name']!),
+                ))
+            .toList(),
+        onChanged: (font) {
+          if (font == null) return;
+          setState(() => _selectedFont = font);
+          _save();
+        },
+      ),
+      _slider('Size', _fontSize, 8, 512, (size) {
+        setState(() => _fontSize = size);
+        _save();
+      }),
+      const SizedBox(height: 8),
+      Wrap(
+          spacing: 5,
+          runSpacing: 5,
+          children: _colors.map((hex) {
+            final selected = _selectedColor == hex;
+            return Semantics(
+              label: 'Text color $hex',
+              selected: selected,
+              button: true,
+              child: GestureDetector(
+                key: ValueKey('text-color-$hex'),
+                onTap: () {
+                  setState(() => _selectedColor = hex);
+                  _save();
                 },
+                child: Container(
+                    width: 24,
+                    height: 24,
+                    decoration: BoxDecoration(
+                      color:
+                          Color(int.parse('FF${hex.substring(1)}', radix: 16)),
+                      borderRadius: BorderRadius.circular(3),
+                      border: Border.all(
+                          color: selected ? AppTheme.primary : AppTheme.border,
+                          width: selected ? 2 : 1),
+                    )),
               ),
-            ),
-            SizedBox(
-              width: 36,
-              child: Text(
-                _fontSize.round().toString(),
-                style: context.textTheme.labelSmall?.copyWith(
-                  fontFamily: 'monospace',
-                  color: AppTheme.textPrimary,
-                ),
-                textAlign: TextAlign.right,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-
-        // Color picker (simple preset colors)
-        Row(
-          children: [
-            SizedBox(
-              width: 60,
-              child: Text('Color', style: context.textTheme.bodySmall),
-            ),
-            Expanded(
-              child: Wrap(
-                spacing: 4,
-                runSpacing: 4,
-                children: _presetColors.map((color) {
-                  final hex = color['hex']!;
-                  final isSelected = _selectedColor == hex;
-                  return GestureDetector(
-                    onTap: () {
-                      setState(() => _selectedColor = hex);
-                      _updateTextStyle();
-                    },
-                    child: Container(
-                      width: 22,
-                      height: 22,
-                      decoration: BoxDecoration(
-                        color: _parseHexColor(hex),
-                        borderRadius: BorderRadius.circular(3),
-                        border: Border.all(
-                          color: isSelected
-                              ? AppTheme.primary
-                              : const Color(0xFF2A2A3E),
-                          width: isSelected ? 2 : 1,
-                        ),
-                      ),
-                    ),
-                  );
-                }).toList(),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-
-        // Animation dropdown
-        Row(
-          children: [
-            SizedBox(
-              width: 60,
-              child: Text('Animate', style: context.textTheme.bodySmall),
-            ),
-            Expanded(
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8),
-                decoration: BoxDecoration(
-                  color: AppTheme.surfaceVariant,
-                  borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
-                ),
-                child: DropdownButtonHideUnderline(
-                  child: DropdownButton<String>(
-                    value: _selectedAnimation,
-                    isExpanded: true,
-                    icon: const Icon(
-                      Icons.animation,
-                      size: 14,
-                      color: AppTheme.textSecondary,
-                    ),
-                    style: context.textTheme.bodySmall,
-                    dropdownColor: AppTheme.surfaceVariant,
-                    items: _animations.map((anim) {
-                      return DropdownMenuItem<String>(
-                        value: anim,
-                        child: Text(
-                          anim,
-                          style: const TextStyle(
-                            color: AppTheme.textPrimary,
-                            fontSize: 12,
-                          ),
-                        ),
-                      );
-                    }).toList(),
-                    onChanged: (value) {
-                      if (value != null) {
-                        setState(() => _selectedAnimation = value);
-                      }
-                    },
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-
-        // Position X/Y fields
-        Row(
-          children: [
-            SizedBox(
-              width: 60,
-              child: Text('Pos X', style: context.textTheme.bodySmall),
-            ),
-            Expanded(
-              child: Slider(
-                value: _positionX,
-                min: 0.0,
-                max: 1.0,
-                divisions: 100,
-                onChanged: (value) {
-                  setState(() => _positionX = value);
-                },
-                onChangeEnd: (_) => _updateTextPosition(),
-              ),
-            ),
-            SizedBox(
-              width: 36,
-              child: Text(
-                _positionX.toStringAsFixed(2),
-                style: context.textTheme.labelSmall?.copyWith(
-                  fontFamily: 'monospace',
-                  color: AppTheme.textPrimary,
-                ),
-                textAlign: TextAlign.right,
-              ),
-            ),
-          ],
-        ),
-        Row(
-          children: [
-            SizedBox(
-              width: 60,
-              child: Text('Pos Y', style: context.textTheme.bodySmall),
-            ),
-            Expanded(
-              child: Slider(
-                value: _positionY,
-                min: 0.0,
-                max: 1.0,
-                divisions: 100,
-                onChanged: (value) {
-                  setState(() => _positionY = value);
-                },
-                onChangeEnd: (_) => _updateTextPosition(),
-              ),
-            ),
-            SizedBox(
-              width: 36,
-              child: Text(
-                _positionY.toStringAsFixed(2),
-                style: context.textTheme.labelSmall?.copyWith(
-                  fontFamily: 'monospace',
-                  color: AppTheme.textPrimary,
-                ),
-                textAlign: TextAlign.right,
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
+            );
+          }).toList()),
+      const SizedBox(height: 8),
+      _slider('Pos X', _positionX, 0, 1, (value) {
+        setState(() => _positionX = value);
+        _save(positionOnly: true);
+      }),
+      _slider('Pos Y', _positionY, 0, 1, (value) {
+        setState(() => _positionY = value);
+        _save(positionOnly: true);
+      }),
+    ]);
   }
 }
 
@@ -2230,146 +2037,6 @@ class _KeyframePropertyConfig {
 }
 
 // ─── Color Grading Section ──────────────────────────────────────────────
-
-/// Inspector section for color grading (lift/gamma/gain wheels).
-///
-/// When the user adjusts any wheel, the values are applied as effects
-/// to the selected clip:
-/// - Lift R/G/B → "color_lift" effect parameters
-/// - Gamma R/G/B → "color_gamma" effect parameters
-/// - Gain R/G/B → "color_gain" effect parameters
-///
-/// Since the engine may not have dedicated "color_lift"/"color_gamma"/
-/// "color_gain" filter types, we fall back to using "Brightness" for
-/// the master adjustment and "Temperature" for the color tint of each
-/// wheel. The effect IDs are cached so we only add them once.
-class _ColorGradingSection extends ConsumerStatefulWidget {
-  const _ColorGradingSection({required this.clipId});
-  final String clipId;
-
-  @override
-  ConsumerState<_ColorGradingSection> createState() =>
-      _ColorGradingSectionState();
-}
-
-class _ColorGradingSectionState extends ConsumerState<_ColorGradingSection> {
-  ColorGradeValues _values = ColorGradeValues.neutral;
-
-  // Cached effect IDs for the three color grading wheels.
-  // Null means the effect hasn't been added yet.
-  String? _liftEffectId;
-  String? _gammaEffectId;
-  String? _gainEffectId;
-
-  @override
-  Widget build(BuildContext context) {
-    return ColorGradingPanel(
-      initialValues: _values,
-      onChanged: _onColorGradeChanged,
-    );
-  }
-
-  /// Called when the user adjusts any color grading wheel.
-  void _onColorGradeChanged(ColorGradeValues newValues) {
-    setState(() => _values = newValues);
-    _applyColorGradeToEngine(newValues);
-  }
-
-  /// Apply the color grade values to the engine as effects.
-  ///
-  /// For each wheel (lift, gamma, gain):
-  /// - The master value maps to a "Brightness" effect parameter.
-  /// - The hue/saturation tint maps to a "Temperature" effect parameter.
-  ///
-  /// We try to add a "color_lift"/"color_gamma"/"color_gain" effect first.
-  /// If those filter types don't exist in the engine, we fall back to
-  /// using "Brightness" and "Temperature" effects.
-  Future<void> _applyColorGradeToEngine(ColorGradeValues values) async {
-    final rgbOffsets = values.toRgbOffsets();
-
-    // ── Lift ──
-    await _ensureEffect(
-      effectIdGetter: () => _liftEffectId,
-      effectIdSetter: (id) => _liftEffectId = id,
-      preferredName: 'color_lift',
-      fallbackName: 'Brightness',
-      parameters: {
-        'lift_r': rgbOffsets['lift']![0],
-        'lift_g': rgbOffsets['lift']![1],
-        'lift_b': rgbOffsets['lift']![2],
-        'brightness': values.liftMaster,
-      },
-    );
-
-    // ── Gamma ──
-    await _ensureEffect(
-      effectIdGetter: () => _gammaEffectId,
-      effectIdSetter: (id) => _gammaEffectId = id,
-      preferredName: 'color_gamma',
-      fallbackName: 'Contrast',
-      parameters: {
-        'gamma_r': rgbOffsets['gamma']![0],
-        'gamma_g': rgbOffsets['gamma']![1],
-        'gamma_b': rgbOffsets['gamma']![2],
-        'contrast': values.gammaMaster,
-      },
-    );
-
-    // ── Gain ──
-    await _ensureEffect(
-      effectIdGetter: () => _gainEffectId,
-      effectIdSetter: (id) => _gainEffectId = id,
-      preferredName: 'color_gain',
-      fallbackName: 'Saturation',
-      parameters: {
-        'gain_r': rgbOffsets['gain']![0],
-        'gain_g': rgbOffsets['gain']![1],
-        'gain_b': rgbOffsets['gain']![2],
-        'saturation': 1.0 + values.gainMaster,
-      },
-    );
-  }
-
-  /// Ensure an effect exists on the clip, adding it if needed.
-  /// Then set all [parameters] on it.
-  Future<void> _ensureEffect({
-    required String? Function() effectIdGetter,
-    required void Function(String) effectIdSetter,
-    required String preferredName,
-    required String fallbackName,
-    required Map<String, double> parameters,
-  }) async {
-    var effectId = effectIdGetter();
-
-    // Add the effect if it doesn't exist yet.
-    if (effectId == null) {
-      // Try preferred name first (e.g. "color_lift").
-      var id = await ref.read(editorProvider.notifier).addEffect(preferredName);
-      id ??= await ref.read(editorProvider.notifier).addEffect(fallbackName);
-      if (id != null) {
-        effectIdSetter(id);
-        effectId = id;
-      }
-    }
-
-    // Set parameters on the effect.
-    if (effectId != null) {
-      for (final entry in parameters.entries) {
-        // The provider's setEffectParameter catches errors internally,
-        // so we don't need try/catch here. If a parameter name doesn't
-        // exist on the effect type (e.g. "lift_r" on a Brightness
-        // effect), the engine will log an error but won't crash.
-        await ref.read(editorProvider.notifier).setEffectParameter(
-              effectId,
-              entry.key,
-              entry.value,
-            );
-      }
-    }
-  }
-}
-
-// ─── Crop & Transform Section ───────────────────────────────────────────
 
 /// Inspector section for crop and transform operations.
 ///

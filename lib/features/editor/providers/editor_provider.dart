@@ -5,11 +5,14 @@ import 'dart:developer' as developer;
 // reference them without knowing the bridge internals.
 import 'package:editors_pro/src/rust/api/bridge_api.dart'
     show
+        EditorsProEngineApi,
         BridgeProjectSettings,
         BridgeSpeedCurve,
         BridgeSpeedSegment,
         ClipInfo,
         EffectInfo,
+        FilterTypeInfo,
+        FilterPresetInfo,
         FontInfo,
         GpuInfo,
         MediaAssetInfo,
@@ -30,6 +33,7 @@ class EditorState {
     this.isPlaying = false,
     this.currentTimeMs = 0,
     this.durationMs = 0,
+    this.renderRevision = 0,
     this.zoomLevel = 1.0,
     this.isImporting = false,
     this.isExporting = false,
@@ -54,6 +58,7 @@ class EditorState {
   final bool isPlaying;
   final int currentTimeMs;
   final int durationMs;
+  final int renderRevision;
   final double zoomLevel;
   final bool isImporting;
   final bool isExporting;
@@ -95,16 +100,19 @@ class EditorState {
   /// Phase F.2: whether the audio meter bridge is visible at the bottom.
   final bool showAudioMeterBridge;
 
+  static const Object _selectionUnchanged = Object();
+
   EditorState copyWith({
     bool? isPlaying,
     int? currentTimeMs,
     int? durationMs,
+    int? renderRevision,
     double? zoomLevel,
     bool? isImporting,
     bool? isExporting,
     double? exportProgress,
-    String? selectedClipId,
-    String? selectedTrackId,
+    Object? selectedClipId = _selectionUnchanged,
+    Object? selectedTrackId = _selectionUnchanged,
     LeftPanelTab? leftPanelTab,
     bool? showInspector,
     double? playbackSpeed,
@@ -126,12 +134,17 @@ class EditorState {
       isPlaying: isPlaying ?? this.isPlaying,
       currentTimeMs: currentTimeMs ?? this.currentTimeMs,
       durationMs: durationMs ?? this.durationMs,
+      renderRevision: renderRevision ?? this.renderRevision,
       zoomLevel: zoomLevel ?? this.zoomLevel,
       isImporting: isImporting ?? this.isImporting,
       isExporting: isExporting ?? this.isExporting,
       exportProgress: exportProgress ?? this.exportProgress,
-      selectedClipId: selectedClipId,
-      selectedTrackId: selectedTrackId,
+      selectedClipId: identical(selectedClipId, _selectionUnchanged)
+          ? this.selectedClipId
+          : selectedClipId as String?,
+      selectedTrackId: identical(selectedTrackId, _selectionUnchanged)
+          ? this.selectedTrackId
+          : selectedTrackId as String?,
       leftPanelTab: leftPanelTab ?? this.leftPanelTab,
       showInspector: showInspector ?? this.showInspector,
       playbackSpeed: playbackSpeed ?? this.playbackSpeed,
@@ -190,7 +203,11 @@ enum LeftPanelTab {
 /// - Clip drag-and-move via engine bridge
 /// - Project save/load integration
 class EditorNotifier extends StateNotifier<EditorState> {
-  EditorNotifier(this._ref) : super(const EditorState());
+  EditorNotifier(this._ref, {EditorsProEngineApi? engineApi})
+      : _injectedApi = engineApi,
+        super(const EditorState());
+  final EditorsProEngineApi? _injectedApi;
+  EditorsProEngineApi get _api => _injectedApi ?? EngineService.instance.api;
   Timer? _playbackTimer;
   DateTime? _lastFrameTime;
   final Ref _ref;
@@ -208,7 +225,7 @@ class EditorNotifier extends StateNotifier<EditorState> {
   }
 
   /// Whether the engine is available for use.
-  bool get _engineReady => EngineService.instance.isInitialized;
+  bool get _engineReady => _injectedApi != null || EngineService.instance.isInitialized;
 
   /// Initialize the editor state from the engine.
   Future<void> initialize() async {
@@ -331,6 +348,7 @@ class EditorNotifier extends StateNotifier<EditorState> {
   void selectClip(String? clipId) {
     state = state.copyWith(
       selectedClipId: clipId,
+      selectedTrackId: null,
       showInspector: clipId != null,
     );
   }
@@ -338,6 +356,7 @@ class EditorNotifier extends StateNotifier<EditorState> {
   /// Select a track
   void selectTrack(String? trackId) {
     state = state.copyWith(
+      selectedClipId: null,
       selectedTrackId: trackId,
       showInspector: trackId != null,
     );
@@ -414,7 +433,7 @@ class EditorNotifier extends StateNotifier<EditorState> {
   Future<void> undo() async {
     if (!_engineReady) return;
     try {
-      final api = EngineService.instance.api;
+      final api = _api;
       await api.undo();
       await _syncDurationFromEngine();
       await _ref.read(projectProvider.notifier).syncFromEngine();
@@ -428,7 +447,7 @@ class EditorNotifier extends StateNotifier<EditorState> {
   Future<void> redo() async {
     if (!_engineReady) return;
     try {
-      final api = EngineService.instance.api;
+      final api = _api;
       await api.redo();
       await _syncDurationFromEngine();
       await _ref.read(projectProvider.notifier).syncFromEngine();
@@ -438,25 +457,76 @@ class EditorNotifier extends StateNotifier<EditorState> {
     }
   }
 
-  /// Split the currently selected clip at the playhead via the Rust engine.
+  ({TrackModel track, ClipModel clip})? _editableClip(String? clipId) {
+    if (!_engineReady) {
+      state = state.copyWith(lastError: 'The editing engine is not ready. Reopen the project.');
+      return null;
+    }
+    final project = _ref.read(currentProjectProvider);
+    for (final track in project?.tracks ?? <TrackModel>[]) {
+      for (final clip in track.clips) {
+        if (clip.id != clipId) continue;
+        if (track.locked || clip.locked) {
+          state = state.copyWith(lastError: 'Clip or track is locked. Unlock it before editing.');
+          return null;
+        }
+        return (track: track, clip: clip);
+      }
+    }
+    state = state.copyWith(lastError: 'Select a clip to edit.');
+    return null;
+  }
+
+  Future<void> _finishClipEdit({String? selectedClipId, bool clearSelection = false}) async {
+    state = state.copyWith(clearError: true,
+      selectedClipId: clearSelection ? null : selectedClipId ?? state.selectedClipId,
+      selectedTrackId: null, showInspector: !clearSelection);
+    await _syncDurationFromEngine();
+    _refreshEngineState();
+    await _ref.read(projectProvider.notifier).syncFromEngine();
+    notifyRenderChanged();
+  }
+
+  /// Cut at the playhead and select the actual resulting right-hand clip.
   Future<void> splitAtPlayhead() async {
-    if (!_engineReady) return;
-    final clipId = state.selectedClipId;
-    if (clipId == null) return;
+    final selected = _editableClip(state.selectedClipId);
+    if (selected == null) return;
+    final clip = selected.clip;
+    if (state.currentTimeMs <= clip.startMs || state.currentTimeMs >= clip.startMs + clip.durationMs) {
+      state = state.copyWith(lastError: 'Move the playhead inside the selected clip to split.');
+      return;
+    }
     try {
-      final api = EngineService.instance.api;
-      await api.splitClip(
-        clipId: clipId,
-        timeMs: BigInt.from(state.currentTimeMs),
-      );
-      await _syncDurationFromEngine();
-      _refreshEngineState();
-      await _ref.read(projectProvider.notifier).syncFromEngine();
+      final (_, right) = await _api.splitClip(clipId: clip.id, timeMs: BigInt.from(state.currentTimeMs));
+      await _finishClipEdit(selectedClipId: right.id);
     } catch (e) {
-      developer.log('splitAtPlayhead failed: $e', name: 'EditorNotifier');
       state = state.copyWith(lastError: 'Split failed: $e');
     }
   }
+
+  Future<void> _editSelectedClip(String operation) async {
+    final selected = _editableClip(state.selectedClipId);
+    if (selected == null) return;
+    final clip = selected.clip;
+    if ((operation == 'trim_in' || operation == 'trim_out') &&
+        (state.currentTimeMs <= clip.startMs || state.currentTimeMs >= clip.startMs + clip.durationMs)) {
+      state = state.copyWith(lastError: 'Move the playhead inside the selected clip to trim.');
+      return;
+    }
+    try {
+      final result = await _api.editClip(clipId: clip.id, operation: operation,
+          timeMs: operation.startsWith('trim_') ? BigInt.from(state.currentTimeMs) : null);
+      await _finishClipEdit(selectedClipId: result?.id, clearSelection: operation == 'ripple_delete');
+      if (result != null && operation == 'duplicate') seekTo(result.startMs);
+    } catch (e) {
+      state = state.copyWith(lastError: 'Could not edit clip: $e');
+    }
+  }
+
+  Future<void> duplicateSelected() => _editSelectedClip('duplicate');
+  Future<void> rippleDeleteSelected() => _editSelectedClip('ripple_delete');
+  Future<void> trimSelectedInAtPlayhead() => _editSelectedClip('trim_in');
+  Future<void> trimSelectedOutAtPlayhead() => _editSelectedClip('trim_out');
 
   /// Delete the currently selected clip via the Rust engine.
   Future<void> deleteSelected() async {
@@ -482,9 +552,13 @@ class EditorNotifier extends StateNotifier<EditorState> {
     }
 
     try {
-      final api = EngineService.instance.api;
+      final api = _api;
       await api.removeClip(clipId: clipId);
-      state = state.copyWith(selectedClipId: null, showInspector: false);
+      state = state.copyWith(
+        selectedClipId: null,
+        selectedTrackId: null,
+        showInspector: false,
+      );
       await _syncDurationFromEngine();
       _refreshEngineState();
       await _ref.read(projectProvider.notifier).syncFromEngine();
@@ -498,7 +572,7 @@ class EditorNotifier extends StateNotifier<EditorState> {
   Future<MediaAssetInfo?> importMedia(String filePath) async {
     if (!_engineReady) return null;
     try {
-      final api = EngineService.instance.api;
+      final api = _api;
       final assetInfo = await api.importMedia(filePath: filePath);
       await _syncDurationFromEngine();
       _refreshEngineState();
@@ -519,7 +593,7 @@ class EditorNotifier extends StateNotifier<EditorState> {
   }) async {
     if (!_engineReady) return null;
     try {
-      final api = EngineService.instance.api;
+      final api = _api;
       final clipInfo = await api.addClip(
         trackId: trackId,
         assetId: assetId,
@@ -546,7 +620,7 @@ class EditorNotifier extends StateNotifier<EditorState> {
   }) async {
     if (!_engineReady) return;
     try {
-      final api = EngineService.instance.api;
+      final api = _api;
       await api.moveClip(
         clipId: clipId,
         newStartMs: BigInt.from(newStartMs),
@@ -567,16 +641,15 @@ class EditorNotifier extends StateNotifier<EditorState> {
     required int trimStartMs,
     required int trimEndMs,
   }) async {
-    if (!_engineReady) return;
+    if (_editableClip(clipId) == null) return;
     try {
-      final api = EngineService.instance.api;
+      final api = _api;
       await api.trimClip(
         clipId: clipId,
         trimStartMs: BigInt.from(trimStartMs),
         trimEndMs: BigInt.from(trimEndMs),
       );
-      await _syncDurationFromEngine();
-      _refreshEngineState();
+      await _finishClipEdit(selectedClipId: clipId);
     } catch (e) {
       developer.log('trimClip failed: $e', name: 'EditorNotifier');
       state = state.copyWith(lastError: 'Trim clip failed: $e');
@@ -592,7 +665,7 @@ class EditorNotifier extends StateNotifier<EditorState> {
   }) async {
     if (!_engineReady) return null;
     try {
-      final api = EngineService.instance.api;
+      final api = _api;
 
       BridgeProjectSettings? settings;
       if (width != null || height != null || fps != null) {
@@ -619,7 +692,7 @@ class EditorNotifier extends StateNotifier<EditorState> {
   Future<void> saveProject({required String filePath}) async {
     if (!_engineReady) return;
     try {
-      final api = EngineService.instance.api;
+      final api = _api;
       await api.saveProject(filePath: filePath);
     } catch (e) {
       developer.log('saveProject failed: $e', name: 'EditorNotifier');
@@ -631,7 +704,7 @@ class EditorNotifier extends StateNotifier<EditorState> {
   Future<void> loadProject({required String filePath}) async {
     if (!_engineReady) return;
     try {
-      final api = EngineService.instance.api;
+      final api = _api;
       await api.loadProject(filePath: filePath);
       await _syncDurationFromEngine();
       _refreshEngineState();
@@ -647,7 +720,7 @@ class EditorNotifier extends StateNotifier<EditorState> {
   Future<void> setTrackVolume(String trackId, double volume) async {
     if (!_engineReady) return;
     try {
-      final api = EngineService.instance.api;
+      final api = _api;
       await api.setTrackVolume(trackId: trackId, volume: volume);
       _refreshEngineState();
     } catch (e) {
@@ -660,7 +733,7 @@ class EditorNotifier extends StateNotifier<EditorState> {
   Future<void> toggleTrackVisibility(String trackId) async {
     if (!_engineReady) return;
     try {
-      final api = EngineService.instance.api;
+      final api = _api;
       await api.toggleTrackVisibility(trackId: trackId);
       _refreshEngineState();
     } catch (e) {
@@ -673,7 +746,7 @@ class EditorNotifier extends StateNotifier<EditorState> {
   Future<List<double>> getWaveform(String assetId, {int numBins = 200}) async {
     if (!_engineReady) return [];
     try {
-      final api = EngineService.instance.api;
+      final api = _api;
       final peaks = await api.getWaveform(assetId: assetId, numBins: numBins);
       return peaks.map((e) => e.toDouble()).toList();
     } catch (e) {
@@ -690,7 +763,7 @@ class EditorNotifier extends StateNotifier<EditorState> {
   }) async {
     if (!_engineReady) return;
     try {
-      final api = EngineService.instance.api;
+      final api = _api;
       await api.setDucking(
         trackId: trackId,
         enabled: enabled,
@@ -706,7 +779,7 @@ class EditorNotifier extends StateNotifier<EditorState> {
   Future<dynamic> getTimelineState() async {
     if (!_engineReady) return null;
     try {
-      final api = EngineService.instance.api;
+      final api = _api;
       return await api.getTimelineState();
     } catch (e) {
       developer.log('getTimelineState failed: $e', name: 'EditorNotifier');
@@ -716,120 +789,147 @@ class EditorNotifier extends StateNotifier<EditorState> {
 
   // ─── Effect Bridge Operations ──────────────────────────────────────
 
-  /// Add a filter effect to the selected clip.
+  /// Refresh the rendered image and durable project after a successful mutation.
+  void _effectError(String message) {
+    state = state.copyWith(
+        lastError: message,
+        selectedClipId: state.selectedClipId,
+        selectedTrackId: state.selectedTrackId);
+  }
+
+  Future<void> _effectsChanged() async {
+    state = state.copyWith(
+        clearError: true,
+        selectedClipId: state.selectedClipId,
+        selectedTrackId: state.selectedTrackId);
+    notifyRenderChanged();
+    _refreshEngineState();
+    await _ref.read(projectProvider.notifier).syncFromEngine();
+  }
+
   Future<String?> addEffect(String filterTypeName) async {
-    if (!_engineReady) return null;
-    final clipId = state.selectedClipId;
-    if (clipId == null) return null;
+    if (!_engineReady || state.selectedClipId == null) return null;
     try {
-      final api = EngineService.instance.api;
-      final effectInfo = await api.addEffect(
-        clipId: clipId,
-        filterTypeName: filterTypeName,
-      );
-      _refreshEngineState();
-      return effectInfo.id;
+      final effect = await _api.addEffect(
+          clipId: state.selectedClipId!, filterTypeName: filterTypeName);
+      await _effectsChanged();
+      return effect.id;
     } catch (e) {
-      developer.log('addEffect failed: $e', name: 'EditorNotifier');
-      state = state.copyWith(lastError: 'Add effect failed: $e');
+      _effectError('Add effect failed: $e');
       return null;
     }
   }
 
-  /// Remove an effect from the selected clip.
-  Future<void> removeEffect(String effectId) async {
-    if (!_engineReady) return;
+  Future<bool> removeEffect(String effectId) async {
+    if (!_engineReady || state.selectedClipId == null) return false;
+    try {
+      await _api
+          .removeEffect(clipId: state.selectedClipId!, effectId: effectId);
+      await _effectsChanged();
+      return true;
+    } catch (e) {
+      _effectError('Remove effect failed: $e');
+      return false;
+    }
+  }
+
+  Future<bool> setEffectParameter(
+      String effectId, String paramName, double value) async {
+    if (!_engineReady || state.selectedClipId == null) return false;
+    try {
+      await _api.setEffectParameter(
+          clipId: state.selectedClipId!,
+          effectId: effectId,
+          paramName: paramName,
+          value: value);
+      await _effectsChanged();
+      return true;
+    } catch (e) {
+      _effectError('Set parameter failed: $e');
+      return false;
+    }
+  }
+
+  Future<bool> toggleEffect(String effectId) async {
+    if (!_engineReady || state.selectedClipId == null) return false;
+    try {
+      await _api
+          .toggleEffect(clipId: state.selectedClipId!, effectId: effectId);
+      await _effectsChanged();
+      return true;
+    } catch (e) {
+      _effectError('Toggle effect failed: $e');
+      return false;
+    }
+  }
+
+  Future<List<FilterTypeInfo>> getFilterCatalog() async {
+    if (!_engineReady) throw StateError('Editing engine is not ready');
+    return _api.getFilterCatalog();
+  }
+
+  Future<List<FilterPresetInfo>> getFilterPresets() async {
+    if (!_engineReady) throw StateError('Editing engine is not ready');
+    return _api.getFilterPresets();
+  }
+
+  Future<List<EffectInfo>> getSelectedClipEffects() async {
+    if (!_engineReady) throw StateError('Editing engine is not ready');
     final clipId = state.selectedClipId;
-    if (clipId == null) return;
+    if (clipId == null) return [];
+    return _api.getClipEffects(clipId: clipId);
+  }
+
+  Future<bool> applyFilterPreset(String presetId) => setFilterLook(presetId);
+
+  Future<bool> setFilterLook(String presetId,
+      {double intensity = 1, bool enabled = true}) async {
+    if (!_engineReady || state.selectedClipId == null) {
+      _effectError('Select a clip in an initialized editor');
+      return false;
+    }
     try {
-      final api = EngineService.instance.api;
-      await api.removeEffect(clipId: clipId, effectId: effectId);
-      _refreshEngineState();
+      await _api.setFilterLook(
+          clipId: state.selectedClipId!,
+          presetId: presetId,
+          intensity: intensity,
+          enabled: enabled);
+      _focusSelectedVisualClip();
+      await _effectsChanged();
+      return true;
     } catch (e) {
-      developer.log('removeEffect failed: $e', name: 'EditorNotifier');
-      state = state.copyWith(lastError: 'Remove effect failed: $e');
+      _effectError('Apply look failed: $e');
+      return false;
     }
   }
 
-  /// Set a parameter value for an effect on the selected clip.
-  Future<void> setEffectParameter(
-    String effectId,
-    String paramName,
-    double value,
-  ) async {
-    if (!_engineReady) return;
-    final clipId = state.selectedClipId;
-    if (clipId == null) return;
-    try {
-      final api = EngineService.instance.api;
-      await api.setEffectParameter(
-        clipId: clipId,
-        effectId: effectId,
-        paramName: paramName,
-        value: value,
-      );
-      _refreshEngineState();
-    } catch (e) {
-      developer.log('setEffectParameter failed: $e', name: 'EditorNotifier');
-      state = state.copyWith(lastError: 'Set parameter failed: $e');
+  void _focusSelectedVisualClip() {
+    final project = _ref.read(currentProjectProvider);
+    for (final track in project?.tracks ?? <TrackModel>[]) {
+      for (final clip in track.clips) {
+        if (clip.id != state.selectedClipId) continue;
+        if (state.currentTimeMs < clip.startMs || state.currentTimeMs >= clip.startMs + clip.durationMs) {
+          if (state.isPlaying) _stopPlayback();
+          seekTo(clip.startMs);
+        }
+        return;
+      }
     }
   }
 
-  /// Toggle the enabled/disabled state of an effect.
-  Future<void> toggleEffect(String effectId) async {
-    if (!_engineReady) return;
-    final clipId = state.selectedClipId;
-    if (clipId == null) return;
+  Future<bool> applyUserLook(String recipeJson) async {
+    final selected = _editableClip(state.selectedClipId);
+    if (selected == null || selected.track.trackType != TrackType.video) return false;
     try {
-      final api = EngineService.instance.api;
-      await api.toggleEffect(clipId: clipId, effectId: effectId);
-      _refreshEngineState();
-    } catch (e) {
-      developer.log('toggleEffect failed: $e', name: 'EditorNotifier');
-      state = state.copyWith(lastError: 'Toggle effect failed: $e');
+      await _api.applyEffectRecipe(clipId: selected.clip.id, recipeJson: recipeJson);
+      _focusSelectedVisualClip();
+      await _effectsChanged();
+      return true;
+    } catch (error) {
+      _effectError('Could not apply saved look: $error');
+      return false;
     }
   }
-
-  /// Get the filter catalog from the engine.
-  Future<List<dynamic>> getFilterCatalog() async {
-    if (!_engineReady) return [];
-    try {
-      final api = EngineService.instance.api;
-      return await api.getFilterCatalog();
-    } catch (e) {
-      developer.log('getFilterCatalog failed: $e', name: 'EditorNotifier');
-      return [];
-    }
-  }
-
-  /// Get the filter presets from the engine.
-  Future<List<dynamic>> getFilterPresets() async {
-    if (!_engineReady) return [];
-    try {
-      final api = EngineService.instance.api;
-      return await api.getFilterPresets();
-    } catch (e) {
-      developer.log('getFilterPresets failed: $e', name: 'EditorNotifier');
-      return [];
-    }
-  }
-
-  /// Apply a filter preset to the selected clip.
-  Future<void> applyFilterPreset(String presetId) async {
-    if (!_engineReady) return;
-    final clipId = state.selectedClipId;
-    if (clipId == null) return;
-    try {
-      final api = EngineService.instance.api;
-      await api.applyFilterPreset(clipId: clipId, presetId: presetId);
-      _refreshEngineState();
-    } catch (e) {
-      developer.log('applyFilterPreset failed: $e', name: 'EditorNotifier');
-      state = state.copyWith(lastError: 'Apply preset failed: $e');
-    }
-  }
-
-  // ─── Transition Bridge Operations ──────────────────────────────────
 
   /// Add a transition to the selected clip.
   Future<String?> addTransition(
@@ -841,7 +941,7 @@ class EditorNotifier extends StateNotifier<EditorState> {
     final clipId = state.selectedClipId;
     if (clipId == null) return null;
     try {
-      final api = EngineService.instance.api;
+      final api = _api;
       final info = await api.addTransition(
         clipId: clipId,
         transitionType: transitionType,
@@ -863,7 +963,7 @@ class EditorNotifier extends StateNotifier<EditorState> {
     final clipId = state.selectedClipId;
     if (clipId == null) return;
     try {
-      final api = EngineService.instance.api;
+      final api = _api;
       await api.removeTransition(clipId: clipId, direction: direction);
       _refreshEngineState();
     } catch (e) {
@@ -876,7 +976,7 @@ class EditorNotifier extends StateNotifier<EditorState> {
   Future<List<dynamic>> getTransitionCatalog() async {
     if (!_engineReady) return [];
     try {
-      final api = EngineService.instance.api;
+      final api = _api;
       return await api.getTransitionCatalog();
     } catch (e) {
       developer.log('getTransitionCatalog failed: $e', name: 'EditorNotifier');
@@ -900,7 +1000,7 @@ class EditorNotifier extends StateNotifier<EditorState> {
   }) async {
     if (!_engineReady) return null;
     try {
-      final api = EngineService.instance.api;
+      final api = _api;
       final clipInfo = await api.addTextClip(
         trackId: trackId,
         text: text,
@@ -915,6 +1015,7 @@ class EditorNotifier extends StateNotifier<EditorState> {
       await _syncDurationFromEngine();
       _refreshEngineState();
       await _ref.read(projectProvider.notifier).syncFromEngine();
+      notifyRenderChanged();
       return clipInfo;
     } catch (e) {
       developer.log('addTextClip failed: $e', name: 'EditorNotifier');
@@ -923,55 +1024,99 @@ class EditorNotifier extends StateNotifier<EditorState> {
     }
   }
 
-  /// Update the position of a text overlay clip.
+  /// Invalidates rendered frames after an authoritative native mutation.
+  void notifyRenderChanged() {
+    state = state.copyWith(
+      renderRevision: state.renderRevision + 1,
+      selectedClipId: state.selectedClipId,
+      selectedTrackId: state.selectedTrackId,
+    );
+  }
+
+  Future<void> _textMutationQueue = Future<void>.value();
+  Object? _textEditFailure;
+
+  /// Save/export/project transitions wait for edits already accepted by the UI.
+  Future<void> flushPendingTextEdits() async {
+    await _textMutationQueue;
+    if (_textEditFailure != null) {
+      throw StateError('Pending text edits were not saved: $_textEditFailure');
+    }
+  }
+
+  /// Serialize partial updates so rapid typing/sliders cannot restore stale data.
+  Future<bool> updateTextOverlay({
+    required String clipId,
+    String? content,
+    String? fontFamily,
+    double? fontSize,
+    String? colorHex,
+    double? positionX,
+    double? positionY,
+  }) {
+    final result = Completer<bool>();
+    _textMutationQueue = _textMutationQueue.then((_) async {
+      if (!_engineReady) {
+        _textEditFailure = StateError('The editing engine is not ready.');
+        result.complete(false);
+        return;
+      }
+      try {
+        await _api.updateTextOverlay(
+          clipId: clipId,
+          content: content,
+          fontFamily: fontFamily,
+          fontSize: fontSize,
+          colorHex: colorHex,
+          positionX: positionX,
+          positionY: positionY,
+        );
+        await _ref.read(projectProvider.notifier).syncFromEngine();
+        _refreshEngineState();
+        notifyRenderChanged();
+        _textEditFailure = null;
+        result.complete(true);
+      } catch (error) {
+        _textEditFailure = error;
+        developer.log('Update text failed: $error', name: 'EditorNotifier');
+        state = state.copyWith(
+          lastError: 'Update text failed: $error',
+          selectedClipId: state.selectedClipId,
+          selectedTrackId: state.selectedTrackId,
+        );
+        result.complete(false);
+      }
+    });
+    return result.future;
+  }
+
   Future<void> updateTextPosition({
     required String clipId,
     required double positionX,
     required double positionY,
   }) async {
-    if (!_engineReady) return;
-    try {
-      final api = EngineService.instance.api;
-      await api.setTextPosition(
-        clipId: clipId,
-        positionX: positionX,
-        positionY: positionY,
-      );
-      _refreshEngineState();
-    } catch (e) {
-      developer.log('updateTextPosition failed: $e', name: 'EditorNotifier');
-      state = state.copyWith(lastError: 'Update text position failed: $e');
-    }
+    await updateTextOverlay(
+        clipId: clipId, positionX: positionX, positionY: positionY);
   }
 
-  /// Update the style of a text overlay clip.
   Future<void> updateTextStyle({
     required String clipId,
     required String fontFamily,
     required double fontSize,
     required String colorHex,
   }) async {
-    if (!_engineReady) return;
-    try {
-      final api = EngineService.instance.api;
-      await api.setTextStyle(
+    await updateTextOverlay(
         clipId: clipId,
         fontFamily: fontFamily,
         fontSize: fontSize,
-        colorHex: colorHex,
-      );
-      _refreshEngineState();
-    } catch (e) {
-      developer.log('updateTextStyle failed: $e', name: 'EditorNotifier');
-      state = state.copyWith(lastError: 'Update text style failed: $e');
-    }
+        colorHex: colorHex);
   }
 
   /// Get the list of available fonts from the engine.
   Future<List<FontInfo>> getAvailableFonts() async {
     if (!_engineReady) return [];
     try {
-      final api = EngineService.instance.api;
+      final api = _api;
       return await api.getAvailableFonts();
     } catch (e) {
       developer.log('getAvailableFonts failed: $e', name: 'EditorNotifier');
@@ -983,7 +1128,7 @@ class EditorNotifier extends StateNotifier<EditorState> {
   Future<bool> canUndo() async {
     if (!_engineReady) return false;
     try {
-      final api = EngineService.instance.api;
+      final api = _api;
       return await api.canUndo();
     } catch (e) {
       return false;
@@ -994,7 +1139,7 @@ class EditorNotifier extends StateNotifier<EditorState> {
   Future<bool> canRedo() async {
     if (!_engineReady) return false;
     try {
-      final api = EngineService.instance.api;
+      final api = _api;
       return await api.canRedo();
     } catch (e) {
       return false;
@@ -1007,7 +1152,7 @@ class EditorNotifier extends StateNotifier<EditorState> {
   Future<void> setClipSpeed(String clipId, double speed) async {
     if (!_engineReady) return;
     try {
-      final api = EngineService.instance.api;
+      final api = _api;
       developer.log(
         'setClipSpeed: clipId=$clipId, speed=$speed',
         name: 'EditorNotifier',
@@ -1025,7 +1170,7 @@ class EditorNotifier extends StateNotifier<EditorState> {
   Future<void> setClipSpeedCurve(String clipId, List<dynamic> segments) async {
     if (!_engineReady) return;
     try {
-      final api = EngineService.instance.api;
+      final api = _api;
       developer.log(
         'setClipSpeedCurve: clipId=$clipId, segments=${segments.length}',
         name: 'EditorNotifier',
@@ -1058,7 +1203,7 @@ class EditorNotifier extends StateNotifier<EditorState> {
   ) async {
     if (!_engineReady) return;
     try {
-      final api = EngineService.instance.api;
+      final api = _api;
       await api.addKeyframe(
         clipId: clipId,
         property: property,
@@ -1081,7 +1226,7 @@ class EditorNotifier extends StateNotifier<EditorState> {
   ) async {
     if (!_engineReady) return;
     try {
-      final api = EngineService.instance.api;
+      final api = _api;
       await api.removeKeyframe(
         clipId: clipId,
         property: property,
@@ -1104,7 +1249,7 @@ class EditorNotifier extends StateNotifier<EditorState> {
   }) async {
     if (!_engineReady) return;
     try {
-      final api = EngineService.instance.api;
+      final api = _api;
       await api.updateKeyframe(
         clipId: clipId,
         property: property,
@@ -1123,7 +1268,7 @@ class EditorNotifier extends StateNotifier<EditorState> {
   Future<List<dynamic>> getKeyframes(String clipId, String property) async {
     if (!_engineReady) return [];
     try {
-      final api = EngineService.instance.api;
+      final api = _api;
       return await api.getKeyframes(clipId: clipId, property: property);
     } catch (e) {
       developer.log('getKeyframes failed: $e', name: 'EditorNotifier');
@@ -1143,7 +1288,7 @@ class EditorNotifier extends StateNotifier<EditorState> {
   }) async {
     if (!_engineReady) return;
     try {
-      final api = EngineService.instance.api;
+      final api = _api;
       final timeMs = state.currentTimeMs;
       // Get existing keyframes at this time, or add a new one
       await api.addKeyframe(
@@ -1165,7 +1310,7 @@ class EditorNotifier extends StateNotifier<EditorState> {
   Future<void> _syncDurationFromEngine() async {
     if (!_engineReady) return;
     try {
-      final api = EngineService.instance.api;
+      final api = _api;
       final duration = await api.getTimelineDuration();
       state = state.copyWith(durationMs: duration.toInt());
     } catch (e) {
@@ -1193,7 +1338,7 @@ class EditorNotifier extends StateNotifier<EditorState> {
   Future<void> checkGpuAvailability() async {
     if (!_engineReady) return;
     try {
-      final api = EngineService.instance.api;
+      final api = _api;
       final available = await api.isGpuAvailable();
       final gpuInfo = await api.getGpuInfo();
       state = state.copyWith(
@@ -1219,7 +1364,7 @@ class EditorNotifier extends StateNotifier<EditorState> {
   Future<void> toggleGpuAcceleration(bool enabled) async {
     if (!_engineReady) return;
     try {
-      final api = EngineService.instance.api;
+      final api = _api;
       await api.setGpuAcceleration(enabled: enabled);
       state = state.copyWith(gpuAccelerationEnabled: enabled);
       developer.log(
@@ -1258,7 +1403,7 @@ class EditorNotifier extends StateNotifier<EditorState> {
         softness,
         spillSuppression,
       );
-      _refreshEngineState();
+      await _effectsChanged();
       developer.log(
         'addChromaKeyEffect: clipId=$clipId, targetHue=$targetHue',
         name: 'EditorNotifier',
@@ -1266,7 +1411,7 @@ class EditorNotifier extends StateNotifier<EditorState> {
       return result;
     } catch (e) {
       developer.log('addChromaKeyEffect failed: $e', name: 'EditorNotifier');
-      state = state.copyWith(lastError: 'Add chroma key effect failed: $e');
+      _effectError('Add chroma key effect failed: $e');
       return null;
     }
   }

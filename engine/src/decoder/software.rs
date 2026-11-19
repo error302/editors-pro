@@ -17,6 +17,8 @@ pub struct SoftwareDecoder {
     video_info: Option<VideoInfo>,
     is_open: bool,
     current_position_ms: u64,
+    /// Preserve lookahead when selecting the frame active at a timestamp.
+    pending_frame: Option<FrameData>,
     /// Phase B fix: cache the FFmpeg scaler so we don't recreate it on
     /// every `decode_next_frame()` call. Recreating a scaler per frame
     /// at 30fps = 30 scaler constructions/sec, which is wasteful.
@@ -38,6 +40,7 @@ impl SoftwareDecoder {
             video_info: None,
             is_open: false,
             current_position_ms: 0,
+            pending_frame: None,
             scaler: None,
             scaler_src_format: None,
             scaler_src_width: 0,
@@ -135,6 +138,7 @@ impl SoftwareDecoder {
         self.decoder = Some(decoder);
         self.video_info = Some(video_info);
         self.is_open = true;
+        self.pending_frame = None;
         // Invalidate any cached scaler from a previously-opened file.
         self.scaler = None;
         self.scaler_src_format = None;
@@ -183,17 +187,14 @@ impl SoftwareDecoder {
     /// Seek to a specific timestamp in milliseconds
     pub fn seek_to(&mut self, time_ms: u64) -> Result<(), String> {
         let format_context = self.format_context.as_mut().ok_or("Not open")?;
-        let video_idx = self.video_stream_index.ok_or("No video stream")?;
-        let stream = format_context.stream(video_idx).ok_or("Stream not found")?;
-        let tb = stream.time_base();
-
-        let target =
-            (time_ms as i64 * tb.denominator() as i64) / (1000 * tb.numerator().max(1) as i64);
+        // Input::seek uses stream -1 and therefore AV_TIME_BASE microseconds.
+        let target = time_ms.saturating_mul(1000).min(i64::MAX as u64) as i64;
         format_context
-            .seek(target, ..target + 500)
+            .seek(target, ..target)
             .map_err(|e| format!("Seek failed: {}", e))?;
 
         self.current_position_ms = time_ms;
+        self.pending_frame = None;
         // Flush the decoder after seeking
         if let Some(decoder) = &mut self.decoder {
             decoder.flush();
@@ -207,85 +208,96 @@ impl SoftwareDecoder {
         if !self.is_open {
             return Err("Decoder not open".to_string());
         }
-
-        let format_context = self.format_context.as_mut().ok_or("Not open")?;
+        if let Some(frame) = self.pending_frame.take() {
+            self.current_position_ms = frame.timestamp_ms;
+            return Ok(Some(frame));
+        }
         let video_idx = self.video_stream_index.ok_or("No video stream")?;
-        let stream = format_context.stream(video_idx).ok_or("Stream not found")?;
-        let tb = stream.time_base();
-
+        let tb = self
+            .format_context
+            .as_ref()
+            .ok_or("Not open")?
+            .stream(video_idx)
+            .ok_or("Stream not found")?
+            .time_base();
         let mut decoded = ffmpeg::util::frame::Video::empty();
         let mut scaled = ffmpeg::util::frame::Video::empty();
-
-        for (s, packet) in format_context.packets() {
-            if s.index() != video_idx {
-                continue;
+        // Always drain available frames before feeding another packet, and
+        // send EOF to recover delayed B-frames at the end of a normal GOP.
+        loop {
+            match self
+                .decoder
+                .as_mut()
+                .ok_or("No decoder")?
+                .receive_frame(&mut decoded)
+            {
+                Ok(()) => break,
+                Err(ffmpeg::Error::Eof) => return Ok(None),
+                Err(ffmpeg::Error::Other {
+                    errno: ffmpeg::sys::EAGAIN,
+                }) => {}
+                Err(error) => return Err(format!("Receive frame error: {}", error)),
             }
-
+            let packet = self
+                .format_context
+                .as_mut()
+                .ok_or("Not open")?
+                .packets()
+                .find(|(stream, _)| stream.index() == video_idx)
+                .map(|(_, packet)| packet);
             let decoder = self.decoder.as_mut().ok_or("No decoder")?;
-            decoder
-                .send_packet(&packet)
-                .map_err(|e| format!("Send packet error: {}", e))?;
-
-            while decoder.receive_frame(&mut decoded).is_ok() {
-                let pts_ms = (decoded.pts().unwrap_or(0) as i64 * tb.numerator() as i64 * 1000)
-                    / tb.denominator().max(1) as i64;
-
-                // Phase B: use cached scaler instead of recreating per frame.
-                let scaler = self.scaler_for_current_decoder()?;
-                scaler
-                    .run(&decoded, &mut scaled)
-                    .map_err(|e| format!("Scale error: {}", e))?;
-
-                self.current_position_ms = pts_ms as u64;
-
-                // Phase C.15: allocate the output buffer from the global
-                // FRAME_BUFFER_POOL so the same 8 MB Vec is recycled
-                // across frames instead of being allocated and freed
-                // 30 times per second.
-                let frame_width = scaled.width();
-                let frame_height = scaled.height();
-                let mut frame = FrameData::with_pool(frame_width, frame_height);
-                frame.truncate_to_frame_size();
-                let src_bytes = scaled.data(0);
-                let dst_bytes = &mut frame.data;
-                if dst_bytes.len() >= src_bytes.len() {
-                    dst_bytes[..src_bytes.len()].copy_from_slice(src_bytes);
-                }
-                frame.timestamp_ms = pts_ms as u64;
-                frame.is_keyframe = decoded.is_key();
-
-                return Ok(Some(frame));
+            match packet {
+                Some(packet) => decoder
+                    .send_packet(&packet)
+                    .map_err(|e| format!("Send packet error: {}", e))?,
+                None => decoder
+                    .send_eof()
+                    .map_err(|e| format!("Drain decoder error: {}", e))?,
             }
         }
-
-        Ok(None)
+        let pts = decoded
+            .timestamp()
+            .or(decoded.pts())
+            .ok_or("Decoded frame has no timestamp")?;
+        let pts_ms = (pts * tb.numerator() as i64 * 1000) / tb.denominator().max(1) as i64;
+        self.scaler_for_current_decoder()?
+            .run(&decoded, &mut scaled)
+            .map_err(|e| format!("Scale error: {}", e))?;
+        self.current_position_ms = pts_ms.max(0) as u64;
+        let mut frame = FrameData::with_pool(scaled.width(), scaled.height());
+        frame.truncate_to_frame_size();
+        let row_bytes = scaled.width() as usize * 4;
+        for row in 0..scaled.height() as usize {
+            let source = row * scaled.stride(0);
+            let destination = row * row_bytes;
+            frame.data[destination..destination + row_bytes]
+                .copy_from_slice(&scaled.data(0)[source..source + row_bytes]);
+        }
+        frame.timestamp_ms = self.current_position_ms;
+        frame.is_keyframe = decoded.is_key();
+        Ok(Some(frame))
     }
 
     /// Decode a frame at a specific timestamp
     pub fn decode_frame_at(&mut self, time_ms: u64) -> Result<FrameData, String> {
         self.seek_to(time_ms)?;
 
-        // Decode frames until we reach the target
-        let mut attempts = 0;
-        const MAX_ATTEMPTS: u32 = 30;
-
-        while attempts < MAX_ATTEMPTS {
-            match self.decode_next_frame()? {
-                Some(frame) => {
-                    // Accept frame if it's close enough to the target time
-                    if frame.timestamp_ms >= time_ms.saturating_sub(50) {
-                        return Ok(frame);
-                    }
+        let mut selected: Option<FrameData> = None;
+        while let Some(frame) = self.decode_next_frame()? {
+            if frame.timestamp_ms > time_ms {
+                if let Some(previous) = selected {
+                    self.pending_frame = Some(frame);
+                    self.current_position_ms = previous.timestamp_ms;
+                    return Ok(previous);
                 }
-                None => break,
+                return Ok(frame);
             }
-            attempts += 1;
+            if frame.timestamp_ms == time_ms {
+                return Ok(frame);
+            }
+            selected = Some(frame);
         }
-
-        Err(format!(
-            "No frame found at {}ms after {} attempts",
-            time_ms, attempts
-        ))
+        selected.ok_or_else(|| format!("No frame found at {}ms", time_ms))
     }
 
     /// Get the current position in milliseconds
@@ -305,6 +317,7 @@ impl SoftwareDecoder {
         self.decoder = None;
         self.video_info = None;
         self.is_open = false;
+        self.pending_frame = None;
         // Phase B: drop cached scaler along with the decoder.
         self.scaler = None;
         self.scaler_src_format = None;

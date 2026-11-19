@@ -7,6 +7,7 @@ import 'package:share_plus/share_plus.dart';
 
 import '../../../core/services/engine_service.dart';
 import '../../../core/services/export_service.dart';
+import '../../../core/services/export_capability_service.dart';
 import '../../../src/rust/api/bridge_api.dart';
 
 /// Export state that tracks the current status, progress, and result.
@@ -93,13 +94,18 @@ class ExportState {
 /// - Share the exported file
 /// - Track progress in real-time
 class ExportNotifier extends StateNotifier<ExportState> {
-  ExportNotifier({EditorsProEngineApi? engineApi})
+  ExportNotifier(
+      {EditorsProEngineApi? engineApi,
+      Future<void> Function(BridgeExportSettings)? capabilityChecker})
       : _engineApi = engineApi,
+        _capabilityChecker = capabilityChecker,
         super(const ExportState());
 
   final EditorsProEngineApi? _engineApi;
+  final Future<void> Function(BridgeExportSettings)? _capabilityChecker;
   Timer? _progressTimer;
   bool _cancelRequested = false;
+  bool _nativePrepared = false;
 
   EditorsProEngineApi get _api => _engineApi ?? EngineService.instance.api;
 
@@ -118,6 +124,7 @@ class ExportNotifier extends StateNotifier<ExportState> {
     String? outputPath,
     String codec = 'H.264',
     String format = 'MP4',
+    double fps = 30,
     int? customWidth,
     int? customHeight,
     int? customBitrate,
@@ -132,8 +139,35 @@ class ExportNotifier extends StateNotifier<ExportState> {
     );
 
     try {
+      final settings = _buildSettings(
+        preset: preset,
+        codec: codec,
+        format: format,
+        fps: fps,
+        customWidth: customWidth,
+        customHeight: customHeight,
+        customBitrate: customBitrate,
+      );
+      if (!fps.isFinite ||
+          fps <= 0 ||
+          fps > 240 ||
+          fps != fps.roundToDouble()) {
+        throw ArgumentError(
+            'Choose a whole-number frame rate from 1 to 240 fps.');
+      }
+      // The current native audio encoder is AAC, which WebM cannot contain.
+      if (format.toUpperCase() == 'WEBM') {
+        throw ArgumentError(
+            'WebM export is unavailable with AAC audio. Choose MP4 or MOV.');
+      }
+      if (codec != 'H.264' && codec != 'H.265') {
+        throw ArgumentError('Choose H.264 or H.265 for MP4/MOV export.');
+      }
+      if (_capabilityChecker != null) await _capabilityChecker!(settings);
+      if (_cancelRequested) throw StateError('Export canceled');
       final api = _api;
       api.prepareExport();
+      _nativePrepared = true;
 
       // Start the Android foreground service so export continues
       // when the app is minimized.
@@ -141,16 +175,6 @@ class ExportNotifier extends StateNotifier<ExportState> {
 
       // Determine output path
       final outPath = outputPath ?? await _defaultOutputPath(format);
-
-      // Build export settings
-      final settings = _buildSettings(
-        preset: preset,
-        codec: codec,
-        format: format,
-        customWidth: customWidth,
-        customHeight: customHeight,
-        customBitrate: customBitrate,
-      );
 
       _startProgressPolling(api);
       final result = await api.exportVideoWithCallback(
@@ -191,6 +215,7 @@ class ExportNotifier extends StateNotifier<ExportState> {
       );
     } finally {
       _cancelRequested = false;
+      _nativePrepared = false;
     }
   }
 
@@ -200,7 +225,7 @@ class ExportNotifier extends StateNotifier<ExportState> {
 
     _cancelRequested = true;
     try {
-      await _api.cancelExport();
+      if (_nativePrepared) await _api.cancelExport();
       state = state.copyWith(stageName: 'Canceling');
     } catch (e) {
       _cancelRequested = false;
@@ -283,6 +308,7 @@ class ExportNotifier extends StateNotifier<ExportState> {
     required String preset,
     required String codec,
     required String format,
+    required double fps,
     int? customWidth,
     int? customHeight,
     int? customBitrate,
@@ -301,7 +327,7 @@ class ExportNotifier extends StateNotifier<ExportState> {
     return BridgeExportSettings(
       width: customWidth ?? width,
       height: customHeight ?? height,
-      fps: 30.0,
+      fps: fps,
       bitrateKbps: customBitrate ?? bitrate,
       codec: codec,
       format: format,
@@ -317,7 +343,7 @@ class ExportNotifier extends StateNotifier<ExportState> {
 /// Provider for export state
 final exportProvider =
     StateNotifierProvider<ExportNotifier, ExportState>((ref) {
-  return ExportNotifier();
+  return ExportNotifier(capabilityChecker: ExportCapabilityService.validate);
 });
 
 final isAndroidPlatformProvider = Provider<bool>((ref) => Platform.isAndroid);

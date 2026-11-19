@@ -78,6 +78,16 @@
             </intent-filter>
         </activity>
 
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.social_share.files"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/social_share_paths" />
+        </provider>
+
         <!-- Export foreground service — keeps video encoding alive
              when the app is minimized. Shows a persistent notification
              with progress percentage and a cancel action. -->
@@ -93,6 +103,13 @@
     </application>
 
     <queries>
+        <!-- Exact app shortlist for user-initiated video handoffs. -->
+        <package android:name="com.google.android.youtube" />
+        <package android:name="com.zhiliaoapp.musically" />
+        <package android:name="com.ss.android.ugc.trill" />
+        <package android:name="com.instagram.android" />
+        <package android:name="com.facebook.katana" />
+        <package android:name="com.twitter.android" />
         <intent>
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>

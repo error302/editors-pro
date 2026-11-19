@@ -7,6 +7,7 @@ pub mod format;
 pub mod interop;
 
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::path::Path;
 
 use crate::timeline::Timeline;
@@ -22,6 +23,9 @@ pub struct Project {
     pub timeline: Timeline,
     pub media_assets: Vec<MediaAsset>,
     pub thumbnail_path: Option<String>,
+    /// Optional for older files; contains edits that previously lived only in the engine.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub render_state: Option<ProjectRenderState>,
 }
 
 impl Project {
@@ -37,6 +41,7 @@ impl Project {
             timeline: Timeline::new(),
             media_assets: Vec::new(),
             thumbnail_path: None,
+            render_state: None,
         }
     }
 
@@ -52,6 +57,7 @@ impl Project {
             timeline: Timeline::new(),
             media_assets: Vec::new(),
             thumbnail_path: None,
+            render_state: None,
         }
     }
 
@@ -80,8 +86,7 @@ impl Project {
         let json = serde_json::to_string_pretty(self)
             .map_err(|e| format!("Serialization failed: {}", e))?;
 
-        std::fs::write(path, json)
-            .map_err(|e| format!("Failed to write file: {}", e))?;
+        std::fs::write(path, json).map_err(|e| format!("Failed to write file: {}", e))?;
 
         log::info!("Project saved to {:?}", path);
         Ok(())
@@ -89,11 +94,11 @@ impl Project {
 
     /// Load a project from a JSON file
     pub fn load_from_file(path: &Path) -> Result<Self, String> {
-        let json = std::fs::read_to_string(path)
-            .map_err(|e| format!("Failed to read file: {}", e))?;
+        let json =
+            std::fs::read_to_string(path).map_err(|e| format!("Failed to read file: {}", e))?;
 
-        let project: Project = serde_json::from_str(&json)
-            .map_err(|e| format!("Deserialization failed: {}", e))?;
+        let project: Project =
+            serde_json::from_str(&json).map_err(|e| format!("Deserialization failed: {}", e))?;
 
         log::info!("Project loaded from {:?}", path);
         Ok(project)
@@ -117,6 +122,92 @@ impl Project {
     }
 }
 
+/// Per-track mixer edits use the same typed values during editing and persistence.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct TrackMixerState {
+    pub pan: f32,
+    pub solo: bool,
+}
+
+/// Saved visual/audio edits, excluding decoded buffers and other disposable caches.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ProjectRenderState {
+    pub active_lut: Option<crate::effects::lut::Lut>,
+    pub active_lut_intensity: f32,
+    pub track_mixer_state: HashMap<String, TrackMixerState>,
+    pub track_eq_settings: HashMap<String, crate::audio::effects::EqSettings>,
+    pub ducking_configs: HashMap<String, crate::audio::ducking::DuckingConfig>,
+}
+
+impl Default for ProjectRenderState {
+    fn default() -> Self {
+        Self {
+            active_lut: None,
+            active_lut_intensity: 1.0,
+            track_mixer_state: HashMap::new(),
+            track_eq_settings: HashMap::new(),
+            ducking_configs: HashMap::new(),
+        }
+    }
+}
+
+impl ProjectRenderState {
+    /// Reject corrupt tables before they can index a frame or partially replace the open project.
+    pub fn validate(&self) -> Result<(), String> {
+        if !self.active_lut_intensity.is_finite()
+            || !(0.0..=1.0).contains(&self.active_lut_intensity)
+        {
+            return Err("Saved LUT intensity must be finite and between 0 and 1".into());
+        }
+        if let Some(lut) = &self.active_lut {
+            let valid = match lut {
+                crate::effects::lut::Lut::Lut1D(lut) => {
+                    lut.size > 0
+                        && lut.table.iter().all(|channel| {
+                            channel.len() == lut.size
+                                && channel.iter().all(|value| value.is_finite())
+                        })
+                }
+                crate::effects::lut::Lut::Lut3D(lut) => {
+                    lut.size > 0
+                        && lut
+                            .size
+                            .checked_pow(3)
+                            .and_then(|count| count.checked_mul(3))
+                            == Some(lut.table.len())
+                        && lut.table.iter().all(|value| value.is_finite())
+                }
+            };
+            if !valid {
+                return Err("Saved LUT table is incomplete or invalid".into());
+            }
+        }
+        if self
+            .track_mixer_state
+            .values()
+            .any(|state| !state.pan.is_finite())
+            || self.track_eq_settings.values().any(|eq| {
+                !eq.high_pass_hz.is_finite()
+                    || !eq.low_pass_hz.is_finite()
+                    || eq.bands.iter().any(|band| {
+                        !band.frequency.is_finite()
+                            || !band.gain_db.is_finite()
+                            || !band.q.is_finite()
+                    })
+            })
+            || self
+                .ducking_configs
+                .values()
+                .any(|duck| !duck.duck_level.is_finite() || !duck.threshold.is_finite())
+        {
+            return Err("Saved audio settings must contain finite values".into());
+        }
+        Ok(())
+    }
+}
+
 /// Project-level settings
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProjectSettings {
@@ -128,6 +219,27 @@ pub struct ProjectSettings {
     pub auto_save_interval_ms: u64,
     pub proxy_enabled: bool,
     pub proxy_quality: ProxyQuality,
+}
+
+impl ProjectSettings {
+    /// Project canvases can be smaller than encoded video, but allocation must stay bounded.
+    pub fn validate_for_rendering(&self) -> Result<(), String> {
+        if self.width == 0
+            || self.height == 0
+            || self.width > 8192
+            || self.height > 8192
+            || u64::from(self.width) * u64::from(self.height) > 67_108_864
+        {
+            return Err(
+                "Project canvas dimensions must be positive and at most 8192 pixels per axis"
+                    .into(),
+            );
+        }
+        if !self.fps.is_finite() || self.fps <= 0.0 || self.fps > 240.0 {
+            return Err("Project FPS must be finite, positive, and at most 240".into());
+        }
+        Ok(())
+    }
 }
 
 impl Default for ProjectSettings {
@@ -175,14 +287,13 @@ impl MediaAsset {
     /// Create a new media asset from a file path
     pub fn new(file_path: &str, media_type: MediaType) -> Self {
         let path = Path::new(file_path);
-        let file_name = path.file_name()
+        let file_name = path
+            .file_name()
             .and_then(|n| n.to_str())
             .unwrap_or("unknown")
             .to_string();
 
-        let file_size = std::fs::metadata(file_path)
-            .map(|m| m.len())
-            .unwrap_or(0);
+        let file_size = std::fs::metadata(file_path).map(|m| m.len()).unwrap_or(0);
 
         Self {
             id: uuid::Uuid::new_v4().to_string(),

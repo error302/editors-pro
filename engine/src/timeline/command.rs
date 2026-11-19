@@ -158,9 +158,13 @@ impl TrimClipCommand {
 
 impl Command for TrimClipCommand {
     fn execute(&mut self, timeline: &mut Timeline) -> Result<CommandResult, String> {
-        let clip = timeline
-            .find_clip_mut(&self.clip_id)
+        let (track, clip) = timeline
+            .find_clip(&self.clip_id)
             .ok_or_else(|| format!("Clip {} not found", self.clip_id))?;
+        if track.locked || clip.is_edit_locked() { return Err("Track or clip is locked".into()); }
+        let trimmed = clip.try_with_trim(self.new_trim_start, self.new_trim_end)?;
+        for candidate in timeline.tracks.iter().flat_map(|t| &t.clips) { candidate.checked_end_ms()?; }
+        let clip = timeline.find_clip_mut(&self.clip_id).ok_or("Clip no longer exists")?;
 
         // Store old values for undo
         self.old_trim_start = Some(clip.trim_start_ms);
@@ -168,7 +172,6 @@ impl Command for TrimClipCommand {
         self.old_duration_ms = Some(clip.duration_ms);
 
         // Apply new trim using the clip's with_trim method which handles duration
-        let trimmed = clip.with_trim(self.new_trim_start, self.new_trim_end);
         clip.trim_start_ms = trimmed.trim_start_ms;
         clip.trim_end_ms = trimmed.trim_end_ms;
         clip.duration_ms = trimmed.duration_ms;
@@ -322,6 +325,8 @@ pub struct SplitClipCommand {
     pub right_clip_id: Option<String>,
     pub original_clip: Option<Clip>,
     pub original_track_id: Option<String>,
+    before_track: Option<super::track::Track>,
+    after_track: Option<super::track::Track>,
 }
 
 impl SplitClipCommand {
@@ -333,22 +338,37 @@ impl SplitClipCommand {
             right_clip_id: None,
             original_clip: None,
             original_track_id: None,
+            before_track: None,
+            after_track: None,
         }
     }
 }
 
 impl Command for SplitClipCommand {
     fn execute(&mut self, timeline: &mut Timeline) -> Result<CommandResult, String> {
+        if let Some(after) = &self.after_track {
+            let track = timeline.find_track_mut(&after.id).ok_or("Split track no longer exists")?;
+            *track = after.clone();
+            timeline.recalculate_duration();
+            return Ok(CommandResult {
+                success: true,
+                message: "Clip split redone".into(),
+                affected_clip_ids: vec![self.left_clip_id.clone().ok_or("Missing split ID")?, self.right_clip_id.clone().ok_or("Missing split ID")?],
+            });
+        }
         // Store the original clip and track for undo
         let (track, clip) = timeline
             .find_clip(&self.clip_id)
             .ok_or_else(|| format!("Clip {} not found", self.clip_id))?;
         self.original_clip = Some(clip.clone());
         self.original_track_id = Some(track.id.clone());
+        let before_track = track.clone();
 
         let (left, right) = timeline.split_clip(&self.clip_id, self.split_time_ms)?;
         self.left_clip_id = Some(left.id.clone());
         self.right_clip_id = Some(right.id.clone());
+        self.after_track = timeline.find_track(&before_track.id).cloned();
+        self.before_track = Some(before_track);
 
         Ok(CommandResult {
             success: true,
@@ -358,22 +378,9 @@ impl Command for SplitClipCommand {
     }
 
     fn undo(&mut self, timeline: &mut Timeline) -> Result<CommandResult, String> {
-        // Remove the split clips
-        if let Some(left_id) = &self.left_clip_id {
-            timeline.remove_clip(left_id);
-        }
-        if let Some(right_id) = &self.right_clip_id {
-            timeline.remove_clip(right_id);
-        }
-
-        // Restore the original clip to the correct track
-        let original = self.original_clip.take().ok_or("No original clip stored")?;
-        let track_id = self
-            .original_track_id
-            .take()
-            .ok_or("No original track ID stored")?;
-
-        timeline.add_clip_to_track(&track_id, original)?;
+        let before = self.before_track.as_ref().ok_or("Split has not executed")?;
+        *timeline.find_track_mut(&before.id).ok_or("Split track no longer exists")? = before.clone();
+        timeline.recalculate_duration();
 
         Ok(CommandResult {
             success: true,
@@ -491,6 +498,34 @@ impl Command for ToggleTrackVisibilityCommand {
     fn description(&self) -> String {
         "Toggle track visibility".to_string()
     }
+}
+
+/// Atomically replace a clip's effects, retaining the complete stack for undo.
+#[derive(Debug, Clone)]
+pub struct ReplaceClipEffectsCommand {
+    clip_id: String,
+    next: Vec<crate::effects::Effect>,
+    previous: Option<Vec<crate::effects::Effect>>,
+}
+
+impl ReplaceClipEffectsCommand {
+    pub fn new(clip_id: String, next: Vec<crate::effects::Effect>) -> Self {
+        Self { clip_id, next, previous: None }
+    }
+}
+
+impl Command for ReplaceClipEffectsCommand {
+    fn execute(&mut self, timeline: &mut Timeline) -> Result<CommandResult, String> {
+        let clip = timeline.find_clip_mut(&self.clip_id).ok_or("Clip not found")?;
+        self.previous = Some(std::mem::replace(&mut clip.effects, self.next.clone()));
+        Ok(CommandResult { success: true, message: "Effects updated".into(), affected_clip_ids: vec![self.clip_id.clone()] })
+    }
+    fn undo(&mut self, timeline: &mut Timeline) -> Result<CommandResult, String> {
+        let clip = timeline.find_clip_mut(&self.clip_id).ok_or("Clip not found")?;
+        clip.effects = self.previous.clone().ok_or("No previous effects")?;
+        Ok(CommandResult { success: true, message: "Effects restored".into(), affected_clip_ids: vec![self.clip_id.clone()] })
+    }
+    fn description(&self) -> String { "Change effects".into() }
 }
 
 /// Command to add an effect to a clip

@@ -2,10 +2,12 @@ import 'package:editors_pro/core/services/storage_service.dart';
 import 'package:editors_pro/features/export/presentation/export_screen.dart';
 import 'package:editors_pro/features/export/providers/export_provider.dart';
 import 'package:editors_pro/features/projects/providers/project_provider.dart';
+import 'package:editors_pro/features/settings/providers/settings_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -37,6 +39,8 @@ void main() {
   });
 
   testWidgets('saves completed Android export to MediaStore', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final preferences = await SharedPreferences.getInstance();
     const filePath = '/tmp/editors-pro-test.mp4';
     MethodCall? saveCall;
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
@@ -48,6 +52,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          settingsProvider.overrideWith((ref) => SettingsNotifier(preferences)),
           exportProvider
               .overrideWith((ref) => _CompletedExportNotifier(filePath)),
           isAndroidPlatformProvider.overrideWithValue(true),

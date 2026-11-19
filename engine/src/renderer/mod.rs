@@ -5,11 +5,8 @@
 //! Clip effects are applied per-clip before compositing. Keyframe animations
 //! (position, scale, rotation, opacity) are applied via affine transforms.
 //!
-//! ## GPU Acceleration
-//!
-//! When available, the `GpuRenderer` is used for effects processing,
-//! providing 10-50x speedup over the CPU path. The renderer
-//! automatically falls back to CPU processing when GPU is unavailable.
+//! Effects use a canonical ordered CPU path so preview and export share
+//! parameter semantics. GPU availability alone does not establish parity.
 
 pub mod gpu;
 pub mod shader;
@@ -53,6 +50,11 @@ impl PreviewRenderer {
         }
     }
 
+    pub fn set_canvas_size(&mut self, width: u32, height: u32) {
+        self.width = width.max(1);
+        self.height = height.max(1);
+    }
+
     /// Attempt to initialize the GPU renderer.
     ///
     /// Call this once during engine startup. If it fails, the renderer
@@ -72,7 +74,7 @@ impl PreviewRenderer {
     ///
     /// This method:
     /// 1. Takes the decoded video frame (or a blank frame)
-    /// 2. Applies per-clip effects (GPU if available, CPU fallback)
+    /// 2. Applies per-clip effects through the canonical ordered CPU pipeline
     /// 3. Applies keyframe transforms (position, scale, rotation, opacity)
     /// 4. Applies opacity blending for non-opaque clips
     /// 5. Renders text overlays from text tracks
@@ -82,34 +84,43 @@ impl PreviewRenderer {
         time_ms: u64,
         video_frame: Option<FrameData>,
     ) -> FrameData {
-        // Start with the video frame or a blank frame
-        let mut frame = video_frame.unwrap_or_else(|| FrameData::blank(self.width, self.height));
+        let layers = video_frame.and_then(|frame| {
+            timeline.tracks.iter()
+                .filter(|track| track.visible && track.track_type == TrackType::Video)
+                .flat_map(|track| &track.clips)
+                .find(|clip| clip.contains_time(time_ms))
+                .map(|clip| vec![(clip.id.clone(), frame)])
+        }).unwrap_or_default();
+        self.compose_video_layers(timeline, time_ms, layers)
+    }
 
-        // Get all clips active at this timestamp
-        let active_clips = timeline.get_clips_at_time(time_ms);
-
-        // Apply per-clip effects, keyframe transforms, and opacity
-        for (_track, clip) in &active_clips {
-            // Apply effects from the clip's effect chain
-            if !clip.effects.is_empty() {
-                self.apply_effects(&mut frame, &clip.effects);
-            }
-
-            // Apply keyframe transforms if the clip has keyframes
+    /// Layers arrive in bottom-to-top track order. Each clip is processed
+    /// independently before straight-alpha composition onto the project canvas.
+    pub fn compose_video_layers(
+        &mut self, timeline: &Timeline, time_ms: u64,
+        layers: Vec<(String, FrameData)>,
+    ) -> FrameData {
+        let mut frame = FrameData::blank(self.width, self.height);
+        frame.timestamp_ms = time_ms;
+        for pixel in frame.data.chunks_exact_mut(4) { pixel[3] = 255; }
+        for (clip_id, mut source) in layers {
+            let Some(clip) = timeline.tracks.iter()
+                .filter(|track| track.visible && track.track_type == TrackType::Video)
+                .flat_map(|track| &track.clips)
+                .find(|clip| clip.id == clip_id && clip.contains_time(time_ms)) else { continue; };
+            self.apply_effects(&mut source, &clip.effects);
+            let mut layer = self.fit_to_canvas(&source);
             if clip.has_keyframes() {
-                let values = clip.interpolate_at(time_ms);
-                frame = apply_clip_transform(&frame, &values, self.width, self.height);
+                layer = apply_clip_transform(&layer, &clip.interpolate_at(time_ms), self.width, self.height);
             }
-
-            // Apply opacity blending
-            if clip.opacity < 1.0 {
-                let alpha = clip.opacity;
-                for chunk in frame.data.chunks_exact_mut(4) {
-                    chunk[0] = (chunk[0] as f32 * alpha) as u8;
-                    chunk[1] = (chunk[1] as f32 * alpha) as u8;
-                    chunk[2] = (chunk[2] as f32 * alpha) as u8;
-                    chunk[3] = (chunk[3] as f32 * alpha) as u8;
+            let opacity = clip.opacity.clamp(0.0, 1.0);
+            for (destination, pixel) in frame.data.chunks_exact_mut(4).zip(layer.data.chunks_exact(4)) {
+                let alpha = pixel[3] as f32 / 255.0 * opacity;
+                for channel in 0..3 {
+                    destination[channel] = (pixel[channel] as f32 * alpha
+                        + destination[channel] as f32 * (1.0 - alpha)).round().clamp(0.0, 255.0) as u8;
                 }
+                destination[3] = 255;
             }
         }
 
@@ -130,32 +141,8 @@ impl PreviewRenderer {
                     0.0
                 };
 
-                // Build TextOverlay from clip properties instead of hardcoded "Text"
-                let content = clip.properties.get("content")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("Text");
-                let font_family = clip.properties.get("font_family")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("sans-serif");
-                let font_size = clip.properties.get("font_size")
-                    .and_then(|v| v.as_f64())
-                    .map(|f| f as f32)
-                    .unwrap_or(48.0);
-                let color_hex = clip.properties.get("color_hex")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("#FFFFFF");
-
-                let mut overlay = TextOverlay::simple(content);
-                overlay.font_family = font_family.to_string();
-                overlay.font_size = font_size;
-                overlay.color = crate::effects::text_render::TextColor::with_hex(color_hex);
-
-                // Apply position from clip properties if specified
-                if let Some(pos_x) = clip.properties.get("position_x").and_then(|v| v.as_f64()) {
-                    if let Some(pos_y) = clip.properties.get("position_y").and_then(|v| v.as_f64()) {
-                        overlay.position = crate::effects::text_render::TextPosition::at(pos_x as f32, pos_y as f32);
-                    }
-                }
+                let mut overlay = TextOverlay::from_properties(&clip.properties);
+                overlay.color.opacity = clip.opacity.clamp(0.0, 1.0);
                 self.text_rasterizer.render_text(
                     &overlay,
                     &mut frame.data,
@@ -170,60 +157,32 @@ impl PreviewRenderer {
         frame
     }
 
-    /// Apply effects to a frame, using GPU acceleration when available.
+    fn fit_to_canvas(&self, source: &FrameData) -> FrameData {
+        let mut canvas = FrameData::blank(self.width, self.height);
+        if source.width == 0 || source.height == 0 { return canvas; }
+        let scale = (self.width as f64 / source.width as f64)
+            .min(self.height as f64 / source.height as f64);
+        let width = ((source.width as f64 * scale).round() as u32).clamp(1, self.width);
+        let height = ((source.height as f64 * scale).round() as u32).clamp(1, self.height);
+        let resized = self.resize_frame(source, width, height);
+        let left = (self.width - width) / 2;
+        let top = (self.height - height) / 2;
+        let row_bytes = width as usize * 4;
+        for row in 0..height {
+            let destination = (((top + row) * self.width + left) * 4) as usize;
+            let source_offset = row as usize * row_bytes;
+            canvas.data[destination..destination + row_bytes]
+                .copy_from_slice(&resized.data[source_offset..source_offset + row_bytes]);
+        }
+        canvas
+    }
+
+    /// Apply the same ordered effect chain used by export.
     fn apply_effects(&mut self, frame: &mut FrameData, effects: &[crate::effects::Effect]) {
-        if effects.is_empty() {
-            return;
-        }
-
-        // Collect GPU-compatible effects for batch processing
-        let mut gpu_effects: Vec<(String, Vec<f32>)> = Vec::new();
-        let mut cpu_only_effects: Vec<crate::effects::Effect> = Vec::new();
-
-        for effect in effects {
-            if !effect.enabled {
-                continue;
-            }
-
-            match effect.effect_type {
-                crate::effects::EffectType::Filter => {
-                    // Check if this effect has a GPU shader
-                    let shader_name = effect.name.to_lowercase().replace(' ', "_");
-                    if self.gpu_available
-                        && self.gpu_renderer.gpu_accelerated_effects().contains(&shader_name.as_str())
-                    {
-                        let params: Vec<f32> = effect.parameters.iter()
-                            .map(|p| p.value)
-                            .collect();
-                        gpu_effects.push((shader_name, params));
-                    } else {
-                        cpu_only_effects.push(effect.clone());
-                    }
-                }
-                _ => {
-                    // Non-filter effects (transitions, text, chroma key)
-                    // are handled elsewhere
-                    cpu_only_effects.push(effect.clone());
-                }
-            }
-        }
-
-        // Apply GPU effects in batch
-        if !gpu_effects.is_empty() {
-            if let Err(e) = self.gpu_renderer.apply_effects_chain(frame, &gpu_effects) {
-                log::warn!("GPU effects failed ({}), falling back to CPU", e);
-                // Fall back to CPU for all effects
-                let pipeline = EffectsPipeline::new(effects.to_vec());
-                pipeline.apply(&mut frame.data, frame.width, frame.height);
-                return;
-            }
-        }
-
-        // Apply remaining CPU-only effects
-        if !cpu_only_effects.is_empty() {
-            let pipeline = EffectsPipeline::new(cpu_only_effects);
-            pipeline.apply(&mut frame.data, frame.width, frame.height);
-        }
+        // One canonical ordered implementation for preview and export. GPU
+        // descriptors currently disagree with native parameter names and units.
+        let pipeline = EffectsPipeline::new(effects.to_vec());
+        pipeline.apply(&mut frame.data, frame.width, frame.height);
     }
 
     /// Apply effects from a clip's effect chain to frame data.
@@ -400,9 +359,9 @@ fn apply_clip_transform(
 
             if sx >= 0 && sx < w as isize && sy >= 0 && sy < h as isize {
                 let src_idx = (sy as usize * w + sx as usize) * 4;
-                output[dst_idx] = (frame.data[src_idx] as f32 * opacity) as u8;
-                output[dst_idx + 1] = (frame.data[src_idx + 1] as f32 * opacity) as u8;
-                output[dst_idx + 2] = (frame.data[src_idx + 2] as f32 * opacity) as u8;
+                output[dst_idx] = frame.data[src_idx];
+                output[dst_idx + 1] = frame.data[src_idx + 1];
+                output[dst_idx + 2] = frame.data[src_idx + 2];
                 output[dst_idx + 3] = (frame.data[src_idx + 3] as f32 * opacity) as u8;
             }
             // else: leave as 0 (transparent black)

@@ -23,6 +23,7 @@ import 'package:editors_pro/src/rust/api/bridge_api.dart'
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../../core/extensions/context_extensions.dart';
@@ -30,6 +31,7 @@ import '../../../core/services/engine_service.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../data/models/project_model.dart';
 import '../../projects/providers/project_provider.dart';
+import '../../settings/providers/settings_provider.dart';
 import '../providers/editor_provider.dart';
 import '../services/media_library_service.dart';
 import '../widgets/audio_loudness_meter.dart';
@@ -60,9 +62,16 @@ class EditorScreen extends ConsumerStatefulWidget {
   ConsumerState<EditorScreen> createState() => _EditorScreenState();
 }
 
-class _EditorScreenState extends ConsumerState<EditorScreen> {
+class _EditorScreenState extends ConsumerState<EditorScreen>
+    with WidgetsBindingObserver {
+  Timer? _autoSaveTimer;
+  DateTime _lastAutoSave = DateTime.now();
+  bool _exitInProgress = false;
+  bool _autoSaveChecking = false;
+  Completer<void>? _importCompletion;
   final MediaLibraryService _mediaLibrary = MediaLibraryService();
   bool _showingMobileMediaLibrary = false;
+  bool _showCompactTools = false;
 
   /// Phase F.2: in-memory timeline markers. In a full integration these
   /// would be persisted via the engine's `effects/markers.rs` module.
@@ -88,123 +97,227 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _autoSaveTimer = Timer.periodic(const Duration(seconds: 15), (_) {
+      unawaited(_autoSaveIfDue());
+    });
     // Initialize the editor state
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(editorProvider.notifier).initialize();
     });
   }
 
+  Future<void> _autoSaveIfDue() async {
+    if (_autoSaveChecking || _exitInProgress) return;
+    _autoSaveChecking = true;
+    try {
+      await ref.read(settingsProvider.notifier).ensureLoaded();
+      if (!mounted || _exitInProgress) return;
+      final settings = ref.read(settingsProvider);
+      final enabled = settings.autoSaveEnabled;
+      final minutes = settings.autoSaveIntervalMinutes.clamp(1, 10);
+      if (enabled &&
+          DateTime.now().difference(_lastAutoSave).inMinutes >= minutes) {
+        _lastAutoSave = DateTime.now();
+        await ref.read(projectProvider.notifier).saveCurrentProject();
+      }
+    } catch (error, stackTrace) {
+      developer.log('Automatic save could not run',
+          name: 'EditorScreen', error: error, stackTrace: stackTrace);
+    } finally {
+      _autoSaveChecking = false;
+    }
+  }
+
+  Future<void> _exitEditor() async {
+    if (_exitInProgress) return;
+    _exitInProgress = true;
+    if (ref.read(editorProvider).isPlaying) {
+      ref.read(editorProvider.notifier).togglePlayback();
+    }
+    await _importCompletion?.future;
+    if (!mounted) return;
+    final saved = await ref.read(projectProvider.notifier).saveCurrentProject();
+    if (!mounted) return;
+    _exitInProgress = false;
+    if (saved) {
+      context.go('/');
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content:
+              Text('Could not save project. Please try again before leaving.'),
+        ),
+      );
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.paused) {
+      if (ref.read(editorProvider).isPlaying) {
+        ref.read(editorProvider.notifier).togglePlayback();
+      }
+      unawaited(ref.read(projectProvider.notifier).saveCurrentProject());
+    }
+  }
+
+  @override
+  void dispose() {
+    _autoSaveTimer?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     final editorState = ref.watch(editorProvider);
     final project = ref.watch(currentProjectProvider);
-    final screenWidth = MediaQuery.of(context).size.width;
+    final screenSize = MediaQuery.sizeOf(context);
+    final screenWidth = screenSize.width;
+    final shortScreen = screenSize.height < 500;
     // The full three-column editor needs a wide canvas plus usable sidebars.
     // Keep the compact preview-first layout until a tablet can fit all panels.
-    final isNarrowScreen = screenWidth < 900;
+    final isNarrowScreen = screenWidth < 1200 || screenSize.height < 600;
     // On large tablets (>=1200px) the left panel is wider and the inspector
     // takes more space, giving professional editors room to work.
     final isTablet = screenWidth >= 1200;
 
-    return Scaffold(
-      body: Column(
-        children: [
-          // Top toolbar
-          const EditorToolbar(),
-          if (MediaQuery.sizeOf(context).height >= 500)
-            _buildViewerToolbar(editorState, isNarrowScreen),
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) unawaited(_exitEditor());
+      },
+      child: Scaffold(
+        body: Column(
+          children: [
+            // Top toolbar
+            EditorToolbar(onExit: _exitEditor, onOpenTools: _openTools,
+              onImportMedia: _importMedia, onImportAudio: _importAudio,
+              onInspector: () => _showInspectorBottomSheet(context)),
+            if (!isNarrowScreen)
+              _buildViewerToolbar(editorState, isNarrowScreen),
 
-          // Main content area
-          Expanded(
-            child: Row(
-              children: [
-                // Left: Media library / Tools (hidden on narrow screens)
-                if (!isNarrowScreen)
-                  _buildLeftPanel(context, editorState, isTablet: isTablet),
+            // Main content area
+            Expanded(
+              child: Row(
+                children: [
+                  // Left: Media library / Tools (hidden on narrow screens)
+                  if (!isNarrowScreen)
+                    _buildLeftPanel(context, editorState, isTablet: isTablet),
 
-                // Center: Preview viewport
-                Expanded(
-                  flex: 3,
-                  child: Stack(
-                    children: [
-                      const PreviewViewport(),
-                      // Phase F.2: Safe Zones overlay (broadcast / social / composition).
-                      // Toggleable from the toolbar; only renders when showSafeZones is true.
-                      if (editorState.showSafeZones &&
-                          editorState.safeZoneMode != SafeZoneMode.off)
-                        Positioned.fill(
-                          child: SafeZonesOverlay(
-                            config:
-                                _safeZoneConfigFor(editorState.safeZoneMode),
-                            previewAspectRatio: (project?.width ?? 1920) /
-                                (project?.height ?? 1080),
-                          ),
-                        ),
-                      // Phase E.10: importing overlay — shown whenever
-                      // editorState.isImporting is true. Previously the flag
-                      // was set but no UI surfaced it, leaving the user
-                      // wondering if the app was frozen.
-                      if (editorState.isImporting)
-                        Positioned.fill(
-                          child: Container(
-                            color: Colors.black.withValues(alpha: 0.5),
-                            child: const Center(
-                              child: Card(
-                                color: AppTheme.surface,
-                                child: Padding(
-                                  padding: EdgeInsets.all(AppTheme.spacing24),
-                                  child: Column(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      CircularProgressIndicator(
-                                        color: AppTheme.primary,
-                                      ),
-                                      SizedBox(
-                                        height: AppTheme.spacing16,
-                                      ),
-                                      Text(
-                                        'Importing media…',
-                                        style: TextStyle(
-                                          color: AppTheme.textPrimary,
-                                          fontSize: 14,
-                                          fontWeight: FontWeight.w500,
-                                        ),
-                                      ),
-                                    ],
+                  // Center: Preview viewport
+                  Expanded(
+                    flex: 3,
+                    child: Flex(
+                      direction: shortScreen ? Axis.horizontal : Axis.vertical,
+                      children: [
+                        Expanded(
+                          child: Stack(
+                            children: [
+                              const PreviewViewport(),
+                              // Phase F.2: Safe Zones overlay (broadcast / social / composition).
+                              // Toggleable from the toolbar; only renders when showSafeZones is true.
+                              if (editorState.showSafeZones &&
+                                  editorState.safeZoneMode != SafeZoneMode.off)
+                                Positioned.fill(
+                                  child: SafeZonesOverlay(
+                                    config: _safeZoneConfigFor(
+                                      editorState.safeZoneMode,
+                                    ),
+                                    previewAspectRatio:
+                                        (project?.width ?? 1920) /
+                                        (project?.height ?? 1080),
                                   ),
                                 ),
-                              ),
-                            ),
+                              // Phase E.10: importing overlay — shown whenever
+                              // editorState.isImporting is true. Previously the flag
+                              // was set but no UI surfaced it, leaving the user
+                              // wondering if the app was frozen.
+                              if (editorState.isImporting)
+                                Positioned.fill(
+                                  child: Container(
+                                    color: Colors.black.withValues(alpha: 0.5),
+                                    child: const Center(
+                                      child: Card(
+                                        color: AppTheme.surface,
+                                        child: Padding(
+                                          padding: EdgeInsets.all(
+                                            AppTheme.spacing24,
+                                          ),
+                                          child: Column(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              CircularProgressIndicator(
+                                                color: AppTheme.primary,
+                                              ),
+                                              SizedBox(
+                                                height: AppTheme.spacing16,
+                                              ),
+                                              Text(
+                                                'Importing media…',
+                                                style: TextStyle(
+                                                  color: AppTheme.textPrimary,
+                                                  fontSize: 14,
+                                                  fontWeight: FontWeight.w500,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                            ],
                           ),
                         ),
-                    ],
+                        if (isNarrowScreen && _showCompactTools)
+                          Expanded(
+                            child: _buildLeftPanel(
+                              context,
+                              editorState,
+                              isTablet: true,
+                              showClose: true,
+                            ),
+                          ),
+                      ],
+                    ),
                   ),
-                ),
 
-                // Right: Inspector / Properties (hidden on narrow screens)
-                if (!isNarrowScreen)
-                  Expanded(
-                    // Phase E.19: give the inspector more room on tablets
-                    // (flex 2) so color grading wheels and effect chains
-                    // aren't cramped. On phones it's flex 1.
-                    flex: isTablet ? 2 : 1,
-                    child: const InspectorPanel(),
-                  ),
-              ],
+                  // Right: Inspector / Properties (hidden on narrow screens)
+                  if (!isNarrowScreen)
+                    Expanded(
+                      // Phase E.19: give the inspector more room on tablets
+                      // (flex 2) so color grading wheels and effect chains
+                      // aren't cramped. On phones it's flex 1.
+                      flex: isTablet ? 2 : 1,
+                      child: const InspectorPanel(),
+                    ),
+                ],
+              ),
             ),
-          ),
 
-          // Phase F.2: Audio Meter Bridge — thin horizontal strip showing
-          // integrated LUFS + true-peak, between the timeline and the bottom
-          // of the screen. Toggleable via the audio-meter FAB on the viewport.
-          if (editorState.showAudioMeterBridge)
-            _buildAudioMeterBridge(context, editorState),
+            // Phase F.2: Audio Meter Bridge — thin horizontal strip showing
+            // integrated LUFS + true-peak, between the timeline and the bottom
+            // of the screen. Toggleable via the audio-meter FAB on the viewport.
+            if (editorState.showAudioMeterBridge)
+              _buildAudioMeterBridge(context, editorState),
 
-          if (isNarrowScreen) _buildMobileImportBar(),
+            if (isNarrowScreen && !shortScreen) _buildMobileImportBar(),
 
-          // Bottom: Timeline
-          const TimelinePanel(),
-        ],
+            // Bottom: Timeline
+            SafeArea(
+              top: false,
+              child: TimelinePanel(
+                height: shortScreen || (isNarrowScreen && _showCompactTools)
+                    ? 112
+                    : (screenSize.height * 0.3).clamp(168.0, 260.0),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -263,103 +376,91 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
     );
   }
 
-  void _showEditingTools() {
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      showDragHandle: true,
-      backgroundColor: AppTheme.surface,
-      builder: (context) => FractionallySizedBox(
-        heightFactor: 0.8,
-        child: Consumer(
-          builder: (context, ref, _) => Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 8, 8),
-                child: Row(
-                  children: [
-                    const Expanded(
-                      child: Text(
-                        'Editing tools',
-                        style: TextStyle(fontWeight: FontWeight.w600),
-                      ),
-                    ),
-                    IconButton(
-                      tooltip: 'Close tools',
-                      onPressed: () => Navigator.pop(context),
-                      icon: const Icon(Icons.close),
-                    ),
-                  ],
-                ),
-              ),
-              Expanded(
-                child: SizedBox(
-                  width: double.infinity,
-                  child: _buildLeftPanel(
-                    context,
-                    ref.watch(editorProvider),
-                    isTablet: true,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
+  void _openTools(LeftPanelTab tab) {
+    ref.read(editorProvider.notifier).setLeftPanelTab(tab);
+    setState(() => _showCompactTools = true);
   }
+
+  void _showEditingTools() => _openTools(ref.read(editorProvider).leftPanelTab);
 
   Widget _buildMobileImportBar() {
     final mediaCount = ref.watch(mediaAssetsProvider).length;
 
     return Container(
-      height: 60,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      height: MediaQuery.sizeOf(context).height < 500 ? 48 : 56,
+      padding: const EdgeInsets.symmetric(horizontal: 4),
       decoration: const BoxDecoration(
         color: AppTheme.surface,
-        border: Border(
-          top: BorderSide(color: AppTheme.border, width: 1),
-        ),
+        border: Border(top: BorderSide(color: AppTheme.border, width: 1)),
       ),
       child: Row(
         children: [
           Expanded(
-            child: SizedBox(
-              height: 48,
-              child: FilledButton.icon(
-                onPressed: () => _importMedia(),
-                icon: const Icon(Icons.add_photo_alternate_outlined, size: 20),
-                label: const Text('Add media'),
-                style: FilledButton.styleFrom(
-                  backgroundColor: AppTheme.primary,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  textStyle: const TextStyle(fontWeight: FontWeight.w600),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  SizedBox(
+                    height: 48,
+                    child: FilledButton.icon(
+                      onPressed: () => _importMedia(),
+                      icon: const Icon(
+                        Icons.add_photo_alternate_outlined,
+                        size: 20,
+                      ),
+                      label: const Text('Add media'),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: AppTheme.primary,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        textStyle: const TextStyle(fontWeight: FontWeight.w600),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(
+                            AppTheme.radiusSmall,
+                          ),
+                        ),
+                      ),
+                    ),
                   ),
-                ),
+                  const SizedBox(width: 8),
+                  _mobileImportAction(
+                    icon: Icons.audio_file_outlined,
+                    tooltip: 'Add audio',
+                    onPressed: _importAudio,
+                  ),
+                  const SizedBox(width: 8),
+                  _mobileImportAction(
+                    icon: Icons.video_library_outlined,
+                    tooltip: 'Media bin ($mediaCount)',
+                    onPressed: _showMobileMediaLibrary,
+                  ),
+                  const SizedBox(width: 8),
+                  _mobileImportAction(
+                    icon: Icons.text_fields,
+                    tooltip: 'Add text',
+                    onPressed: () => _openTools(LeftPanelTab.text),
+                  ),
+                  const SizedBox(width: 8),
+                  _mobileImportAction(
+                    icon: Icons.auto_fix_high_outlined,
+                    tooltip: 'Effects',
+                    onPressed: () => _openTools(LeftPanelTab.effects),
+                  ),
+                  const SizedBox(width: 8),
+                  _mobileImportAction(
+                    icon: Icons.auto_fix_high_outlined,
+                    tooltip: 'Editing tools',
+                    onPressed: _showEditingTools,
+                  ),
+                ],
               ),
             ),
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 4),
           _mobileImportAction(
-            icon: Icons.audio_file_outlined,
-            tooltip: 'Add audio',
-            onPressed: _importAudio,
-          ),
-          const SizedBox(width: 8),
-          _mobileImportAction(
-            icon: Icons.video_library_outlined,
-            tooltip: 'Media bin ($mediaCount)',
-            onPressed: _showMobileMediaLibrary,
-          ),
-          const SizedBox(width: 8),
-          _mobileImportAction(
-            icon: Icons.auto_fix_high_outlined,
-            tooltip: 'Editing tools',
-            onPressed: _showEditingTools,
+            icon: Icons.tune,
+            tooltip: 'Inspector',
+            onPressed: () => _showInspectorBottomSheet(context),
           ),
         ],
       ),
@@ -578,11 +679,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
                 const Divider(height: 1),
                 // Inspector content (scrollable)
                 Expanded(
-                  child: SingleChildScrollView(
-                    controller: scrollController,
-                    padding: const EdgeInsets.all(AppTheme.spacing16),
-                    child: const InspectorPanel(),
-                  ),
+                  child: InspectorPanel(scrollController: scrollController),
                 ),
               ],
             );
@@ -596,11 +693,12 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
     BuildContext context,
     EditorState state, {
     bool isTablet = false,
+    bool showClose = false,
   }) {
     return Container(
       // Phase E.19: tablets get a wider left panel (320 vs 240) so
       // media thumbnails and effect names don't truncate.
-      width: isTablet ? 320 : 240,
+      width: showClose ? double.infinity : (isTablet ? 320 : 240),
       color: AppTheme.surface,
       child: Column(
         children: [
@@ -609,107 +707,118 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
             decoration: const BoxDecoration(
               border: Border(bottom: BorderSide(color: Color(0xFF2A2A3E))),
             ),
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: [
-                  _TabButton(
-                    label: 'Media',
-                    icon: Icons.video_library,
-                    selected: state.leftPanelTab == LeftPanelTab.media,
-                    onTap: () => ref
-                        .read(editorProvider.notifier)
-                        .setLeftPanelTab(LeftPanelTab.media),
+            child: Row(
+              children: [
+                Expanded(
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        _TabButton(
+                          label: 'Media',
+                          icon: Icons.video_library,
+                          selected: state.leftPanelTab == LeftPanelTab.media,
+                          onTap: () => ref
+                              .read(editorProvider.notifier)
+                              .setLeftPanelTab(LeftPanelTab.media),
+                        ),
+                        _TabButton(
+                          label: 'Audio',
+                          icon: Icons.audiotrack,
+                          selected: state.leftPanelTab == LeftPanelTab.audio,
+                          onTap: () => ref
+                              .read(editorProvider.notifier)
+                              .setLeftPanelTab(LeftPanelTab.audio),
+                        ),
+                        _TabButton(
+                          label: 'Effects',
+                          icon: Icons.auto_fix_high,
+                          selected: state.leftPanelTab == LeftPanelTab.effects,
+                          onTap: () => ref
+                              .read(editorProvider.notifier)
+                              .setLeftPanelTab(LeftPanelTab.effects),
+                        ),
+                        _TabButton(
+                          label: 'Text',
+                          icon: Icons.text_fields,
+                          selected: state.leftPanelTab == LeftPanelTab.text,
+                          onTap: () => ref
+                              .read(editorProvider.notifier)
+                              .setLeftPanelTab(LeftPanelTab.text),
+                        ),
+                        _TabButton(
+                          label: 'Speed',
+                          icon: Icons.speed,
+                          selected: state.leftPanelTab == LeftPanelTab.speed,
+                          onTap: () => ref
+                              .read(editorProvider.notifier)
+                              .setLeftPanelTab(LeftPanelTab.speed),
+                        ),
+                        _TabButton(
+                          label: 'Keys',
+                          icon: Icons.timeline,
+                          selected:
+                              state.leftPanelTab == LeftPanelTab.keyframes,
+                          onTap: () => ref
+                              .read(editorProvider.notifier)
+                              .setLeftPanelTab(LeftPanelTab.keyframes),
+                        ),
+                        _TabButton(
+                          label: 'Mixer',
+                          icon: Icons.graphic_eq,
+                          selected: state.leftPanelTab == LeftPanelTab.mixer,
+                          onTap: () => ref
+                              .read(editorProvider.notifier)
+                              .setLeftPanelTab(LeftPanelTab.mixer),
+                        ),
+                        _TabButton(
+                          label: 'Scopes',
+                          icon: Icons.analytics_outlined,
+                          selected: state.leftPanelTab == LeftPanelTab.scopes,
+                          onTap: () => ref
+                              .read(editorProvider.notifier)
+                              .setLeftPanelTab(LeftPanelTab.scopes),
+                        ),
+                        _TabButton(
+                          label: 'Markers',
+                          icon: Icons.bookmark_border,
+                          selected: state.leftPanelTab == LeftPanelTab.markers,
+                          onTap: () => ref
+                              .read(editorProvider.notifier)
+                              .setLeftPanelTab(LeftPanelTab.markers),
+                        ),
+                        _TabButton(
+                          label: 'LUTs',
+                          icon: Icons.palette_outlined,
+                          selected: state.leftPanelTab == LeftPanelTab.luts,
+                          onTap: () => ref
+                              .read(editorProvider.notifier)
+                              .setLeftPanelTab(LeftPanelTab.luts),
+                        ),
+                        _TabButton(
+                          label: 'EQ',
+                          icon: Icons.equalizer,
+                          selected: state.leftPanelTab == LeftPanelTab.eq,
+                          onTap: () => ref
+                              .read(editorProvider.notifier)
+                              .setLeftPanelTab(LeftPanelTab.eq),
+                        ),
+                      ],
+                    ),
                   ),
-                  _TabButton(
-                    label: 'Audio',
-                    icon: Icons.audiotrack,
-                    selected: state.leftPanelTab == LeftPanelTab.audio,
-                    onTap: () => ref
-                        .read(editorProvider.notifier)
-                        .setLeftPanelTab(LeftPanelTab.audio),
+                ),
+                if (showClose)
+                  IconButton(
+                    tooltip: 'Close tools',
+                    onPressed: () => setState(() => _showCompactTools = false),
+                    icon: const Icon(Icons.close, size: 20),
                   ),
-                  _TabButton(
-                    label: 'Effects',
-                    icon: Icons.auto_fix_high,
-                    selected: state.leftPanelTab == LeftPanelTab.effects,
-                    onTap: () => ref
-                        .read(editorProvider.notifier)
-                        .setLeftPanelTab(LeftPanelTab.effects),
-                  ),
-                  _TabButton(
-                    label: 'Text',
-                    icon: Icons.text_fields,
-                    selected: state.leftPanelTab == LeftPanelTab.text,
-                    onTap: () => ref
-                        .read(editorProvider.notifier)
-                        .setLeftPanelTab(LeftPanelTab.text),
-                  ),
-                  _TabButton(
-                    label: 'Speed',
-                    icon: Icons.speed,
-                    selected: state.leftPanelTab == LeftPanelTab.speed,
-                    onTap: () => ref
-                        .read(editorProvider.notifier)
-                        .setLeftPanelTab(LeftPanelTab.speed),
-                  ),
-                  _TabButton(
-                    label: 'Keys',
-                    icon: Icons.timeline,
-                    selected: state.leftPanelTab == LeftPanelTab.keyframes,
-                    onTap: () => ref
-                        .read(editorProvider.notifier)
-                        .setLeftPanelTab(LeftPanelTab.keyframes),
-                  ),
-                  _TabButton(
-                    label: 'Mixer',
-                    icon: Icons.graphic_eq,
-                    selected: state.leftPanelTab == LeftPanelTab.mixer,
-                    onTap: () => ref
-                        .read(editorProvider.notifier)
-                        .setLeftPanelTab(LeftPanelTab.mixer),
-                  ),
-                  _TabButton(
-                    label: 'Scopes',
-                    icon: Icons.analytics_outlined,
-                    selected: state.leftPanelTab == LeftPanelTab.scopes,
-                    onTap: () => ref
-                        .read(editorProvider.notifier)
-                        .setLeftPanelTab(LeftPanelTab.scopes),
-                  ),
-                  _TabButton(
-                    label: 'Markers',
-                    icon: Icons.bookmark_border,
-                    selected: state.leftPanelTab == LeftPanelTab.markers,
-                    onTap: () => ref
-                        .read(editorProvider.notifier)
-                        .setLeftPanelTab(LeftPanelTab.markers),
-                  ),
-                  _TabButton(
-                    label: 'LUTs',
-                    icon: Icons.palette_outlined,
-                    selected: state.leftPanelTab == LeftPanelTab.luts,
-                    onTap: () => ref
-                        .read(editorProvider.notifier)
-                        .setLeftPanelTab(LeftPanelTab.luts),
-                  ),
-                  _TabButton(
-                    label: 'EQ',
-                    icon: Icons.equalizer,
-                    selected: state.leftPanelTab == LeftPanelTab.eq,
-                    onTap: () => ref
-                        .read(editorProvider.notifier)
-                        .setLeftPanelTab(LeftPanelTab.eq),
-                  ),
-                ],
-              ),
+              ],
             ),
           ),
 
           // Panel content
-          Expanded(
-            child: _buildLeftPanelContent(context, state),
-          ),
+          Expanded(child: _buildLeftPanelContent(context, state)),
         ],
       ),
     );
@@ -1181,10 +1290,10 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
   /// frame is LUT-processed. This retires the 'LUT applied lazily' debt.
   Widget _buildLutPanel(BuildContext context, EditorState state) {
     return LutBrowser(
-      onLutSelected: (lutJson) {
+      onLutSelected: (lutJson) async {
         _loadedLutJson = lutJson;
-        _applyActiveLut();
-        if (!mounted) return;
+        final applied = await _applyActiveLut();
+        if (!mounted || !context.mounted || !applied) return;
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('LUT applied to preview. Adjust intensity live.'),
@@ -1200,8 +1309,8 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
   }
 
   /// Phase F.5: apply (or clear) the active LUT via the engine FFI.
-  Future<void> _applyActiveLut() async {
-    if (!EngineService.instance.isInitialized) return;
+  Future<bool> _applyActiveLut() async {
+    if (!EngineService.instance.isInitialized) return false;
     try {
       if (_loadedLutJson == null || _lutIntensity <= 0.001) {
         await clearActiveLut();
@@ -1211,8 +1320,16 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
           intensity: _lutIntensity,
         );
       }
+      if (mounted) ref.read(editorProvider.notifier).notifyRenderChanged();
+      return true;
     } catch (e) {
       developer.log('_applyActiveLut failed: $e', name: 'LutPanel');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not apply LUT: $e')),
+        );
+      }
+      return false;
     }
   }
 
@@ -1812,9 +1929,14 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
       final result = await FilePicker.platform.pickFiles(
         type: FileType.audio,
         allowMultiple: true,
+        withReadStream: true,
       );
       return result?.files
-              .map((file) => _PickedMedia(path: file.path, name: file.name))
+              .map((file) => _PickedMedia(
+                    path: file.path ?? file.identifier,
+                    name: file.name,
+                    readStream: file.readStream,
+                  ))
               .toList() ??
           const [];
     });
@@ -1833,6 +1955,10 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
           'flv',
           'wmv',
           '3gp',
+          'm4v',
+          'mpg',
+          'mpeg',
+          'ts',
           'mp3',
           'wav',
           'aac',
@@ -1840,6 +1966,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
           'ogg',
           'm4a',
           'wma',
+          'opus',
           'jpg',
           'jpeg',
           'png',
@@ -1848,9 +1975,14 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
           'webp',
         ],
         allowMultiple: true,
+        withReadStream: true,
       );
       return result?.files
-              .map((file) => _PickedMedia(path: file.path, name: file.name))
+              .map((file) => _PickedMedia(
+                    path: file.path ?? file.identifier,
+                    name: file.name,
+                    readStream: file.readStream,
+                  ))
               .toList() ??
           const [];
     });
@@ -1860,10 +1992,17 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
     Future<List<_PickedMedia>> Function() pickFiles,
   ) async {
     final editorNotifier = ref.read(editorProvider.notifier);
+    if (ref.read(editorProvider).isImporting || _exitInProgress) return;
+    final projectId = ref.read(currentProjectProvider)?.id;
+    if (projectId == null) return;
+    bool sameProject() =>
+        mounted && ref.read(currentProjectProvider)?.id == projectId;
+    final completion = Completer<void>();
+    _importCompletion = completion;
     editorNotifier.setImporting(true);
     try {
       final pickedFiles = await pickFiles();
-      if (pickedFiles.isEmpty) return;
+      if (pickedFiles.isEmpty || !sameProject()) return;
 
       if (!EngineService.instance.isInitialized &&
           !await EngineService.instance.initialize()) {
@@ -1884,16 +2023,22 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
       final failedFiles = <String>[];
       final timelineFailures = <String>[];
       for (final pickedFile in pickedFiles) {
+        if (!sameProject()) return;
         try {
-          final sourcePath = pickedFile.path;
-          if (sourcePath == null || sourcePath.isEmpty) {
+          final sourcePath = pickedFile.path ?? '';
+          if (sourcePath.isEmpty && pickedFile.readStream == null) {
             throw StateError('The selected file could not be opened.');
           }
 
           final copy = await _mediaLibrary.copyIntoLibrary(
             sourcePath: sourcePath,
             fileName: pickedFile.name,
+            readStream: pickedFile.readStream,
           );
+          if (!sameProject()) {
+            await copy.delete();
+            return;
+          }
 
           final assetInfo = await editorNotifier.importMedia(copy.path);
           if (assetInfo == null) {
@@ -1901,6 +2046,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
             throw StateError('The editing engine could not read this format.');
           }
 
+          if (!sameProject()) return;
           await ref.read(projectProvider.notifier).importMedia(
                 assetInfo.filePath,
                 pickedFile.name,
@@ -1941,7 +2087,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
         }
       }
 
-      if (!mounted) return;
+      if (!sameProject()) return;
       final projectSaved = importedCount == 0 ||
           await ref.read(projectProvider.notifier).saveCurrentProject();
       if (!mounted) return;
@@ -1984,6 +2130,8 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
       if (mounted) {
         editorNotifier.setImporting(false);
       }
+      completion.complete();
+      if (identical(_importCompletion, completion)) _importCompletion = null;
     }
   }
 
@@ -2004,10 +2152,11 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
 }
 
 class _PickedMedia {
-  const _PickedMedia({required this.path, required this.name});
+  const _PickedMedia({required this.path, required this.name, this.readStream});
 
   final String? path;
   final String name;
+  final Stream<List<int>>? readStream;
 }
 
 class _TabButton extends StatelessWidget {

@@ -8,9 +8,11 @@ import 'package:flutter_svg/flutter_svg.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/constants/app_icons.dart';
 import '../../../core/extensions/context_extensions.dart';
+import '../../../core/services/engine_service.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/app_icon.dart';
 import '../../../data/models/project_model.dart';
+import '../../../src/rust/api/bridge_api.dart' show getTrackSolo, setTrackSolo;
 import '../../projects/providers/project_provider.dart';
 import '../providers/editor_provider.dart';
 import 'audio_waveform_painter.dart';
@@ -34,7 +36,10 @@ const int _kMaxClipStartMs = 3600000;
 ///   borders, trim handles, drag feedback, and a red playhead with a
 ///   triangle handle and time badge.
 class TimelinePanel extends ConsumerStatefulWidget {
-  const TimelinePanel({super.key});
+  const TimelinePanel({this.height, super.key});
+
+  /// The workspace allocates timeline space from its available height.
+  final double? height;
 
   @override
   ConsumerState<TimelinePanel> createState() => _TimelinePanelState();
@@ -48,8 +53,9 @@ class _TimelinePanelState extends ConsumerState<TimelinePanel> {
   final _LruCache<String, List<double>> _waveformCache =
       _LruCache<String, List<double>>(maxSize: 32);
 
-  /// Track IDs that are soloed for the current session (visual indicator).
+  /// Reflect successful engine solo changes; never indicate an unaccepted edit.
   final Set<String> _soloedTrackIds = <String>{};
+  final Set<String> _pendingSoloTrackIds = <String>{};
 
   @override
   void dispose() {
@@ -78,14 +84,33 @@ class _TimelinePanelState extends ConsumerState<TimelinePanel> {
         );
   }
 
-  void _toggleSolo(String trackId) {
-    setState(() {
-      if (_soloedTrackIds.contains(trackId)) {
-        _soloedTrackIds.remove(trackId);
-      } else {
-        _soloedTrackIds.add(trackId);
+  Future<void> _toggleSolo(String trackId) async {
+    if (_pendingSoloTrackIds.contains(trackId)) return;
+    _pendingSoloTrackIds.add(trackId);
+    try {
+      if (!EngineService.instance.isInitialized) {
+        throw StateError('Audio engine is unavailable');
       }
-    });
+      final solo = !(await getTrackSolo(trackId: trackId));
+      await setTrackSolo(trackId: trackId, solo: solo);
+      if (!mounted) return;
+      setState(() {
+        if (solo) {
+          _soloedTrackIds.add(trackId);
+        } else {
+          _soloedTrackIds.remove(trackId);
+        }
+      });
+      ref.read(editorProvider.notifier).notifyRenderChanged();
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not change track solo: $error')),
+        );
+      }
+    } finally {
+      _pendingSoloTrackIds.remove(trackId);
+    }
   }
 
   @override
@@ -108,9 +133,9 @@ class _TimelinePanelState extends ConsumerState<TimelinePanel> {
 
     final hasTracks = tracks.isNotEmpty;
     return Container(
-      height: MediaQuery.sizeOf(context).height < 500
+      height: widget.height ?? (MediaQuery.sizeOf(context).height < 500
           ? 120
-          : AppTheme.timelineMinHeight,
+          : AppTheme.timelineMinHeight),
       decoration: const BoxDecoration(
         color: AppTheme.surface,
         border: Border(top: BorderSide(color: AppTheme.border, width: 1)),

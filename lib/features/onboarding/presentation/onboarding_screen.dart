@@ -6,12 +6,13 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/constants/app_icons.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/app_brand.dart';
 import '../providers/onboarding_provider.dart';
 
 /// Premium three-page onboarding flow.
 ///
 /// Pages:
-///   1. Welcome  — branded hero with gradient wordmark
+///   1. Welcome  — branded hero with the Editors Pro symbol
 ///   2. Edit Like a Pro — timeline / effects / transitions
 ///   3. Export & Share — 4K export / social share
 ///
@@ -142,57 +143,33 @@ class _WelcomePage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 32),
+    return const Padding(
+      padding: EdgeInsets.symmetric(horizontal: 32),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           // Logo
-          Container(
-            width: 120,
-            height: 120,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(AppTheme.radiusXLarge),
-              boxShadow: AppTheme.primaryGlow(opacity: 0.5),
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(AppTheme.radiusXLarge),
-              child: Image.asset(
-                'assets/icons/logo.png',
-                fit: BoxFit.cover,
-              ),
-            ),
-          ),
-          const SizedBox(height: 40),
+          AppBrandMark(size: 144),
+          SizedBox(height: 40),
 
           // "Welcome to"
-          const Text(
+          Text(
             'Welcome to',
             style: TextStyle(
               fontSize: 16,
               color: AppTheme.textSecondary,
             ),
           ),
-          const SizedBox(height: 4),
+          SizedBox(height: 4),
 
-          // Gradient wordmark
-          ShaderMask(
-            shaderCallback: (bounds) =>
-                AppTheme.primaryGradient.createShader(bounds),
-            child: const Text(
-              'EDITORS-PRO',
-              style: TextStyle(
-                fontSize: 32,
-                fontWeight: FontWeight.w700,
-                color: Colors.white,
-                letterSpacing: 2,
-              ),
-            ),
+          AppBrandWordmark(
+            fontSize: 30,
+            color: AppTheme.textPrimary,
           ),
-          const SizedBox(height: 12),
+          SizedBox(height: 12),
 
           // Subtitle
-          const Text(
+          Text(
             'Professional mobile video editing\npowered by native performance',
             textAlign: TextAlign.center,
             style: TextStyle(

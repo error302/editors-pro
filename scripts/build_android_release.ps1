@@ -12,6 +12,32 @@ $abiMap = @{
     "x86_64" = @{ Lib = "amd64"; Triple = "x86_64" }
 }
 
+# Match android/app/build.gradle.kts when no NDK is selected by the caller.
+if (-not $env:ANDROID_NDK_HOME) {
+    $androidSdkRoot = $env:ANDROID_HOME
+    if (-not $androidSdkRoot) { $androidSdkRoot = $env:ANDROID_SDK_ROOT }
+    if (-not $androidSdkRoot) { $androidSdkRoot = Join-Path $env:LOCALAPPDATA "Android\Sdk" }
+    $env:ANDROID_NDK_HOME = Join-Path $androidSdkRoot "ndk\28.2.13676358"
+}
+$ndkToolchain = Join-Path $env:ANDROID_NDK_HOME "toolchains\llvm\prebuilt\windows-x86_64"
+$ndkClang = Join-Path $ndkToolchain "bin\clang.exe"
+if (-not (Test-Path $ndkClang)) {
+    throw "Android NDK clang.exe was not found. Install NDK 28.2.13676358 or set ANDROID_NDK_HOME."
+}
+$clangResourceDirectory = (& $ndkClang --print-resource-dir).Trim()
+if ($LASTEXITCODE -ne 0 -or -not (Test-Path (Join-Path $clangResourceDirectory "include\stddef.h"))) {
+    throw "The selected NDK does not provide Clang's standard headers."
+}
+$ndkSysroot = (Join-Path $ndkToolchain "sysroot").Replace('\', '/')
+if (-not $env:LIBCLANG_PATH) {
+    $localLibClang = Join-Path $projectRoot "build\native-toolchain\libclang\clang\native"
+    if (Test-Path (Join-Path $localLibClang "libclang.dll")) {
+        $env:LIBCLANG_PATH = $localLibClang
+    } else {
+        throw "Set LIBCLANG_PATH, or install the project-local binding generator: python -m pip install --target build/native-toolchain/libclang --no-deps libclang==18.1.1"
+    }
+}
+
 $missingFfmpegBuildInputs = @()
 foreach ($abi in $abiMap.Keys) {
     $libDir = Join-Path $ffmpegRoot "lib\$($abiMap[$abi].Lib)"
@@ -58,7 +84,7 @@ foreach ($abi in $abiMap.Keys) {
     New-Item -ItemType Directory -Force $jniDir | Out-Null
 
     if (Test-Path $jniDir) {
-        foreach ($lib in $ffmpegLibs) {
+        foreach ($lib in ($ffmpegLibs + @("editors_pro_engine", "c++_shared"))) {
             $oldLibrary = Join-Path $jniDir "lib$lib.so"
             if ((Test-Path $oldLibrary) -and -not (Test-Path (Join-Path $backupDir "lib$lib.so"))) {
                 New-Item -ItemType Directory -Force $backupDir | Out-Null
@@ -70,11 +96,35 @@ foreach ($abi in $abiMap.Keys) {
     $sourceLibDir = Join-Path $ffmpegRoot "lib\$($abiMap[$abi].Lib)"
     Copy-Item (Join-Path $sourceLibDir "*.so") $jniDir -Force
     $triple = $abiMap[$abi].Triple
+    $cppRuntime = Join-Path $ndkSysroot "usr/lib/$triple-linux-android/libc++_shared.so"
+    if (-not (Test-Path $cppRuntime)) {
+        throw "The selected NDK does not provide the C++ runtime for $abi."
+    }
+    Copy-Item $cppRuntime $jniDir -Force
     $engineLibrary = Join-Path $projectRoot "engine\target\$triple-linux-android\release\libeditors_pro_engine.so"
 
-    & cargo ndk -t $abi build --manifest-path (Join-Path $projectRoot "engine\Cargo.toml") --release --features ffmpeg
-    if ($LASTEXITCODE -ne 0) {
-        throw "Rust engine build failed for $abi with exit code $LASTEXITCODE."
+    # cargo-ndk reads metadata from its working directory before forwarding
+    # Cargo arguments, so --manifest-path alone cannot select the engine.
+    # cargo-ndk replaces the underscore form of this variable on Windows.
+    # bindgen prefers the hyphenated target form, preserving our resource dir.
+    $bindgenVariable = "BINDGEN_EXTRA_CLANG_ARGS_$triple-linux-android"
+    $previousBindgenArgs = [Environment]::GetEnvironmentVariable($bindgenVariable, "Process")
+    $bindgenArgs = @(
+        "--target=$triple-linux-android24",
+        "--sysroot=`"$ndkSysroot`"",
+        "-I`"$ndkSysroot/usr/include/$triple-linux-android`"",
+        "-resource-dir=`"$clangResourceDirectory`""
+    ) -join " "
+    [Environment]::SetEnvironmentVariable($bindgenVariable, $bindgenArgs, "Process")
+    Push-Location (Join-Path $projectRoot "engine")
+    try {
+        & cargo ndk -t $abi --platform 24 build --release --features ffmpeg --locked
+        if ($LASTEXITCODE -ne 0) {
+            throw "Rust engine build failed for $abi with exit code $LASTEXITCODE."
+        }
+    } finally {
+        Pop-Location
+        [Environment]::SetEnvironmentVariable($bindgenVariable, $previousBindgenArgs, "Process")
     }
     Copy-Item $engineLibrary $jniDir -Force
 }

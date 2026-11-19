@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:collection';
 import 'dart:developer' as developer;
-import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -16,7 +15,6 @@ import '../providers/editor_provider.dart';
 import 'safe_zones_overlay.dart';
 import 'text_overlay_handle.dart';
 import 'transform_handles.dart';
-import 'video_clip_preview.dart';
 
 enum SafeZoneType { actionSafe, titleSafe, centerCross, thirds, centerMarker }
 
@@ -28,7 +26,11 @@ enum SafeZoneType { actionSafe, titleSafe, centerCross, thirds, centerMarker }
 /// - Debounced scrub rendering during manual seek
 /// - Frame prefetch during idle for smoother playback startup
 class PreviewViewport extends ConsumerStatefulWidget {
-  const PreviewViewport({super.key});
+  const PreviewViewport({super.key, this.frameLoader});
+
+  /// Tests can exercise caching and mutation refresh without loading native code.
+  @visibleForTesting
+  final Future<Uint8List> Function(int timeMs)? frameLoader;
 
   @override
   ConsumerState<PreviewViewport> createState() => _PreviewViewportState();
@@ -56,14 +58,19 @@ class _PreviewViewportState extends ConsumerState<PreviewViewport> {
         showRuleOfThirds: _enabledSafeZones.contains(SafeZoneType.thirds),
       );
 
-  int get _frameDurationMs =>
-      (1000 / (ref.read(currentProjectProvider)?.fps ?? 30)).round();
+  int _stepFrame(int currentTimeMs, int direction) {
+    final fps = ref.read(currentProjectProvider)?.fps ?? 30;
+    final currentFrame = (currentTimeMs * fps / 1000).round();
+    return ((currentFrame + direction) * 1000 / fps).round();
+  }
 
   /// LRU cache of the last 10 rendered frames keyed by time position.
   final _frameCache = _LruCache<int, Uint8List>(maxSize: 10);
 
   /// Whether a frame request is currently in-flight.
   bool _fetchingFrame = false;
+  int? _queuedFrameTime;
+  int _frameGeneration = 0;
 
   /// Timer for continuous frame fetching during playback.
   Timer? _playbackDecodeTimer;
@@ -78,6 +85,14 @@ class _PreviewViewportState extends ConsumerState<PreviewViewport> {
       fireImmediately: true,
     );
 
+    ref.listenManual(editorProvider.select((state) => state.renderRevision),
+        (_, __) {
+      _invalidateFrames();
+    });
+    ref.listenManual(currentProjectProvider, (_, __) {
+      _invalidateFrames();
+    });
+
     // Listen to playback state changes to start/stop continuous decode
     ref.listenManual(
       editorProvider.select((s) => s.isPlaying),
@@ -89,6 +104,13 @@ class _PreviewViewportState extends ConsumerState<PreviewViewport> {
   void dispose() {
     _playbackDecodeTimer?.cancel();
     super.dispose();
+  }
+
+  void _invalidateFrames() {
+    _frameGeneration++;
+    _frameCache.clear();
+    setState(() => _currentFrameBytes = null);
+    _requestFrame(ref.read(editorProvider).currentTimeMs);
   }
 
   void _onTimeChanged(int? previous, int next) {
@@ -136,8 +158,15 @@ class _PreviewViewportState extends ConsumerState<PreviewViewport> {
   }
 
   Future<void> _requestFrame(int timeMs) async {
-    if (!EngineService.instance.isInitialized) return;
-    if (_fetchingFrame) return;
+    if (widget.frameLoader == null && !EngineService.instance.isInitialized)
+      return;
+    if (_fetchingFrame) {
+      _queuedFrameTime = timeMs;
+      return;
+    }
+    final revision = ref.read(editorProvider).renderRevision;
+    final projectId = ref.read(currentProjectProvider)?.id;
+    final generation = _frameGeneration;
 
     // Check the cache first.
     final cached = _frameCache.get(timeMs);
@@ -152,10 +181,16 @@ class _PreviewViewportState extends ConsumerState<PreviewViewport> {
 
     _fetchingFrame = true;
     try {
-      final api = EngineService.instance.api;
-      final pngBytes = await api.getFrame(timeMs: BigInt.from(timeMs));
+      final pngBytes = await (widget.frameLoader?.call(timeMs) ??
+          EngineService.instance.api.getFrame(timeMs: BigInt.from(timeMs)));
 
       if (!mounted) return;
+      if (generation != _frameGeneration ||
+          revision != ref.read(editorProvider).renderRevision ||
+          projectId != ref.read(currentProjectProvider)?.id) {
+        _queuedFrameTime = ref.read(editorProvider).currentTimeMs;
+        return;
+      }
 
       // Only apply if the user hasn't moved on to a very different position.
       final currentTimeMs = ref.read(editorProvider).currentTimeMs;
@@ -173,6 +208,9 @@ class _PreviewViewportState extends ConsumerState<PreviewViewport> {
       // Leave the previous frame (or placeholder) in place.
     } finally {
       _fetchingFrame = false;
+      final queued = _queuedFrameTime;
+      _queuedFrameTime = null;
+      if (mounted && queued != null) unawaited(_requestFrame(queued));
     }
   }
 
@@ -216,7 +254,8 @@ class _PreviewViewportState extends ConsumerState<PreviewViewport> {
                       _buildTransformHandles(context, editorState),
 
                       // Playback controls overlay
-                      if (!editorState.isPlaying)
+                      if (!editorState.isPlaying &&
+                          editorState.selectedClipId == null)
                         Center(
                           child: GestureDetector(
                             onTap: () => ref
@@ -314,7 +353,7 @@ class _PreviewViewportState extends ConsumerState<PreviewViewport> {
             constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
             color: AppTheme.textSecondary,
             onPressed: () {
-              final newTime = (editorState.currentTimeMs - _frameDurationMs)
+              final newTime = _stepFrame(editorState.currentTimeMs, -1)
                   .clamp(0, editorState.durationMs);
               ref.read(editorProvider.notifier).seekTo(newTime);
             },
@@ -328,7 +367,7 @@ class _PreviewViewportState extends ConsumerState<PreviewViewport> {
             constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
             color: AppTheme.textSecondary,
             onPressed: () {
-              final newTime = (editorState.currentTimeMs + _frameDurationMs)
+              final newTime = _stepFrame(editorState.currentTimeMs, 1)
                   .clamp(0, editorState.durationMs);
               ref.read(editorProvider.notifier).seekTo(newTime);
             },
@@ -474,46 +513,7 @@ class _PreviewViewportState extends ConsumerState<PreviewViewport> {
   }
 
   Widget _buildPreviewContent(BuildContext context, EditorState state) {
-    final activeMedia = _activeMediaAtTime(
-      ref.watch(currentProjectProvider),
-      state.currentTimeMs,
-    );
-    if (activeMedia != null) {
-      final asset = activeMedia.asset;
-      if (asset.mediaType == MediaType.image) {
-        return LayoutBuilder(
-          builder: (context, constraints) {
-            final pixelRatio = MediaQuery.devicePixelRatioOf(context);
-            final cacheWidth = constraints.maxWidth.isFinite
-                ? (constraints.maxWidth * pixelRatio).round()
-                : null;
-            return Image.file(
-              File(asset.filePath),
-              fit: BoxFit.contain,
-              gaplessPlayback: true,
-              cacheWidth:
-                  cacheWidth != null && cacheWidth > 0 ? cacheWidth : null,
-              errorBuilder: (context, error, stackTrace) =>
-                  _buildImageUnavailable(context, asset.fileName),
-            );
-          },
-        );
-      }
-
-      if (asset.mediaType == MediaType.video &&
-          defaultTargetPlatform == TargetPlatform.android) {
-        return VideoClipPreview(
-          filePath: asset.filePath,
-          fileName: asset.fileName,
-          clipStartMs: activeMedia.clip.startMs,
-          trimStartMs: activeMedia.clip.trimStartMs,
-          speed: activeMedia.clip.speed * state.playbackSpeed,
-          currentTimeMs: state.currentTimeMs,
-          isPlaying: state.isPlaying,
-        );
-      }
-    }
-
+    // Always show the composed frame, including effects, layers and text.
     // If we have decoded frame bytes, display them.
     if (_currentFrameBytes != null && _currentFrameBytes!.isNotEmpty) {
       return Image.memory(
@@ -528,68 +528,6 @@ class _PreviewViewportState extends ConsumerState<PreviewViewport> {
     }
 
     return _buildPlaceholder(context, state);
-  }
-
-  _ActiveVideoClip? _activeMediaAtTime(ProjectModel? project, int timeMs) {
-    if (project == null) return null;
-
-    final activeClips = [
-      for (final track in project.tracks)
-        if (track.visible && track.trackType == TrackType.video)
-          for (final clip in track.clips)
-            if (timeMs >= clip.startMs &&
-                timeMs < clip.startMs + clip.durationMs)
-              clip,
-    ];
-
-    // Do not guess which layer to show when clips overlap; the native engine
-    // must composite those cases.
-    if (activeClips.length != 1) return null;
-
-    final clip = activeClips.single;
-    for (final asset in project.mediaAssets) {
-      if (asset.id == clip.assetId && asset.filePath.isNotEmpty) {
-        return _ActiveVideoClip(clip: clip, asset: asset);
-      }
-    }
-    return null;
-  }
-
-  Widget _buildImageUnavailable(BuildContext context, String fileName) {
-    return Container(
-      color: AppTheme.background,
-      child: Center(
-        child: FittedBox(
-          fit: BoxFit.scaleDown,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(
-                Icons.broken_image_outlined,
-                size: 40,
-                color: AppTheme.textDisabled,
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Image unavailable',
-                style: context.textTheme.titleSmall?.copyWith(
-                  color: AppTheme.textSecondary,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                fileName,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: context.textTheme.bodySmall?.copyWith(
-                  color: AppTheme.textDisabled,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
   }
 
   Widget _buildPlaceholder(BuildContext context, EditorState state) {
@@ -659,20 +597,43 @@ class _PreviewViewportState extends ConsumerState<PreviewViewport> {
       return const SizedBox.shrink();
     }
 
-    // Create a TextOverlayData from the clip model
+    if (!selectedTrack!.visible ||
+        editorState.currentTimeMs < selectedClip.startMs ||
+        editorState.currentTimeMs >=
+            selectedClip.startMs + selectedClip.durationMs) {
+      return const SizedBox.shrink();
+    }
+    final text = selectedClip.textProperties;
+    final painter = TextPainter(
+      text: TextSpan(
+          text: text.content,
+          style: TextStyle(
+            fontFamily: text.fontFamily.startsWith('Inter') ? 'Inter' : null,
+            fontWeight: text.fontFamily == 'Inter-Bold'
+                ? FontWeight.w700
+                : text.fontFamily == 'Inter-SemiBold'
+                    ? FontWeight.w600
+                    : FontWeight.w400,
+            fontSize: text.fontSize,
+          )),
+      textDirection: TextDirection.ltr,
+    )..layout();
     final overlayData = TextOverlayData(
       clipId: selectedClip.id,
-      text: selectedClip.assetId.startsWith('text_')
-          ? 'Text'
-          : selectedClip.assetId,
-      positionX: 0.5,
-      positionY: 0.5,
-      width: 0.4,
-      height: 0.1,
+      text: text.content,
+      positionX: text.positionX,
+      positionY: text.positionY,
+      width: (painter.width / project.width).clamp(0.015, 1.0),
+      height: (painter.height / project.height).clamp(0.025, 1.0),
+      fontFamily: text.fontFamily,
+      fontSize: text.fontSize,
+      colorHex: text.colorHex,
       isSelected: true,
     );
+    painter.dispose();
 
     return TextOverlayHandle(
+      key: ValueKey('text-handle-${selectedClip.id}'),
       data: overlayData,
       onPositionChanged: (clipId, posX, posY) {
         ref.read(editorProvider.notifier).updateTextPosition(
@@ -826,13 +787,6 @@ class _PreviewViewportState extends ConsumerState<PreviewViewport> {
       ),
     );
   }
-}
-
-class _ActiveVideoClip {
-  const _ActiveVideoClip({required this.clip, required this.asset});
-
-  final ClipModel clip;
-  final MediaAssetModel asset;
 }
 
 // ═══════════════════════════════════════════════════════════════════════

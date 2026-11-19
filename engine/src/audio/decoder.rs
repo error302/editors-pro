@@ -33,8 +33,8 @@ impl DecodedAudio {
 
     /// Create a silent audio buffer of a given duration
     pub fn silence(sample_rate: u32, channels: u32, duration_ms: u64) -> Self {
-        let sample_count =
-            (sample_rate as f64 * channels as f64 * duration_ms as f64 / 1000.0) as usize;
+        let frame_count = (u128::from(sample_rate) * u128::from(duration_ms) / 1000) as usize;
+        let sample_count = frame_count.saturating_mul(channels as usize);
         Self {
             samples: vec![0.0f32; sample_count],
             sample_rate,
@@ -54,24 +54,19 @@ impl DecodedAudio {
 
     /// Get a segment of the audio between start_ms and end_ms
     pub fn segment(&self, start_ms: u64, end_ms: u64) -> Self {
-        if self.samples.is_empty() || self.sample_rate == 0 {
+        if self.samples.is_empty() || self.sample_rate == 0 || self.channels == 0 || end_ms <= start_ms {
             return Self::empty(self.sample_rate, self.channels);
         }
-
-        let start_sample =
-            (start_ms as f64 * self.sample_rate as f64 * self.channels as f64 / 1000.0) as usize;
-        let end_sample =
-            (end_ms as f64 * self.sample_rate as f64 * self.channels as f64 / 1000.0) as usize;
-
-        let start = start_sample.min(self.samples.len());
-        let end = end_sample.min(self.samples.len());
-
-        let segment_duration = if end > start {
-            ((end - start) as f64 * 1000.0 / (self.sample_rate as f64 * self.channels as f64))
-                as u64
-        } else {
-            0
-        };
+        // Round timestamps to complete channel frames before interleaving.
+        // At 44.1kHz, floor(5ms * rate * 2) = 441 would swap left/right.
+        let frames = self.frame_count();
+        let frame_at = |time_ms| ((u128::from(time_ms) * u128::from(self.sample_rate) / 1000)
+            .min(frames as u128)) as usize;
+        let start_frame = frame_at(start_ms);
+        let end_frame = frame_at(end_ms);
+        let start = start_frame * self.channels as usize;
+        let end = end_frame * self.channels as usize;
+        let segment_duration = ((end_frame - start_frame) as u128 * 1000 / u128::from(self.sample_rate)) as u64;
 
         Self {
             samples: self.samples[start..end].to_vec(),
@@ -100,6 +95,30 @@ impl DecodedAudio {
             duration_ms: self.duration_ms,
         }
     }
+}
+
+/// Copy only initialized samples, excluding FFmpeg line alignment padding.
+#[cfg(feature = "ffmpeg")]
+fn append_packed_f32(frame: &ff::frame::Audio, channels: u32, output: &mut Vec<f32>) -> Result<usize, String> {
+    if frame.format() != ff::format::Sample::F32(ff::format::sample::Type::Packed)
+        || u32::from(frame.channels()) != channels {
+        return Err("Unexpected decoded audio format or channel count".into());
+    }
+    let sample_count = frame.samples().checked_mul(channels as usize).ok_or("Decoded sample count overflow")?;
+    if sample_count == 0 { return Ok(0); }
+    let bytes = frame.data(0);
+    let byte_count = sample_count.checked_mul(4).ok_or("Decoded byte count overflow")?;
+    if bytes.len() < byte_count { return Err("Decoded audio plane is smaller than its sample count".into()); }
+    let start = output.len();
+    for bytes in bytes[..byte_count].chunks_exact(4) {
+        let sample = f32::from_ne_bytes(bytes.try_into().expect("four sample bytes"));
+        if !sample.is_finite() {
+            output.truncate(start);
+            return Err("Decoded audio contains a non-finite sample".into());
+        }
+        output.push(sample);
+    }
+    Ok(sample_count)
 }
 
 /// Audio decoder that reads audio from media files using FFmpeg
@@ -224,14 +243,16 @@ impl AudioDecoder {
 
     /// Decode the entire audio stream from the open file
     ///
-    /// Returns the audio as interleaved f32 samples at the source
-    /// sample rate. For resampling to a different rate, use
-    /// `decode_samples_with_rate()`.
+    /// Returns interleaved f32 PCM at the requested sample rate and
+    /// mono/stereo channel count, resampling when the source differs.
     pub fn decode_all(
         &self,
         target_sample_rate: u32,
         target_channels: u32,
     ) -> Result<DecodedAudio, String> {
+        if target_sample_rate == 0 || target_sample_rate > i32::MAX as u32 || !(1..=2).contains(&target_channels) {
+            return Err("Decoded audio requires a valid sample rate and mono or stereo output".into());
+        }
         let file_path = self.file_path.as_ref().ok_or("No file is open")?;
 
         let mut input =
@@ -322,26 +343,9 @@ impl AudioDecoder {
                             r.run(&frame, &mut resampled)
                                 .map_err(|e| format!("Resampling failed: {}", e))?;
 
-                            let data = resampled.data(0);
-                            let sample_count = resampled.samples() * target_channels as usize;
-                            let samples = unsafe {
-                                std::slice::from_raw_parts(
-                                    data.as_ptr() as *const f32,
-                                    sample_count,
-                                )
-                            };
-                            all_samples.extend_from_slice(samples);
+                            append_packed_f32(&resampled, target_channels, &mut all_samples)?;
                         } else {
-                            // Direct f32 packed data
-                            let data = frame.data(0);
-                            let sample_count = frame.samples() * target_channels as usize;
-                            let samples = unsafe {
-                                std::slice::from_raw_parts(
-                                    data.as_ptr() as *const f32,
-                                    sample_count,
-                                )
-                            };
-                            all_samples.extend_from_slice(samples);
+                            append_packed_f32(&frame, target_channels, &mut all_samples)?;
                         }
 
                         frame = ff::util::frame::Audio::empty();
@@ -366,15 +370,7 @@ impl AudioDecoder {
                                 let delay = r
                                     .flush(&mut resampled)
                                     .map_err(|e| format!("Resampler flush failed: {}", e))?;
-                                let data = resampled.data(0);
-                                let sample_count = resampled.samples() * target_channels as usize;
-                                let samples = unsafe {
-                                    std::slice::from_raw_parts(
-                                        data.as_ptr() as *const f32,
-                                        sample_count,
-                                    )
-                                };
-                                all_samples.extend_from_slice(samples);
+                                let sample_count = append_packed_f32(&resampled, target_channels, &mut all_samples)?;
                                 if delay.is_none() || sample_count == 0 {
                                     break;
                                 }
@@ -433,7 +429,8 @@ impl AudioDecoder {
 
     /// Decode a specific time range of audio
     ///
-    /// Seeks to `start_ms` and decodes until `end_ms`.
+    /// Decodes the entire source, then extracts a channel-aligned time range.
+    /// This is not a bounded-memory streaming seek.
     pub fn decode_range(
         &self,
         start_ms: u64,

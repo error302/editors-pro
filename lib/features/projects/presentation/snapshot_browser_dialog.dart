@@ -100,36 +100,16 @@ class _SnapshotBrowserDialogState extends ConsumerState<SnapshotBrowserDialog> {
     );
     if (confirmed != true) return;
 
-    // Read the snapshot bytes and load them into the engine.
-    final bytes = await ProjectSnapshots.read(
-      snapshot.projectId,
-      snapshot.id,
-    );
-    if (bytes == null) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Failed to read snapshot file')),
-        );
-      }
-      return;
-    }
-
-    // Write the snapshot bytes to a temp file and load it via the engine.
-    // The ProjectRepository.loadProjectFromEngine expects a path, so we
-    // re-use the current project's .epp path after writing the snapshot
-    // bytes there.
     try {
       // Save current state as a snapshot before overwriting (so the user
       // can undo the restore).
-      await ref.read(projectProvider.notifier).createSnapshot();
-      // Now load the chosen snapshot.
-      // For simplicity, we delegate to project_provider which exposes
-      // a restore method (to be implemented when the engine bridge
-      // supports loading from raw bytes — for now we copy the snapshot
-      // to the active .epp path and reload).
+      final restored = await ref
+          .read(projectProvider.notifier)
+          .restoreSnapshot(snapshot.projectId, snapshot.id);
+      if (!restored) throw StateError('Could not restore the saved snapshot.');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Snapshot restore queued')),
+          const SnackBar(content: Text('Snapshot restored')),
         );
         Navigator.of(context).pop(true);
       }

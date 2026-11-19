@@ -231,6 +231,74 @@ void main() {
   // ─── ExportNotifier ──────────────────────────────────────────────────
 
   group('ExportNotifier', () {
+    test('passes requested 120 fps through capability preflight and native export', () async {
+      final api = _FakeExportApi();
+      BridgeExportSettings? checked;
+      final notifier = ExportNotifier(engineApi: api, capabilityChecker: (settings) async {
+        checked = settings;
+        expect(api.events, isEmpty);
+      });
+      api.result.complete(const BridgeExportResult(success: true,
+          outputPath: '/tmp/120.mp4', fileSizeHuman: '1 MB'));
+      await notifier.startExport(preset: '720p', fps: 120,
+          outputPath: '/tmp/120.mp4');
+      expect(checked?.fps, 120);
+      expect(api.settings?.fps, 120);
+      expect(api.settings?.width, 1280);
+      expect(notifier.state.isComplete, isTrue);
+      notifier.dispose();
+    });
+
+    test('unsupported 120 fps fails before native export preparation', () async {
+      final api = _FakeExportApi();
+      final notifier = ExportNotifier(engineApi: api, capabilityChecker: (_) async {
+        throw StateError('1080p at 120 fps is unsupported');
+      });
+      await notifier.startExport(preset: '1080p', fps: 120,
+          outputPath: '/tmp/120.mp4');
+      expect(api.events, isEmpty);
+      expect(notifier.state.error, contains('unsupported'));
+      expect(notifier.state.isExporting, isFalse);
+      notifier.dispose();
+    });
+
+    test('canceling during capability preflight never starts native export', () async {
+      final api = _FakeExportApi();
+      api.result.complete(const BridgeExportResult(success: false, outputPath: '',
+          fileSizeHuman: '', errorMessage: 'Export canceled'));
+      final checked = Completer<void>();
+      final notifier = ExportNotifier(engineApi: api,
+          capabilityChecker: (_) => checked.future);
+      final exporting = notifier.startExport(preset: '720p', fps: 120,
+          outputPath: '/tmp/120.mp4');
+      await notifier.cancelExport();
+      checked.complete();
+      await Future<void>.delayed(Duration.zero);
+      expect(api.events, isEmpty);
+      expect(notifier.state.error, 'Export canceled');
+      await exporting;
+      notifier.dispose();
+    });
+
+    test('invalid rate and AAC WebM fail before native preparation', () async {
+      for (final rate in [0.0, double.nan, double.infinity]) {
+        final api = _FakeExportApi();
+        final notifier = ExportNotifier(engineApi: api);
+        await notifier.startExport(preset: '720p', fps: rate,
+            outputPath: '/tmp/invalid.mp4');
+        expect(api.events, isEmpty);
+        expect(notifier.state.hasError, isTrue);
+        notifier.dispose();
+      }
+      final api = _FakeExportApi();
+      final notifier = ExportNotifier(engineApi: api);
+      await notifier.startExport(preset: '720p', format: 'WebM', codec: 'VP9',
+          outputPath: '/tmp/invalid.webm');
+      expect(api.events, isEmpty);
+      expect(notifier.state.error, contains('WebM'));
+      notifier.dispose();
+    });
+
     test('initial state has defaults', () {
       final notifier = ExportNotifier();
       expect(notifier.state.isExporting, isFalse);
@@ -393,6 +461,7 @@ class _FakeExportApi extends EditorsProEngineApi {
 
   final events = <String>[];
   final result = Completer<BridgeExportResult>();
+  BridgeExportSettings? settings;
 
   @override
   void prepareExport() => events.add('prepare');
@@ -408,6 +477,7 @@ class _FakeExportApi extends EditorsProEngineApi {
     required BridgeExportSettings settings,
   }) {
     events.add('export');
+    this.settings = settings;
     return result.future;
   }
 }

@@ -46,23 +46,30 @@ object StorageIntegration {
      * @return The absolute path of the temporary file, or null on error
      */
     fun copyContentUriToTempFile(context: Context, contentUri: Uri): String? {
+        var ownedTempFile: File? = null
         return try {
             val fileName = getFileName(context, contentUri) ?: "temp_media_${System.currentTimeMillis()}"
             val tempDir = File(context.cacheDir, "engine_media")
-            if (!tempDir.exists()) tempDir.mkdirs()
-
-            val tempFile = File(tempDir, fileName)
-            if (tempFile.exists()) tempFile.delete()
-
-            context.contentResolver.openInputStream(contentUri)?.use { input ->
+            if (!tempDir.exists() && !tempDir.mkdirs()) throw IOException("Cannot prepare import storage")
+            // Provider display names are untrusted and may be reused by many
+            // documents. Never overwrite a previous import or accept a path.
+            val safeName = fileName.substringAfterLast('/').substringAfterLast('\\')
+                .replace(Regex("[^A-Za-z0-9._-]"), "_").takeLast(96)
+            val inputStream = context.contentResolver.openInputStream(contentUri)
+                ?: throw IOException("The selected file could not be opened")
+            inputStream.use { input ->
+                val tempFile = File.createTempFile("import-", "-$safeName", tempDir)
+                ownedTempFile = tempFile
                 FileOutputStream(tempFile).use { output ->
                     input.copyTo(output, 8192)
+                    output.fd.sync()
                 }
             }
-
-            Log.i(TAG, "Copied content URI to temp file: ${tempFile.absolutePath}")
-            tempFile.absolutePath
+            val completed = ownedTempFile ?: throw IOException("Import did not produce a file")
+            if (completed.length() == 0L) throw IOException("The selected file is empty")
+            completed.absolutePath
         } catch (e: Exception) {
+            ownedTempFile?.delete()
             Log.e(TAG, "Failed to copy content URI to temp file: ${e.message}")
             null
         }

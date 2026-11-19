@@ -143,6 +143,9 @@ pub unsafe extern "C" fn editors_pro_dispatch(
 
     // Acquire engine lock and dispatch.
     let result = std::panic::catch_unwind(|| {
+        if let Some(response) = dispatch_saved_project(method_str, &args) {
+            return response;
+        }
         let mut api = ENGINE.lock().expect("engine mutex poisoned");
         dispatch_method(&mut api, method_str, &args)
     });
@@ -206,6 +209,48 @@ fn leak_cstring(s: &str) -> *mut c_char {
         .into_raw()
 }
 
+/// Saved-project workers own their engines. Do not acquire or replace the
+/// interactive engine, its export progress, or its cancellation state here.
+fn dispatch_saved_project(method: &str, args: &serde_json::Value) -> Option<String> {
+    use crate::api::project_preview;
+    match method {
+        "inspect_saved_project" => Some(match args.get("project_path").and_then(|value| value.as_str()) {
+            Some(path) => to_json_string(project_preview::inspect_saved_project(path)),
+            None => to_json_err("missing 'project_path'"),
+        }),
+        "start_project_preview" => Some(match serde_json::from_value(args.clone()) {
+            Ok(request) => to_json_string(project_preview::start_job(request)),
+            Err(error) => to_json_err(format!("Invalid preview request: {error}")),
+        }),
+        "clone_saved_project" => Some(match serde_json::from_value(args.clone()) {
+            Ok(request) => to_json_string(project_preview::clone_saved_project(request)),
+            Err(error) => to_json_err(format!("Invalid duplicate request: {error}")),
+        }),
+        "project_preview_status" | "release_project_preview" => Some(match args.get("job_id").and_then(|value| value.as_str()) {
+            Some(id) if method == "project_preview_status" => to_json_string(project_preview::job_status(id)),
+            Some(id) => to_json_string(project_preview::release_job(id)),
+            None => to_json_err("missing 'job_id'"),
+        }),
+        _ => None,
+    }
+}
+
+fn optional_text_arg(args: &serde_json::Value, key: &str) -> Result<Option<String>, String> {
+    match args.get(key) {
+        None | Some(serde_json::Value::Null) => Ok(None),
+        Some(value) => value.as_str().map(|value| Some(value.to_owned()))
+            .ok_or_else(|| format!("'{key}' must be text")),
+    }
+}
+
+fn optional_float_arg(args: &serde_json::Value, key: &str) -> Result<Option<f32>, String> {
+    match args.get(key) {
+        None | Some(serde_json::Value::Null) => Ok(None),
+        Some(value) => value.as_f64().filter(|value| value.is_finite() && (*value as f32).is_finite())
+            .map(|value| Some(value as f32)).ok_or_else(|| format!("'{key}' must be a finite number")),
+    }
+}
+
 /// Dispatch a single method call. Returns the JSON response string.
 ///
 /// This is a giant match on `method`. Only a subset of the full 60+ API
@@ -220,6 +265,27 @@ fn dispatch_method(
     args: &serde_json::Value,
 ) -> String {
     match method {
+        "update_text_overlay" => {
+            let update = || -> Result<(), String> {
+                let clip_id = args.get("clip_id").and_then(|value| value.as_str())
+                    .ok_or("missing 'clip_id'")?.to_owned();
+                api.update_text_overlay(clip_id,
+                    optional_text_arg(args, "content")?, optional_text_arg(args, "font_family")?,
+                    optional_float_arg(args, "font_size")?, optional_text_arg(args, "color_hex")?,
+                    optional_float_arg(args, "position_x")?, optional_float_arg(args, "position_y")?)
+            };
+            to_json_string(update())
+        }
+        "set_filter_look" => {
+            let apply = || -> Result<(), String> {
+                let clip_id = args.get("clip_id").and_then(|value| value.as_str()).ok_or("missing 'clip_id'")?;
+                let preset_id = args.get("preset_id").and_then(|value| value.as_str()).ok_or("missing 'preset_id'")?;
+                let intensity = optional_float_arg(args, "intensity")?.ok_or("missing 'intensity'")?;
+                let enabled = args.get("enabled").and_then(|value| value.as_bool()).ok_or("missing 'enabled'")?;
+                api.set_filter_look(clip_id.to_owned(), preset_id.to_owned(), intensity, enabled)
+            };
+            to_json_string(apply())
+        }
         // ─── Lifecycle ────────────────────────────────────────────────────
         "initialize" => to_json_string::<()>(api.initialize()),
         "get_engine_version" => to_json_ok(&crate::engine_version().to_string()),

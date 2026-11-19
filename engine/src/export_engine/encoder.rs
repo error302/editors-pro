@@ -281,6 +281,8 @@ impl VideoEncoder {
         let time_base = ffmpeg::Rational::new(1, self.settings.fps as i32);
         encoder.set_time_base(time_base);
         stream.set_time_base(time_base);
+        stream.set_rate(ffmpeg::Rational::new(self.settings.fps as i32, 1));
+        stream.set_avg_frame_rate(ffmpeg::Rational::new(self.settings.fps as i32, 1));
 
         // Codec-specific options
         let encoder = match self.settings.codec {
@@ -488,6 +490,9 @@ impl VideoEncoder {
         let mut packet = ffmpeg::Packet::empty();
         while encoder.receive_packet(&mut packet).is_ok() {
             packet.set_stream(stream_index);
+            // MediaCodec can omit packet duration. A CFR video packet spans
+            // one encoder tick; otherwise the final frame has no duration.
+            if packet.duration() <= 0 { packet.set_duration(1); }
             packet.rescale_ts(encoder_time_base, output_time_base);
             packet
                 .write_interleaved(octx)
@@ -860,11 +865,11 @@ impl AudioEncoder {
     /// The encoder is not yet connected to an output context; call
     /// [`add_stream()`](Self::add_stream) to attach it.
     pub fn new(sample_rate: u32, channels: u32, bitrate_kbps: u32) -> Result<Self, String> {
-        if sample_rate == 0 {
+        if sample_rate == 0 || sample_rate > i32::MAX as u32 {
             return Err("Sample rate must be non-zero".to_string());
         }
-        if channels == 0 {
-            return Err("Channels must be non-zero".to_string());
+        if channels != 1 && channels != 2 {
+            return Err("AAC output supports mono or stereo audio".to_string());
         }
         if bitrate_kbps == 0 {
             return Err("Audio bitrate must be non-zero".to_string());
@@ -900,6 +905,7 @@ impl AudioEncoder {
         let codec = ffmpeg::encoder::find_by_name("aac")
             .ok_or_else(|| "AAC encoder not found in FFmpeg".to_string())?;
 
+        let global_header = octx.format().flags().contains(ffmpeg::format::Flags::GLOBAL_HEADER);
         // Add audio stream
         let mut stream = octx
             .add_stream(codec)
@@ -912,6 +918,7 @@ impl AudioEncoder {
             .audio()
             .map_err(|e| format!("Failed to create audio encoder: {}", e))?;
 
+        if global_header { encoder.set_flags(ffmpeg::codec::Flags::GLOBAL_HEADER); }
         encoder.set_rate(self.sample_rate as i32);
         encoder.set_bit_rate(self.bitrate_kbps as usize * 1000);
         encoder.set_time_base(self.time_base);
@@ -975,6 +982,9 @@ impl AudioEncoder {
         samples: &[f32],
     ) -> Result<(), String> {
         let stream_index = self.stream_index.ok_or("Audio stream not configured")?;
+        if samples.iter().any(|sample| !sample.is_finite()) {
+            return Err("Audio input contains a non-finite sample".into());
+        }
         // Append new samples to buffer
         self.sample_buffer.extend_from_slice(samples);
 
@@ -1008,6 +1018,9 @@ impl AudioEncoder {
     /// frame with silence if needed.
     pub fn flush(&mut self, octx: &mut ffmpeg::format::context::Output) -> Result<(), String> {
         let stream_index = self.stream_index.ok_or("Audio stream not configured")?;
+        if self.sample_buffer.len() % self.channels as usize != 0 {
+            return Err("Audio input ends with an incomplete channel frame".into());
+        }
         // Encode any remaining partial frame (padded with silence)
         let samples_per_frame = self.frame_size * self.channels as usize;
         if !self.sample_buffer.is_empty() {
@@ -1033,7 +1046,7 @@ impl AudioEncoder {
             .encoder
             .as_mut()
             .ok_or("Audio encoder not configured")?;
-        let _ = encoder.send_eof();
+        encoder.send_eof().map_err(|e| format!("Audio encoder EOF failed: {}", e))?;
         Self::receive_and_write_packets(stream_index, octx, encoder)?;
 
         Ok(())
@@ -1069,48 +1082,7 @@ impl AudioEncoder {
     /// Converts `[L₀, R₀, L₁, R₁, …]` → `plane₀ = [L₀, L₁, …]`,
     /// `plane₁ = [R₀, R₁, …]`.
     fn build_audio_frame(&self, interleaved: &[f32]) -> Result<ffmpeg::frame::Audio, String> {
-        let channel_layout = match self.channels {
-            1 => ffmpeg::channel_layout::ChannelLayout::MONO,
-            2 => ffmpeg::channel_layout::ChannelLayout::STEREO,
-            _ => return Err(format!("Unsupported channel count: {}", self.channels)),
-        };
-
-        let mut frame = ffmpeg::frame::Audio::new(
-            ffmpeg::format::Sample::F32(ffmpeg::format::sample::Type::Planar),
-            self.frame_size,
-            channel_layout,
-        );
-
-        frame.set_pts(Some(self.next_pts));
-        frame.set_rate(self.sample_rate);
-
-        // Deinterleave: [L0, R0, L1, R1, ...] → plane 0 [L0, L1, ...], plane 1 [R0, R1, ...]
-        let channels = self.channels as usize;
-        for ch in 0..channels {
-            let dst = frame.data_mut(ch);
-            let plane: Vec<f32> = (0..self.frame_size)
-                .map(|i| {
-                    let idx = i * channels + ch;
-                    if idx < interleaved.len() {
-                        interleaved[idx]
-                    } else {
-                        0.0
-                    }
-                })
-                .collect();
-
-            let src_bytes = unsafe {
-                std::slice::from_raw_parts(
-                    plane.as_ptr() as *const u8,
-                    plane.len() * std::mem::size_of::<f32>(),
-                )
-            };
-
-            let copy_len = src_bytes.len().min(dst.len());
-            dst[..copy_len].copy_from_slice(&src_bytes[..copy_len]);
-        }
-
-        Ok(frame)
+        interleaved_f32_audio_frame(interleaved, self.channels, self.frame_size, self.sample_rate, self.next_pts)
     }
 
     /// Receive encoded audio packets and write them interleaved to the output.
@@ -1125,15 +1097,55 @@ impl AudioEncoder {
             .time_base();
         let encoder_time_base = encoder.time_base();
         let mut packet = ffmpeg::Packet::empty();
-        while encoder.receive_packet(&mut packet).is_ok() {
-            packet.set_stream(stream_index);
-            packet.rescale_ts(encoder_time_base, output_time_base);
-            packet
-                .write_interleaved(octx)
-                .map_err(|e| format!("Audio write packet error: {}", e))?;
+        loop {
+            match encoder.receive_packet(&mut packet) {
+                Ok(()) => {
+                    packet.set_stream(stream_index);
+                    packet.rescale_ts(encoder_time_base, output_time_base);
+                    packet.write_interleaved(octx).map_err(|e| format!("Audio write packet error: {}", e))?;
+                }
+                Err(ffmpeg::Error::Eof) | Err(ffmpeg::Error::Other { errno: ffmpeg::sys::EAGAIN }) => break,
+                Err(error) => return Err(format!("Audio packet encoding failed: {}", error)),
+            }
         }
         Ok(())
     }
+}
+
+/// Allocate and fully initialize each AAC float plane from interleaved PCM.
+/// Audio AVFrames describe all planes using linesize[0]; data_mut(channel)
+/// can therefore expose an empty slice for channel 1 even when its plane exists.
+#[cfg(feature = "ffmpeg")]
+pub fn interleaved_f32_audio_frame(
+    interleaved: &[f32], channels: u32, frame_samples: usize, sample_rate: u32, pts: i64,
+) -> Result<ffmpeg::frame::Audio, String> {
+    let layout = match channels {
+        1 => ffmpeg::channel_layout::ChannelLayout::MONO,
+        2 => ffmpeg::channel_layout::ChannelLayout::STEREO,
+        _ => return Err("AAC output supports mono or stereo audio".into()),
+    };
+    if frame_samples == 0 || frame_samples > i32::MAX as usize || sample_rate == 0 || sample_rate > i32::MAX as u32 {
+        return Err("Invalid audio frame size or sample rate".into());
+    }
+    let channels = channels as usize;
+    let capacity = frame_samples.checked_mul(channels).ok_or("Audio frame capacity overflow")?;
+    if interleaved.len() > capacity || interleaved.len() % channels != 0 {
+        return Err("Audio input must contain complete channel frames within the output capacity".into());
+    }
+    if interleaved.iter().any(|sample| !sample.is_finite()) {
+        return Err("Audio input contains a non-finite sample".into());
+    }
+    let mut frame = ffmpeg::frame::Audio::new(
+        ffmpeg::format::Sample::F32(ffmpeg::format::sample::Type::Planar), frame_samples, layout);
+    frame.set_pts(Some(pts));
+    frame.set_rate(sample_rate);
+    for channel in 0..channels {
+        let plane = frame.plane_mut::<f32>(channel);
+        for (index, output) in plane.iter_mut().enumerate() {
+            *output = interleaved.get(index * channels + channel).copied().unwrap_or(0.0);
+        }
+    }
+    Ok(frame)
 }
 
 // ──────────────────────────────────────────────────────────────────
@@ -1276,6 +1288,8 @@ impl MuxedEncoder {
         let video_time_base = ffmpeg::Rational::new(1, self.settings.fps as i32);
         video_encoder.set_time_base(video_time_base);
         video_stream.set_time_base(video_time_base);
+        video_stream.set_rate(ffmpeg::Rational::new(self.settings.fps as i32, 1));
+        video_stream.set_avg_frame_rate(ffmpeg::Rational::new(self.settings.fps as i32, 1));
 
         // Codec-specific options for video
         let video_encoder = match self.settings.codec {
@@ -1381,6 +1395,7 @@ impl MuxedEncoder {
         let mut packet = ffmpeg::Packet::empty();
         while video_encoder.receive_packet(&mut packet).is_ok() {
             packet.set_stream(stream_index);
+            if packet.duration() <= 0 { packet.set_duration(1); }
             packet.rescale_ts(encoder_time_base, output_time_base);
             packet
                 .write_interleaved(octx)
@@ -1422,6 +1437,7 @@ impl MuxedEncoder {
         let mut packet = ffmpeg::Packet::empty();
         while video_encoder.receive_packet(&mut packet).is_ok() {
             packet.set_stream(stream_index);
+            if packet.duration() <= 0 { packet.set_duration(1); }
             packet.rescale_ts(encoder_time_base, output_time_base);
             packet
                 .write_interleaved(octx)
@@ -1477,6 +1493,7 @@ impl MuxedEncoder {
             let mut packet = ffmpeg::Packet::empty();
             while video_encoder.receive_packet(&mut packet).is_ok() {
                 packet.set_stream(video_stream_index);
+                if packet.duration() <= 0 { packet.set_duration(1); }
                 packet.rescale_ts(encoder_time_base, output_time_base);
                 packet
                     .write_interleaved(octx)

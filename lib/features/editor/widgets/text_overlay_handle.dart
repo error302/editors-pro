@@ -69,8 +69,8 @@ typedef TextSizeChanged = void Function(
 );
 
 /// A draggable handle that appears on the preview viewport when a text
-/// clip is selected. It shows a bounding box around the text overlay area,
-/// supports drag to reposition, and shows resize handles at corners.
+/// clip is selected. The native composed frame paints the text; this widget
+/// only supplies selection geometry and commits a position when dragging ends.
 class TextOverlayHandle extends StatefulWidget {
   const TextOverlayHandle({
     required this.data,
@@ -90,268 +90,81 @@ class TextOverlayHandle extends StatefulWidget {
 
 class _TextOverlayHandleState extends State<TextOverlayHandle> {
   Offset? _dragStart;
-  double? _startPosX;
-  double? _startPosY;
-  _ResizeCorner? _activeCorner;
-  double? _startWidth;
-  double? _startHeight;
+  Offset? _startPosition;
+  Offset? _dragPosition;
 
   @override
   Widget build(BuildContext context) {
     final data = widget.data;
-    final selected = data.isSelected;
-
-    // Use LayoutBuilder to get the actual parent (Stack) size for proper positioning
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final parentWidth = constraints.maxWidth;
-        final parentHeight = constraints.maxHeight;
-
-        if (parentWidth <= 0 || parentHeight <= 0) {
-          return const SizedBox.shrink();
-        }
-
-        // Calculate pixel positions from fractional values
-        final left = (data.positionX - data.width / 2) * parentWidth;
-        final top = (data.positionY - data.height / 2) * parentHeight;
-        final boxWidth = data.width * parentWidth;
-        final boxHeight = data.height * parentHeight;
-
-        return Positioned(
-          left: left,
-          top: top,
+    return LayoutBuilder(builder: (context, constraints) {
+      final width = constraints.maxWidth;
+      final height = constraints.maxHeight;
+      if (!width.isFinite || !height.isFinite || width <= 0 || height <= 0) {
+        return const SizedBox.shrink();
+      }
+      final center = _dragPosition ?? Offset(data.positionX, data.positionY);
+      final boxWidth = (data.width * width).clamp(24.0, width);
+      final boxHeight = (data.height * height).clamp(24.0, height);
+      return Stack(clipBehavior: Clip.none, children: [
+        Positioned(
+          left: center.dx * width - boxWidth / 2,
+          top: center.dy * height - boxHeight / 2,
           width: boxWidth,
           height: boxHeight,
-          child: GestureDetector(
-            onPanStart: _onDragStart,
-            onPanUpdate: (details) =>
-                _onDragUpdate(details, parentWidth, parentHeight),
-            onPanEnd: _onDragEnd,
-            onTap: widget.onTap,
-            child: MouseRegion(
-              cursor: SystemMouseCursors.move,
-              child: Container(
-                decoration: BoxDecoration(
+          child: Semantics(
+            label: 'Move text overlay',
+            child: GestureDetector(
+              key: const ValueKey('text-selection-geometry'),
+              behavior: HitTestBehavior.opaque,
+              onTap: widget.onTap,
+              onPanStart: (details) {
+                _dragStart = details.globalPosition;
+                _startPosition = Offset(data.positionX, data.positionY);
+                _dragPosition = _startPosition;
+              },
+              onPanUpdate: (details) {
+                if (_dragStart == null || _startPosition == null) return;
+                final delta = details.globalPosition - _dragStart!;
+                setState(() => _dragPosition = Offset(
+                      (_startPosition!.dx + delta.dx / width).clamp(0.0, 1.0),
+                      (_startPosition!.dy + delta.dy / height).clamp(0.0, 1.0),
+                    ));
+              },
+              onPanEnd: (_) {
+                final position = _dragPosition;
+                if (position != null) {
+                  widget.onPositionChanged(
+                      data.clipId, position.dx, position.dy);
+                }
+                _dragStart = null;
+                _startPosition = null;
+              },
+              onPanCancel: () => setState(() {
+                _dragStart = null;
+                _startPosition = null;
+                _dragPosition = null;
+              }),
+              child: MouseRegion(
+                cursor: SystemMouseCursors.move,
+                child: DecoratedBox(
+                    decoration: BoxDecoration(
                   border: Border.all(
-                    color:
-                        selected ? AppTheme.primary : AppTheme.textTrackColor,
-                    width: selected ? 2.0 : 1.0,
-                  ),
-                  color: selected
-                      ? AppTheme.primary.withValues(alpha: 0.05)
-                      : Colors.transparent,
-                ),
-                child: Stack(
-                  clipBehavior: Clip.none,
-                  children: [
-                    // Text preview
-                    Center(
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
-                        ),
-                        child: Text(
-                          data.text,
-                          style: TextStyle(
-                            fontFamily: data.fontFamily,
-                            fontSize: _scaledFontSize(data.fontSize, boxWidth),
-                            color: _parseHexColor(data.colorHex),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          textAlign: TextAlign.center,
-                          maxLines: 3,
-                        ),
-                      ),
-                    ),
-
-                    // Resize handles (only when selected)
-                    if (selected) ...[
-                      _buildResizeHandle(
-                        _ResizeCorner.topLeft,
-                        parentWidth,
-                        parentHeight,
-                      ),
-                      _buildResizeHandle(
-                        _ResizeCorner.topRight,
-                        parentWidth,
-                        parentHeight,
-                      ),
-                      _buildResizeHandle(
-                        _ResizeCorner.bottomLeft,
-                        parentWidth,
-                        parentHeight,
-                      ),
-                      _buildResizeHandle(
-                        _ResizeCorner.bottomRight,
-                        parentWidth,
-                        parentHeight,
-                      ),
-                    ],
-                  ],
-                ),
+                      color: data.isSelected
+                          ? AppTheme.primary
+                          : AppTheme.textTrackColor,
+                      width: 1.5),
+                )),
               ),
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildResizeHandle(
-    _ResizeCorner corner,
-    double parentWidth,
-    double parentHeight,
-  ) {
-    double? left, top, right, bottom;
-
-    switch (corner) {
-      case _ResizeCorner.topLeft:
-        left = -5;
-        top = -5;
-        break;
-      case _ResizeCorner.topRight:
-        right = -5;
-        top = -5;
-        break;
-      case _ResizeCorner.bottomLeft:
-        left = -5;
-        bottom = -5;
-        break;
-      case _ResizeCorner.bottomRight:
-        right = -5;
-        bottom = -5;
-        break;
-    }
-
-    return Positioned(
-      left: left,
-      top: top,
-      right: right,
-      bottom: bottom,
-      child: GestureDetector(
-        onPanStart: (_) {
-          _activeCorner = corner;
-          _startWidth = widget.data.width;
-          _startHeight = widget.data.height;
-        },
-        onPanUpdate: (details) {
-          if (_activeCorner == null ||
-              _startWidth == null ||
-              _startHeight == null) {
-            return;
-          }
-
-          final dx = details.delta.dx / parentWidth;
-          final dy = details.delta.dy / parentHeight;
-
-          var newWidth = _startWidth!;
-          var newHeight = _startHeight!;
-
-          switch (_activeCorner!) {
-            case _ResizeCorner.topLeft:
-              newWidth = (newWidth - dx * 2).clamp(0.05, 1.0);
-              newHeight = (newHeight - dy * 2).clamp(0.03, 1.0);
-              break;
-            case _ResizeCorner.topRight:
-              newWidth = (newWidth + dx * 2).clamp(0.05, 1.0);
-              newHeight = (newHeight - dy * 2).clamp(0.03, 1.0);
-              break;
-            case _ResizeCorner.bottomLeft:
-              newWidth = (newWidth - dx * 2).clamp(0.05, 1.0);
-              newHeight = (newHeight + dy * 2).clamp(0.03, 1.0);
-              break;
-            case _ResizeCorner.bottomRight:
-              newWidth = (newWidth + dx * 2).clamp(0.05, 1.0);
-              newHeight = (newHeight + dy * 2).clamp(0.03, 1.0);
-              break;
-          }
-
-          _startWidth = newWidth;
-          _startHeight = newHeight;
-          widget.onSizeChanged?.call(widget.data.clipId, newWidth, newHeight);
-        },
-        onPanEnd: (_) {
-          _activeCorner = null;
-          _startWidth = null;
-          _startHeight = null;
-        },
-        child: MouseRegion(
-          cursor: _cursorForCorner(corner),
-          child: Container(
-            width: 10,
-            height: 10,
-            decoration: BoxDecoration(
-              color: AppTheme.primary,
-              border: Border.all(
-                color: AppTheme.primaryLight,
-                width: 1,
-              ),
-              shape: BoxShape.rectangle,
             ),
           ),
         ),
-      ),
-    );
+      ]);
+    });
   }
 
-  void _onDragStart(DragStartDetails details) {
-    _dragStart = details.globalPosition;
-    _startPosX = widget.data.positionX;
-    _startPosY = widget.data.positionY;
-  }
-
-  void _onDragUpdate(
-    DragUpdateDetails details,
-    double parentWidth,
-    double parentHeight,
-  ) {
-    if (_dragStart == null || _startPosX == null || _startPosY == null) return;
-
-    final dx = details.globalPosition.dx - _dragStart!.dx;
-    final dy = details.globalPosition.dy - _dragStart!.dy;
-
-    final newPosX = (_startPosX! + dx / parentWidth).clamp(0.05, 0.95);
-    final newPosY = (_startPosY! + dy / parentHeight).clamp(0.05, 0.95);
-
-    widget.onPositionChanged(widget.data.clipId, newPosX, newPosY);
-  }
-
-  void _onDragEnd(DragEndDetails details) {
-    // Finalize the position on drag end
-    widget.onPositionChanged(
-      widget.data.clipId,
-      widget.data.positionX,
-      widget.data.positionY,
-    );
-    _dragStart = null;
-    _startPosX = null;
-    _startPosY = null;
-  }
-
-  double _scaledFontSize(double baseFontSize, double boxWidth) {
-    // Scale font size based on the overlay width relative to the preview
-    if (boxWidth <= 0) return baseFontSize.clamp(8.0, 120.0);
-    final scale =
-        boxWidth / 400; // 400px is the reference width for baseFontSize
-    return (baseFontSize * scale).clamp(8.0, 120.0);
-  }
-
-  Color _parseHexColor(String hex) {
-    final hexStr = hex.replaceFirst('#', '');
-    return Color(int.parse('FF$hexStr', radix: 16));
-  }
-
-  MouseCursor _cursorForCorner(_ResizeCorner corner) {
-    switch (corner) {
-      case _ResizeCorner.topLeft:
-      case _ResizeCorner.bottomRight:
-        return SystemMouseCursors.resizeUpLeftDownRight;
-      case _ResizeCorner.topRight:
-      case _ResizeCorner.bottomLeft:
-        return SystemMouseCursors.resizeUpRightDownLeft;
-    }
+  @override
+  void didUpdateWidget(covariant TextOverlayHandle oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (_dragStart == null) _dragPosition = null;
   }
 }
-
-enum _ResizeCorner { topLeft, topRight, bottomLeft, bottomRight }

@@ -7,11 +7,15 @@ import 'package:go_router/go_router.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../../core/constants/app_icons.dart';
+import '../../../core/constants/frame_rates.dart';
 import '../../../core/extensions/context_extensions.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/app_brand.dart';
 import '../../../core/widgets/app_icon.dart';
 import '../../../data/models/project_model.dart';
 import '../providers/project_provider.dart';
+import '../../settings/providers/settings_provider.dart';
+import 'project_preview_dialog.dart';
 
 /// Home screen showing project list, templates, and create button.
 class ProjectHomeScreen extends ConsumerStatefulWidget {
@@ -27,6 +31,7 @@ class _ProjectHomeScreenState extends ConsumerState<ProjectHomeScreen>
   final _searchController = TextEditingController();
   bool _searchVisible = false;
   String _query = '';
+  bool _projectDialogOpen = false;
 
   @override
   void initState() {
@@ -103,22 +108,7 @@ class _ProjectHomeScreenState extends ConsumerState<ProjectHomeScreen>
       padding: const EdgeInsets.fromLTRB(20, 24, 20, 20),
       child: Row(
         children: [
-          // Logo in 44x44 clean rounded container
-          Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              color: AppTheme.surfaceVariant,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(12),
-              child: Image.asset(
-                'assets/icons/logo.png',
-                fit: BoxFit.cover,
-              ),
-            ),
-          ),
+          const AppBrandMark(size: 44),
           const SizedBox(width: 12),
           // Let the brand name yield space to the action buttons on narrow
           // phones instead of forcing the header row wider than the screen.
@@ -128,15 +118,7 @@ class _ProjectHomeScreenState extends ConsumerState<ProjectHomeScreen>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    'EDITORS-PRO',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: context.textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 0.8,
-                    ),
-                  ),
+                  const AppBrandWordmark(fontSize: 20),
                   const SizedBox(height: 2),
                   Text(
                     'Your editing studio',
@@ -162,7 +144,7 @@ class _ProjectHomeScreenState extends ConsumerState<ProjectHomeScreen>
           _buildHeaderIconButton(
             icon: AppIcons.settings,
             tooltip: 'Settings',
-            onTap: () => context.go('/settings'),
+            onTap: () => context.push('/settings'),
           ),
         ],
       ),
@@ -288,14 +270,20 @@ class _ProjectHomeScreenState extends ConsumerState<ProjectHomeScreen>
             mainAxisSpacing: 16,
             // The 16:9 preview and project metadata need more vertical room
             // on phones than the old 1.4 ratio allowed.
-            childAspectRatio: isWide ? 1.15 : 1.22,
+            mainAxisExtent:
+                ((constraints.maxWidth - 32 - (crossAxisCount - 1) * 16) /
+                            crossAxisCount) *
+                        9 /
+                        16 +
+                    140,
           ),
           itemCount: projects.length,
           itemBuilder: (context, index) {
             final project = projects[index];
             return _ProjectCard(
               project: project,
-              onTap: () => _openProject(context, project),
+              onTap: () => _openProject(project),
+              onPreview: () => showProjectPreview(context, project),
               onMore: () => _showProjectActions(context, project),
             )
                 .animate(delay: (index * 80).ms)
@@ -307,10 +295,10 @@ class _ProjectHomeScreenState extends ConsumerState<ProjectHomeScreen>
     );
   }
 
-  Future<void> _openProject(BuildContext context, ProjectModel project) async {
+  Future<void> _openProject(ProjectModel project) async {
     final opened =
         await ref.read(projectProvider.notifier).openProject(project);
-    if (!mounted || !context.mounted) return;
+    if (!mounted) return;
     if (opened) {
       context.go('/editor/${project.id}');
       return;
@@ -493,10 +481,34 @@ class _ProjectHomeScreenState extends ConsumerState<ProjectHomeScreen>
   }
 
   // ─── Dialogs & Project Ops ────────────────────────────────────
-  void _showCreateProjectDialog(BuildContext context) {
-    showDialog(
+  Future<void> _showCreateProjectDialog(BuildContext _) async {
+    if (_projectDialogOpen) return;
+    _projectDialogOpen = true;
+    try {
+      await _openCreateProjectDialog();
+    } finally {
+      _projectDialogOpen = false;
+    }
+  }
+
+  Future<void> _openCreateProjectDialog() async {
+    try {
+      await ref.read(settingsProvider.notifier).ensureLoaded();
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not load project defaults: $error')),
+        );
+      }
+      return;
+    }
+    if (!mounted) return;
+    final defaults = ref.read(settingsProvider);
+    await showDialog(
       context: context,
       builder: (dialogContext) => _CreateProjectDialog(
+        initialResolution: defaults.defaultResolution,
+        initialFrameRate: defaults.defaultFps,
         onCreate: (name, width, height, fps) async {
           final project = await _createProject(
             name,
@@ -531,14 +543,28 @@ class _ProjectHomeScreenState extends ConsumerState<ProjectHomeScreen>
     String name, {
     int width = 1920,
     int height = 1080,
-    double fps = 30,
+    double? fps,
     bool navigate = true,
   }) async {
+    try {
+      await ref.read(settingsProvider.notifier).ensureLoaded();
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not load project defaults: $error')),
+        );
+      }
+      return null;
+    }
+    if (!mounted) return null;
+    final effectiveFps = fps ?? ref.read(settingsProvider).defaultFps;
     final effectiveName =
         name.trim().isEmpty ? 'Untitled Project' : name.trim();
-    final project = await ref
-        .read(projectProvider.notifier)
-        .createProject(effectiveName, width: width, height: height, fps: fps);
+    final project = await ref.read(projectProvider.notifier).createProject(
+        effectiveName,
+        width: width,
+        height: height,
+        fps: effectiveFps);
     if (!mounted) return null;
     if (project == null) {
       if (navigate) {
@@ -629,6 +655,17 @@ class _ProjectHomeScreenState extends ConsumerState<ProjectHomeScreen>
             ),
             const Divider(),
             ListTile(
+              leading: const Icon(Icons.play_circle_outline),
+              title: const Text('Play preview'),
+              subtitle: const Text(
+                'Watch the saved timeline without opening the editor',
+              ),
+              onTap: () {
+                Navigator.pop(ctx);
+                unawaited(showProjectPreview(context, project));
+              },
+            ),
+            ListTile(
               leading: const Icon(Icons.ios_share),
               title: const Text('Share Project Backup'),
               subtitle: const Text(
@@ -645,7 +682,7 @@ class _ProjectHomeScreenState extends ConsumerState<ProjectHomeScreen>
               subtitle: const Text('Continue editing in the timeline'),
               onTap: () {
                 Navigator.pop(ctx);
-                unawaited(_openProject(context, project));
+                unawaited(_openProject(project));
               },
             ),
             ListTile(
@@ -673,7 +710,7 @@ class _ProjectHomeScreenState extends ConsumerState<ProjectHomeScreen>
                                   .read(projectProvider)
                                   .recentProjects
                                   .first;
-                              context.go('/editor/${dup.id}');
+                              unawaited(_openProject(dup));
                             },
                           ),
                         ),
@@ -741,10 +778,12 @@ class _ProjectCard extends StatelessWidget {
   const _ProjectCard({
     required this.project,
     required this.onTap,
+    required this.onPreview,
     required this.onMore,
   });
   final ProjectModel project;
   final VoidCallback onTap;
+  final VoidCallback onPreview;
   final VoidCallback onMore;
 
   @override
@@ -775,12 +814,11 @@ class _ProjectCard extends StatelessWidget {
                           top: Radius.circular(AppTheme.radiusLarge),
                         ),
                       ),
-                      child: const Center(
-                        child: AppIcon(
-                          AppIcons.film,
-                          size: 28,
-                          color: AppTheme.textDisabled,
+                      child: ClipRRect(
+                        borderRadius: const BorderRadius.vertical(
+                          top: Radius.circular(AppTheme.radiusLarge),
                         ),
+                        child: ProjectCover(project: project),
                       ),
                     ),
                   ),
@@ -833,6 +871,25 @@ class _ProjectCard extends StatelessWidget {
                 ],
               ),
               // ─ Info section — name + last modified ─
+              Padding(
+                padding: const EdgeInsets.fromLTRB(8, 4, 8, 0),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: TextButton.icon(
+                        onPressed: onPreview,
+                        icon: const Icon(Icons.play_arrow, size: 18),
+                        label: const Text('Play preview'),
+                      ),
+                    ),
+                    TextButton.icon(
+                      onPressed: onTap,
+                      icon: const Icon(Icons.edit_outlined, size: 16),
+                      label: const Text('Edit'),
+                    ),
+                  ],
+                ),
+              ),
               Padding(
                 padding: const EdgeInsets.fromLTRB(10, 10, 10, 12),
                 child: Column(
@@ -1040,7 +1097,13 @@ class _GradientButton extends StatelessWidget {
 
 // ─── Create Project Dialog ───────────────────────────────────────
 class _CreateProjectDialog extends StatefulWidget {
-  const _CreateProjectDialog({required this.onCreate});
+  const _CreateProjectDialog({
+    required this.onCreate,
+    required this.initialResolution,
+    required this.initialFrameRate,
+  });
+  final String initialResolution;
+  final double initialFrameRate;
   final Future<String?> Function(
     String name,
     int width,
@@ -1054,11 +1117,18 @@ class _CreateProjectDialog extends StatefulWidget {
 
 class _CreateProjectDialogState extends State<_CreateProjectDialog> {
   final _nameController = TextEditingController(text: 'Untitled Project');
-  String _selectedResolution = '1080p';
+  late String _selectedResolution;
   _CanvasPreset _selectedCanvas = _CanvasPreset.landscape;
-  double _selectedFrameRate = 30;
+  late double _selectedFrameRate;
   bool _isCreating = false;
   String? _errorMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedResolution = widget.initialResolution;
+    _selectedFrameRate = widget.initialFrameRate;
+  }
 
   static const _resolutions = <_ResolutionOption>[
     _ResolutionOption('720p', 1280, 720),
@@ -1165,17 +1235,17 @@ class _CreateProjectDialogState extends State<_CreateProjectDialog> {
           const SizedBox(height: 18),
           _sectionLabel(context, 'Frame rate'),
           const SizedBox(height: 8),
-          SegmentedButton<double>(
-            showSelectedIcon: false,
-            segments: const [
-              ButtonSegment(value: 24.0, label: Text('24 fps')),
-              ButtonSegment(value: 30.0, label: Text('30 fps')),
-              ButtonSegment(value: 60.0, label: Text('60 fps')),
+          DropdownButtonFormField<double>(
+            key: const ValueKey('new-project-fps'),
+            initialValue: _selectedFrameRate,
+            isExpanded: true,
+            items: [
+              for (final fps in supportedProjectFrameRates)
+                DropdownMenuItem(value: fps, child: Text('${fps.toInt()} fps')),
             ],
-            selected: {_selectedFrameRate},
-            onSelectionChanged: (selection) => setState(
-              () => _selectedFrameRate = selection.first,
-            ),
+            onChanged: (fps) {
+              if (fps != null) setState(() => _selectedFrameRate = fps);
+            },
           ),
           const SizedBox(height: 14),
           Container(

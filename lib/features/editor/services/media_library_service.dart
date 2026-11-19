@@ -5,6 +5,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../core/constants/app_constants.dart';
+import '../../../core/services/storage_service.dart';
 
 class MediaLibraryService {
   MediaLibraryService({Directory? storageDirectory})
@@ -43,6 +44,7 @@ class MediaLibraryService {
   Future<File> copyIntoLibrary({
     required String sourcePath,
     required String fileName,
+    Stream<List<int>>? readStream,
   }) async {
     final extension = p.extension(fileName).toLowerCase();
     if (!_supportedExtensions.contains(extension)) {
@@ -51,12 +53,25 @@ class MediaLibraryService {
       );
     }
 
-    final source = File(sourcePath);
-    if (!await source.exists()) {
-      throw FileSystemException(
-        'The selected file is no longer available.',
-        sourcePath,
-      );
+    var input = readStream;
+    if (input == null) {
+      var localPath = sourcePath;
+      final uri = Uri.tryParse(sourcePath);
+      if (uri?.scheme == 'content') {
+        localPath =
+            await StorageService.copyContentUriToTempFile(sourcePath) ?? '';
+      } else if (uri?.scheme == 'file') {
+        localPath = uri!.toFilePath();
+      }
+      final source = File(localPath);
+      if (localPath.isEmpty || !await source.exists()) {
+        throw FileSystemException(
+            'The selected file is no longer available.', sourcePath);
+      }
+      if (await source.length() == 0) {
+        throw FileSystemException('The selected file is empty.', sourcePath);
+      }
+      input = source.openRead();
     }
 
     var storageDirectory = _storageDirectory;
@@ -71,9 +86,21 @@ class MediaLibraryService {
     final destination = File(
       p.join(mediaDirectory.path, '${const Uuid().v4()}$extension'),
     );
+    final partial = File('${destination.path}.partial');
     try {
-      return await source.copy(destination.path);
+      final sink = partial.openWrite();
+      try {
+        await sink.addStream(input);
+        await sink.flush();
+      } finally {
+        await sink.close();
+      }
+      if (await partial.length() == 0) {
+        throw FileSystemException('The selected file is empty.', sourcePath);
+      }
+      return await partial.rename(destination.path);
     } catch (_) {
+      if (await partial.exists()) await partial.delete();
       if (await destination.exists()) {
         await destination.delete();
       }

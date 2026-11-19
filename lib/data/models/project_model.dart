@@ -116,6 +116,7 @@ class TrackModel {
   final TrackType trackType;
   final List<ClipModel> clips;
   final bool locked;
+
   final bool visible;
   final double volume;
   final int orderIndex;
@@ -143,6 +144,64 @@ class TrackModel {
   }
 }
 
+/// Text size is measured in project canvas pixels; positions are center anchors.
+class TextClipProperties {
+  const TextClipProperties({
+    this.content = '',
+    this.fontFamily = 'sans-serif',
+    this.fontSize = 36,
+    this.colorHex = '#FFFFFF',
+    this.positionX = 0.5,
+    this.positionY = 0.5,
+  });
+
+  static const supportedFonts = [
+    {'name': 'Inter Regular', 'family': 'Inter', 'style': 'Regular'},
+    {'name': 'Inter SemiBold', 'family': 'Inter-SemiBold', 'style': 'SemiBold'},
+    {'name': 'Inter Bold', 'family': 'Inter-Bold', 'style': 'Bold'},
+    {'name': 'DejaVu Sans Regular', 'family': 'sans-serif', 'style': 'Regular'},
+  ];
+
+  final String content;
+  final String fontFamily;
+  final double fontSize;
+  final String colorHex;
+  final double positionX;
+  final double positionY;
+
+  static String canonicalFont(String family) => switch (family) {
+        'Inter' ||
+        'Inter-Regular' ||
+        'Inter-Medium' ||
+        'Inter-Italic' =>
+          'Inter',
+        'Inter-SemiBold' => 'Inter-SemiBold',
+        'Inter-Bold' || 'Inter-Bold-Italic' => 'Inter-Bold',
+        _ => 'sans-serif',
+      };
+
+  factory TextClipProperties.fromMap(Map<String, dynamic> map) {
+    double number(String key, double fallback) {
+      final value = map[key];
+      return value is num && value.isFinite ? value.toDouble() : fallback;
+    }
+
+    final color = map['color_hex'];
+    return TextClipProperties(
+      content: map['content'] is String ? map['content'] as String : '',
+      fontFamily: canonicalFont(map['font_family'] is String
+          ? map['font_family'] as String
+          : 'sans-serif'),
+      fontSize: number('font_size', 36).clamp(8, 512),
+      colorHex: color is String && RegExp(r'^#[0-9a-fA-F]{6}$').hasMatch(color)
+          ? color.toUpperCase()
+          : '#FFFFFF',
+      positionX: number('position_x', 0.5).clamp(0, 1),
+      positionY: number('position_y', 0.5).clamp(0, 1),
+    );
+  }
+}
+
 /// Track type enum
 enum TrackType {
   video,
@@ -166,6 +225,7 @@ class ClipModel {
     this.transitionIn,
     this.transitionOut,
     this.locked = false,
+    this.properties = const {},
   });
   final String id;
   final String assetId;
@@ -185,6 +245,12 @@ class ClipModel {
   /// title or the closing logo) from accidental edits.
   final bool locked;
 
+  /// Native clip metadata, including authoritative text overlay settings.
+  final Map<String, dynamic> properties;
+
+  TextClipProperties get textProperties =>
+      TextClipProperties.fromMap(properties);
+
   ClipModel copyWith({
     String? id,
     String? assetId,
@@ -198,6 +264,7 @@ class ClipModel {
     TransitionModel? transitionIn,
     TransitionModel? transitionOut,
     bool? locked,
+    Map<String, dynamic>? properties,
   }) {
     return ClipModel(
       id: id ?? this.id,
@@ -212,6 +279,7 @@ class ClipModel {
       transitionIn: transitionIn ?? this.transitionIn,
       transitionOut: transitionOut ?? this.transitionOut,
       locked: locked ?? this.locked,
+      properties: properties ?? this.properties,
     );
   }
 }

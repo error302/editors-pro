@@ -21,31 +21,9 @@ class _TextPanelState extends ConsumerState<TextPanel> {
   String _selectedFont = 'Inter';
   double _fontSize = 36.0;
   String _selectedColor = '#FFFFFF';
-  bool _isBold = false;
-  bool _isItalic = false;
-  String _selectedAnimation = 'None';
-  bool _enableStroke = false;
-  double _strokeWidth = 2.0;
-  String _strokeColor = '#000000';
-  bool _enableShadow = false;
-  double _shadowBlur = 4.0;
-  String _shadowColor = '#000000';
-  List<Map<String, String>> _availableFonts = [];
+  List<Map<String, String>> _availableFonts = TextClipProperties.supportedFonts;
 
-  static const List<Map<String, String>> _defaultFonts = [
-    {'name': 'Inter', 'family': 'Inter', 'style': 'Regular'},
-    {'name': 'Roboto', 'family': 'Roboto', 'style': 'Regular'},
-    {'name': 'Open Sans', 'family': 'Open Sans', 'style': 'Regular'},
-    {'name': 'Lato', 'family': 'Lato', 'style': 'Regular'},
-    {'name': 'Montserrat', 'family': 'Montserrat', 'style': 'Regular'},
-    {
-      'name': 'Playfair Display',
-      'family': 'Playfair Display',
-      'style': 'Regular',
-    },
-    {'name': 'Oswald', 'family': 'Oswald', 'style': 'Regular'},
-    {'name': 'Raleway', 'family': 'Raleway', 'style': 'Regular'},
-  ];
+  static const _defaultFonts = TextClipProperties.supportedFonts;
 
   static const List<Map<String, dynamic>> _textPresets = [
     {
@@ -62,25 +40,16 @@ class _TextPanelState extends ConsumerState<TextPanel> {
     },
     {
       'name': 'Caption',
-      'description': 'Small text with background',
+      'description': 'Small text',
       'icon': Icons.closed_caption,
       'fontSize': 24.0,
     },
     {
       'name': 'Lower Third',
-      'description': 'Name/title bar',
+      'description': 'Name or title',
       'icon': Icons.text_fields,
       'fontSize': 28.0,
     },
-  ];
-
-  static const List<String> _animations = [
-    'None',
-    'Fade In',
-    'Fade Out',
-    'Typewriter',
-    'Slide In',
-    'Pop In',
   ];
 
   static const List<Map<String, String>> _presetColors = [
@@ -124,17 +93,24 @@ class _TextPanelState extends ConsumerState<TextPanel> {
                 },
               )
               .toList();
-          if (_availableFonts.isNotEmpty) {
+          _availableFonts = {
+            for (final font in _availableFonts)
+              if (_defaultFonts
+                  .any((supported) => supported['family'] == font['family']))
+                font['family']!: font,
+          }.values.toList();
+          if (_availableFonts.isEmpty) _availableFonts = _defaultFonts;
+          if (!_availableFonts.any((font) => font['family'] == _selectedFont)) {
             _selectedFont = _availableFonts.first['family']!;
           }
         });
-      } else {
+      } else if (mounted) {
         setState(() {
           _availableFonts = _defaultFonts;
         });
       }
     } catch (_) {
-      // Fallback to default fonts
+      if (!mounted) return;
       setState(() {
         _availableFonts = _defaultFonts;
       });
@@ -145,7 +121,7 @@ class _TextPanelState extends ConsumerState<TextPanel> {
     setState(() {
       _textController.text = preset['name'] as String;
       _fontSize = preset['fontSize'] as double;
-      _isBold = preset['name'] == 'Title';
+      _selectedFont = preset['name'] == 'Title' ? 'Inter-Bold' : 'Inter';
     });
   }
 
@@ -175,18 +151,10 @@ class _TextPanelState extends ConsumerState<TextPanel> {
 
     const defaultDurationMs = 5000;
 
-    // Build font family string with style suffixes for bold/italic
-    var fontFamily = _selectedFont;
-    if (_isBold) fontFamily += '-Bold';
-    if (_isItalic) fontFamily += '-Italic';
-
-    // Log selected animation for future engine-side implementation
-    debugPrint('[TextPanel] Animation selected: $_selectedAnimation');
-
-    await ref.read(editorProvider.notifier).addTextClip(
+    final clip = await ref.read(editorProvider.notifier).addTextClip(
           trackId: textTrack.id,
           text: _textController.text,
-          fontFamily: fontFamily,
+          fontFamily: _selectedFont,
           fontSize: _fontSize,
           colorHex: _selectedColor,
           positionX: 0.5,
@@ -196,9 +164,12 @@ class _TextPanelState extends ConsumerState<TextPanel> {
         );
 
     if (mounted) {
+      if (clip != null) ref.read(editorProvider.notifier).selectClip(clip.id);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Added "${_textController.text}" to ${textTrack.name}'),
+          content: Text(clip == null
+              ? 'Text could not be added.'
+              : 'Added "${_textController.text}" to ${textTrack.name}'),
           duration: const Duration(seconds: 1),
         ),
       );
@@ -234,6 +205,7 @@ class _TextPanelState extends ConsumerState<TextPanel> {
           TextField(
             controller: _textController,
             maxLines: 3,
+            maxLength: 16000,
             minLines: 2,
             style: context.textTheme.bodyMedium,
             decoration: InputDecoration(
@@ -276,7 +248,6 @@ class _TextPanelState extends ConsumerState<TextPanel> {
                     child: Text(
                       font['name']!,
                       style: TextStyle(
-                        fontFamily: font['family'],
                         fontSize: 14,
                         color: AppTheme.textPrimary,
                       ),
@@ -310,8 +281,8 @@ class _TextPanelState extends ConsumerState<TextPanel> {
                 child: Slider(
                   value: _fontSize,
                   min: 8.0,
-                  max: 120.0,
-                  divisions: 56,
+                  max: 512.0,
+                  divisions: 126,
                   onChanged: (value) => setState(() => _fontSize = value),
                 ),
               ),
@@ -329,26 +300,6 @@ class _TextPanelState extends ConsumerState<TextPanel> {
             ],
           ),
           const SizedBox(height: 8),
-
-          // Bold / Italic toggles
-          Row(
-            children: [
-              _StyleToggleButton(
-                icon: Icons.format_bold,
-                label: 'B',
-                isActive: _isBold,
-                onTap: () => setState(() => _isBold = !_isBold),
-              ),
-              const SizedBox(width: 6),
-              _StyleToggleButton(
-                icon: Icons.format_italic,
-                label: 'I',
-                isActive: _isItalic,
-                onTap: () => setState(() => _isItalic = !_isItalic),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
 
           // ─── Color Picker ──────────────────────────────────
           _buildSectionLabel('COLOR'),
@@ -382,197 +333,6 @@ class _TextPanelState extends ConsumerState<TextPanel> {
             }).toList(),
           ),
           const SizedBox(height: 16),
-
-          // ─── Animation Selector ─────────────────────────────
-          _buildSectionLabel('ANIMATION'),
-          const SizedBox(height: 6),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            decoration: BoxDecoration(
-              color: AppTheme.surfaceVariant,
-              borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
-            ),
-            child: DropdownButtonHideUnderline(
-              child: DropdownButton<String>(
-                value: _selectedAnimation,
-                isExpanded: true,
-                icon: const Icon(
-                  Icons.animation,
-                  size: 18,
-                  color: AppTheme.textSecondary,
-                ),
-                style: context.textTheme.bodyMedium,
-                dropdownColor: AppTheme.surfaceVariant,
-                items: _animations.map((anim) {
-                  return DropdownMenuItem<String>(
-                    value: anim,
-                    child: Text(
-                      anim,
-                      style: const TextStyle(
-                        color: AppTheme.textPrimary,
-                        fontSize: 14,
-                      ),
-                    ),
-                  );
-                }).toList(),
-                onChanged: (value) {
-                  if (value != null) {
-                    setState(() => _selectedAnimation = value);
-                  }
-                },
-              ),
-            ),
-          ),
-          const SizedBox(height: 20),
-
-          // ─── Stroke / Outline ───────────────────────────────
-          _buildSectionLabel('STROKE / OUTLINE'),
-          const SizedBox(height: 6),
-          Row(
-            children: [
-              Switch(
-                value: _enableStroke,
-                onChanged: (v) => setState(() => _enableStroke = v),
-                activeThumbColor: AppTheme.primary,
-              ),
-              const Text('Enable Stroke', style: TextStyle(fontSize: 13)),
-            ],
-          ),
-          if (_enableStroke) ...[
-            Row(
-              children: [
-                const Text(
-                  'Width',
-                  style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
-                ),
-                Expanded(
-                  child: Slider(
-                    value: _strokeWidth,
-                    min: 0.5,
-                    max: 10.0,
-                    divisions: 19,
-                    activeColor: AppTheme.primary,
-                    label: _strokeWidth.toStringAsFixed(1),
-                    onChanged: (v) => setState(() => _strokeWidth = v),
-                  ),
-                ),
-                Text(
-                  _strokeWidth.toStringAsFixed(1),
-                  style: const TextStyle(fontSize: 11, fontFamily: 'monospace'),
-                ),
-              ],
-            ),
-            Row(
-              children: [
-                const Text(
-                  'Color',
-                  style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
-                ),
-                const SizedBox(width: 8),
-                GestureDetector(
-                  onTap: () {
-                    // Toggle between common stroke colors
-                    final strokeColors = [
-                      '#000000',
-                      '#FFFFFF',
-                      '#FF0000',
-                      '#333333',
-                    ];
-                    final idx = strokeColors.indexOf(_strokeColor);
-                    setState(
-                      () => _strokeColor =
-                          strokeColors[(idx + 1) % strokeColors.length],
-                    );
-                  },
-                  child: Container(
-                    width: 24,
-                    height: 24,
-                    decoration: BoxDecoration(
-                      color: _parseHexColor(_strokeColor),
-                      borderRadius: BorderRadius.circular(4),
-                      border:
-                          Border.all(color: AppTheme.textSecondary, width: 1),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-          ],
-
-          // ─── Shadow ──────────────────────────────────────────
-          _buildSectionLabel('SHADOW'),
-          const SizedBox(height: 6),
-          Row(
-            children: [
-              Switch(
-                value: _enableShadow,
-                onChanged: (v) => setState(() => _enableShadow = v),
-                activeThumbColor: AppTheme.primary,
-              ),
-              const Text('Enable Shadow', style: TextStyle(fontSize: 13)),
-            ],
-          ),
-          if (_enableShadow) ...[
-            Row(
-              children: [
-                const Text(
-                  'Blur',
-                  style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
-                ),
-                Expanded(
-                  child: Slider(
-                    value: _shadowBlur,
-                    min: 0.0,
-                    max: 20.0,
-                    divisions: 20,
-                    activeColor: AppTheme.primary,
-                    label: _shadowBlur.toStringAsFixed(0),
-                    onChanged: (v) => setState(() => _shadowBlur = v),
-                  ),
-                ),
-                Text(
-                  _shadowBlur.toStringAsFixed(0),
-                  style: const TextStyle(fontSize: 11, fontFamily: 'monospace'),
-                ),
-              ],
-            ),
-            Row(
-              children: [
-                const Text(
-                  'Color',
-                  style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
-                ),
-                const SizedBox(width: 8),
-                GestureDetector(
-                  onTap: () {
-                    final shadowColors = [
-                      '#000000',
-                      '#333333',
-                      '#1a1a2e',
-                      '#0f0f23',
-                    ];
-                    final idx = shadowColors.indexOf(_shadowColor);
-                    setState(
-                      () => _shadowColor =
-                          shadowColors[(idx + 1) % shadowColors.length],
-                    );
-                  },
-                  child: Container(
-                    width: 24,
-                    height: 24,
-                    decoration: BoxDecoration(
-                      color: _parseHexColor(_shadowColor),
-                      borderRadius: BorderRadius.circular(4),
-                      border:
-                          Border.all(color: AppTheme.textSecondary, width: 1),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-          ],
 
           // ─── Add Text Button ────────────────────────────────
           SizedBox(
@@ -647,55 +407,6 @@ class _TextPresetChip extends StatelessWidget {
               ),
             ),
           ],
-        ),
-      ),
-    );
-  }
-}
-
-/// Toggle button for bold/italic
-class _StyleToggleButton extends StatelessWidget {
-  const _StyleToggleButton({
-    required this.icon,
-    required this.label,
-    required this.isActive,
-    required this.onTap,
-  });
-  final IconData icon;
-  final String label;
-  final bool isActive;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(6),
-      child: Container(
-        width: 40,
-        height: 36,
-        decoration: BoxDecoration(
-          color: isActive
-              ? AppTheme.primary.withValues(alpha: 0.2)
-              : AppTheme.surfaceVariant,
-          borderRadius: BorderRadius.circular(6),
-          border: Border.all(
-            color: isActive
-                ? AppTheme.primary
-                : AppTheme.textDisabled.withValues(alpha: 0.3),
-            width: 1,
-          ),
-        ),
-        child: Center(
-          child: Text(
-            label,
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: isActive ? FontWeight.w900 : FontWeight.w400,
-              color: isActive ? AppTheme.primary : AppTheme.textSecondary,
-              fontStyle: label == 'I' ? FontStyle.italic : FontStyle.normal,
-            ),
-          ),
         ),
       ),
     );

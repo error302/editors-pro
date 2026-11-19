@@ -15,6 +15,18 @@ class StorageService {
 
   static const _channel = MethodChannel('com.editorspro/storage');
 
+  /// Runtime capability used to keep preview playback off the texture-crop path
+  /// on modern Android, while retaining the older-device player fallback.
+  static Future<int?> androidSdkVersion() async {
+    try {
+      return await _channel.invokeMethod<int>('getAndroidSdkVersion');
+    } on MissingPluginException {
+      return null;
+    } on PlatformException {
+      return null;
+    }
+  }
+
   /// Returns the Android video MIME type supported by the Gallery save path.
   static String? videoMimeTypeForPath(String filePath) {
     switch (p.extension(filePath).toLowerCase()) {

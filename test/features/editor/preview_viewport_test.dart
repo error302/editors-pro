@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
 import 'package:editors_pro/core/services/engine_service.dart';
 import 'package:editors_pro/core/services/project_repository.dart';
 import 'package:editors_pro/data/models/project_model.dart';
@@ -26,6 +29,7 @@ void main() {
       WidgetTester tester, {
       EditorState editorState = const EditorState(),
       ProjectModel? project,
+      Future<Uint8List> Function(int timeMs)? frameLoader,
     }) async {
       await tester.pumpWidget(
         ProviderScope(
@@ -42,11 +46,11 @@ void main() {
           ],
           child: MaterialApp(
             theme: ThemeData.dark(),
-            home: const Scaffold(
+            home: Scaffold(
               body: SizedBox(
                 width: 800,
                 height: 600,
-                child: PreviewViewport(),
+                child: PreviewViewport(frameLoader: frameLoader),
               ),
             ),
           ),
@@ -54,6 +58,24 @@ void main() {
       );
       await tester.pump(const Duration(milliseconds: 100));
     }
+
+    testWidgets('120 frame steps advance exactly one second without drift', (tester) async {
+      const project = ProjectModel(id: '120', name: '120 fps', createdAt: 0,
+          updatedAt: 0, width: 1280, height: 720, fps: 120);
+      await pumpViewport(tester, project: project,
+          editorState: const EditorState(durationMs: 10000));
+      for (var index = 0; index < 120; index++) {
+        await tester.tap(find.byTooltip('Next frame'));
+        await tester.pump();
+      }
+      final container = ProviderScope.containerOf(tester.element(find.byType(PreviewViewport)));
+      expect(container.read(editorProvider).currentTimeMs, 1000);
+      for (var index = 0; index < 120; index++) {
+        await tester.tap(find.byTooltip('Previous frame'));
+        await tester.pump();
+      }
+      expect(container.read(editorProvider).currentTimeMs, 0);
+    });
 
     testWidgets('renders without crashing', (tester) async {
       await pumpViewport(tester);
@@ -68,7 +90,7 @@ void main() {
       expect(find.text('Preview'), findsOneWidget);
     });
 
-    testWidgets('shows the active still image from the project media library',
+    testWidgets('shows the composed engine frame for an active still image',
         (tester) async {
       const imagePath = '/media/project/photo.jpg';
       const project = ProjectModel(
@@ -104,15 +126,24 @@ void main() {
         ],
       );
 
+      final nativeFrame = base64Decode(
+        'iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAYAAACp8Z5+AAAAD0lEQVR4nGNg+I8GSRcAACxQH+H81I9XAAAAAElFTkSuQmCC',
+      );
+      final requestedTimes = <int>[];
       await pumpViewport(
         tester,
         editorState: const EditorState(currentTimeMs: 2500),
         project: project,
+        frameLoader: (timeMs) async {
+          requestedTimes.add(timeMs);
+          return nativeFrame;
+        },
       );
 
       final image = tester.widget<Image>(find.byType(Image));
-      final resizedImage = image.image as ResizeImage;
-      expect((resizedImage.imageProvider as FileImage).file.path, imagePath);
+      expect(image.image, isA<MemoryImage>());
+      expect((image.image as MemoryImage).bytes, nativeFrame);
+      expect(requestedTimes, [2500]);
       expect(find.text('Preview'), findsNothing);
     });
 

@@ -1,5 +1,7 @@
 # Submission readiness audit — 21 October 2026
 
+Historical audit: newer workflow, codec and package evidence is recorded separately in [1 November 2026 verification](EDITOR_WORKFLOW_VERIFICATION_2026-11-01.md). The older failures below are retained as historical findings; consult the newer ledger for their current verification status. Store-submission approval remains separate.
+
 Verdict: **not yet cleared for store submission**. This audit replaces the older blanket completion claims in README. A successful APK is build evidence; it does not establish full editing, export, store-policy or device compatibility.
 
 ## Implemented in this pass

@@ -5,6 +5,61 @@
 
 use serde::{Deserialize, Serialize};
 
+/// Stable resource IDs shared with Flutter. Every advertised face has embedded bytes.
+pub const SUPPORTED_TEXT_FONTS: &[(&str, &str, &str)] = &[
+    ("Inter Regular", "Inter", "Regular"),
+    ("Inter SemiBold", "Inter-SemiBold", "SemiBold"),
+    ("Inter Bold", "Inter-Bold", "Bold"),
+    ("DejaVu Sans Regular", "sans-serif", "Regular"),
+];
+
+/// Legacy UI builds wrote these names without supplying a corresponding font.
+pub fn canonical_font_family(family: &str) -> Option<&'static str> {
+    match family {
+        "Inter" | "Inter-Regular" | "Inter-Medium" | "Inter-Italic" => Some("Inter"),
+        "Inter-SemiBold" => Some("Inter-SemiBold"),
+        "Inter-Bold" | "Inter-Bold-Italic" => Some("Inter-Bold"),
+        "sans-serif"
+        | "sans-serif-Bold"
+        | "sans-serif-Italic"
+        | "sans-serif-Bold-Italic"
+        | "serif"
+        | "serif-Bold"
+        | "monospace"
+        | "DejaVu Sans" => Some("sans-serif"),
+        _ => None,
+    }
+}
+
+pub fn validate_text_values(
+    content: &str,
+    family: &str,
+    size: f32,
+    color: &str,
+    x: f32,
+    y: f32,
+) -> Result<(), String> {
+    if content.len() > 65_536 || content.contains('\0') {
+        return Err("Text must be at most 65536 UTF-8 bytes and contain no NUL characters".into());
+    }
+    if canonical_font_family(family).is_none() {
+        return Err(format!("Font '{}' is not installed for rendering", family));
+    }
+    if !size.is_finite() || !(8.0..=512.0).contains(&size) {
+        return Err("Font size must be between 8 and 512 project pixels".into());
+    }
+    if color.len() != 7
+        || !color.starts_with('#')
+        || !color.as_bytes()[1..].iter().all(u8::is_ascii_hexdigit)
+    {
+        return Err("Text color must be #RRGGBB".into());
+    }
+    if !x.is_finite() || !y.is_finite() || !(0.0..=1.0).contains(&x) || !(0.0..=1.0).contains(&y) {
+        return Err("Text positions must be finite values between 0 and 1".into());
+    }
+    Ok(())
+}
+
 /// A text overlay that can be placed on the timeline
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TextOverlay {
@@ -22,6 +77,33 @@ pub struct TextOverlay {
 }
 
 impl TextOverlay {
+    /// Read the persisted native contract. Missing legacy values have deterministic defaults.
+    pub fn from_properties(
+        properties: &std::collections::HashMap<String, serde_json::Value>,
+    ) -> Self {
+        let string = |key: &str| properties.get(key).and_then(|value| value.as_str());
+        let number = |key: &str, fallback: f32| {
+            properties
+                .get(key)
+                .and_then(|value| value.as_f64())
+                .map(|value| value as f32)
+                .filter(|value| value.is_finite())
+                .unwrap_or(fallback)
+        };
+        let mut overlay = Self::simple(string("content").unwrap_or(""));
+        overlay.font_family = canonical_font_family(string("font_family").unwrap_or("sans-serif"))
+            .unwrap_or("sans-serif")
+            .into();
+        overlay.font_size = number("font_size", 36.0).clamp(8.0, 512.0);
+        overlay.color = TextColor::with_hex(string("color_hex").unwrap_or("#FFFFFF"));
+        overlay.position = TextPosition::at(
+            number("position_x", 0.5).clamp(0.0, 1.0),
+            number("position_y", 0.5).clamp(0.0, 1.0),
+        );
+        overlay.shadow = None;
+        overlay
+    }
+
     /// Create a simple text overlay with default styling
     pub fn simple(content: &str) -> Self {
         Self {
@@ -101,7 +183,8 @@ impl TextOverlay {
             }
             TextAnimation::Bounce { .. } => 1.0,
             TextAnimation::PopIn { duration_ms } => {
-                let anim_progress = (clip_duration_ms as f32 * progress / *duration_ms as f32).clamp(0.0, 1.0);
+                let anim_progress =
+                    (clip_duration_ms as f32 * progress / *duration_ms as f32).clamp(0.0, 1.0);
                 if anim_progress < 0.5 {
                     let t = anim_progress * 2.0;
                     t * t // Ease in
@@ -120,8 +203,15 @@ impl TextOverlay {
                 // Calculate how many characters should be visible
                 // This is a simplified version - the actual implementation
                 // would need the clip duration to calculate properly
-                let visible_chars = (progress * self.content.len() as f32) as usize;
-                &self.content[..visible_chars.min(self.content.len())]
+                let visible_chars =
+                    (progress.clamp(0.0, 1.0) * self.content.chars().count() as f32) as usize;
+                let end = self
+                    .content
+                    .char_indices()
+                    .nth(visible_chars)
+                    .map(|(index, _)| index)
+                    .unwrap_or(self.content.len());
+                &self.content[..end]
             }
             _ => &self.content,
         }
@@ -141,13 +231,22 @@ pub struct TextColor {
 
 impl TextColor {
     pub fn white() -> Self {
-        Self { hex: "#FFFFFF".to_string(), opacity: 1.0 }
+        Self {
+            hex: "#FFFFFF".to_string(),
+            opacity: 1.0,
+        }
     }
     pub fn black() -> Self {
-        Self { hex: "#000000".to_string(), opacity: 1.0 }
+        Self {
+            hex: "#000000".to_string(),
+            opacity: 1.0,
+        }
     }
     pub fn with_hex(hex: &str) -> Self {
-        Self { hex: hex.to_string(), opacity: 1.0 }
+        Self {
+            hex: hex.to_string(),
+            opacity: 1.0,
+        }
     }
 }
 
@@ -168,10 +267,18 @@ pub struct TextPosition {
 }
 
 impl TextPosition {
-    pub fn center() -> Self { Self { x: 0.5, y: 0.5 } }
-    pub fn bottom_center() -> Self { Self { x: 0.5, y: 0.9 } }
-    pub fn top_center() -> Self { Self { x: 0.5, y: 0.1 } }
-    pub fn at(x: f32, y: f32) -> Self { Self { x, y } }
+    pub fn center() -> Self {
+        Self { x: 0.5, y: 0.5 }
+    }
+    pub fn bottom_center() -> Self {
+        Self { x: 0.5, y: 0.9 }
+    }
+    pub fn top_center() -> Self {
+        Self { x: 0.5, y: 0.1 }
+    }
+    pub fn at(x: f32, y: f32) -> Self {
+        Self { x, y }
+    }
 }
 
 /// Text anchor point
@@ -192,12 +299,26 @@ pub enum TextAnchor {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum TextAnimation {
     None,
-    FadeIn { duration_ms: u64 },
-    FadeOut { duration_ms: u64 },
-    Typewriter { chars_per_second: f32 },
-    SlideIn { direction: SlideDirection, duration_ms: u64 },
-    Bounce { height: f32, duration_ms: u64 },
-    PopIn { duration_ms: u64 },
+    FadeIn {
+        duration_ms: u64,
+    },
+    FadeOut {
+        duration_ms: u64,
+    },
+    Typewriter {
+        chars_per_second: f32,
+    },
+    SlideIn {
+        direction: SlideDirection,
+        duration_ms: u64,
+    },
+    Bounce {
+        height: f32,
+        duration_ms: u64,
+    },
+    PopIn {
+        duration_ms: u64,
+    },
 }
 
 /// Slide direction for text animations

@@ -1,11 +1,16 @@
+import 'dart:async';
 import 'dart:developer' as developer;
+import 'dart:io';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 
 import '../../../core/services/engine_service.dart';
 import '../../../core/services/project_repository.dart';
 import '../../../core/services/project_snapshots.dart';
 import '../../../data/models/project_model.dart';
+import '../../editor/providers/editor_provider.dart';
 
 /// Current project state
 class ProjectState {
@@ -46,6 +51,14 @@ class ProjectNotifier extends StateNotifier<ProjectState> {
 
   ProjectRepository get _repo => _ref.read(projectRepositoryProvider);
 
+  Future<void> _operations = Future<void>.value();
+
+  Future<T> _serialize<T>(Future<T> Function() operation) {
+    final result = _operations.then((_) => operation());
+    _operations = result.then<void>((_) {}, onError: (Object _) {});
+    return result;
+  }
+
   /// Load all projects from the database on app startup.
   Future<void> loadProjects() async {
     state = state.copyWith(isLoading: true, clearError: true);
@@ -69,10 +82,25 @@ class ProjectNotifier extends StateNotifier<ProjectState> {
     int width = 1920,
     int height = 1080,
     double fps = 30.0,
+  }) =>
+      _serialize(
+          () => _createProject(name, width: width, height: height, fps: fps));
+
+  Future<ProjectModel?> _createProject(
+    String name, {
+    int width = 1920,
+    int height = 1080,
+    double fps = 30,
   }) async {
     state = state.copyWith(isLoading: true, clearError: true);
-
+    var previous = state.currentProject;
+    var engineChanged = false;
     try {
+      if (previous != null && !await _saveCurrentProject()) {
+        throw StateError('Save the current project before creating another.');
+      }
+      previous = state.currentProject;
+      engineChanged = true;
       final project = await _repo.createProject(
         name,
         width: width,
@@ -88,6 +116,15 @@ class ProjectNotifier extends StateNotifier<ProjectState> {
       await syncFromEngine();
       return project;
     } catch (e) {
+      if (engineChanged && previous != null) {
+        try {
+          await _repo.activateProjectInEngine(previous);
+          state = state.copyWith(currentProject: previous);
+          await syncFromEngine();
+        } catch (_) {
+          state = state.copyWith(clearCurrentProject: true);
+        }
+      }
       developer.log('createProject failed: $e', name: 'ProjectNotifier');
       state = state.copyWith(isLoading: false, error: e.toString());
       return null;
@@ -95,9 +132,15 @@ class ProjectNotifier extends StateNotifier<ProjectState> {
   }
 
   /// Open an existing project — loads from DB and restores in engine.
-  Future<bool> openProject(ProjectModel project) async {
-    state = state.copyWith(isLoading: true, error: null);
+  Future<bool> openProject(ProjectModel project) =>
+      _serialize(() => _openProject(project));
+
+  Future<bool> _openProject(ProjectModel project) async {
+    state = state.copyWith(isLoading: true, clearError: true);
     try {
+      if (state.currentProject != null && !await _saveCurrentProject()) {
+        throw StateError('Save the current project before opening another.');
+      }
       // Load full project with assets from DB
       final fullProject = await _repo.getProject(project.id) ?? project;
       await _repo.activateProjectInEngine(fullProject);
@@ -120,11 +163,14 @@ class ProjectNotifier extends StateNotifier<ProjectState> {
 
   /// Close the current project
   void closeProject() {
-    state = state.copyWith(currentProject: null);
+    state = state.copyWith(clearCurrentProject: true);
   }
 
   /// Delete a project — removes from DB and engine.
-  Future<void> deleteProject(String projectId) async {
+  Future<void> deleteProject(String projectId) =>
+      _serialize(() => _deleteProject(projectId));
+
+  Future<void> _deleteProject(String projectId) async {
     try {
       await _repo.deleteProject(projectId);
       final updatedRecent =
@@ -140,7 +186,9 @@ class ProjectNotifier extends StateNotifier<ProjectState> {
   }
 
   /// Delete every saved project while keeping source media files untouched.
-  Future<int> deleteAllProjects() async {
+  Future<int> deleteAllProjects() => _serialize(_deleteAllProjects);
+
+  Future<int> _deleteAllProjects() async {
     state = state.copyWith(isLoading: true, clearError: true);
     try {
       final projects = await _repo.getAllProjects();
@@ -176,45 +224,27 @@ class ProjectNotifier extends StateNotifier<ProjectState> {
     }
   }
 
-  /// Phase F.2: Duplicate a project — creates a new project with the same
-  /// name + " (copy)" suffix, same dimensions/fps, and copies the media
-  /// asset references (file paths point to the same source files; no
-  /// media duplication on disk). The new project opens empty (no timeline
-  /// clips copied) — the user can then re-link or copy clip ranges as needed.
-  ///
-  /// This is the workflow pattern: duplicate to fork a delivery variant
-  /// (e.g., "Reel v3 (copy)" → edit down for a 9:16 social cut) without
-  /// losing the original.
-  Future<String> duplicateProject(String projectId) async {
-    state = state.copyWith(isLoading: true, error: null);
-    try {
-      final original = await _repo.getProject(projectId);
-      if (original == null) {
-        throw Exception('Project not found: $projectId');
-      }
-      final newName = '${original.name} (copy)';
-      final duplicate = await _repo.createProject(
-        newName,
-        width: original.width,
-        height: original.height,
-        fps: original.fps,
-      );
-      // Copy media asset references (files stay where they are on disk)
-      for (final asset in original.mediaAssets) {
-        await _repo.addMediaAsset(duplicate.id, asset);
-      }
-      final updatedRecent = [duplicate, ...state.recentProjects];
-      state = state.copyWith(
-        recentProjects: updatedRecent,
-        isLoading: false,
-      );
-      return duplicate.id;
-    } catch (e) {
-      developer.log('duplicateProject failed: $e', name: 'ProjectNotifier');
-      state = state.copyWith(isLoading: false, error: 'Duplicate failed: $e');
-      rethrow;
-    }
-  }
+  /// Clone the saved timeline and media references without activating the copy.
+  Future<String> duplicateProject(String projectId) => _serialize(() async {
+        state = state.copyWith(isLoading: true, clearError: true);
+        try {
+          if (state.currentProject?.id == projectId &&
+              !await _saveCurrentProject()) {
+            throw StateError(
+                'Save the original project before duplicating it.');
+          }
+          final duplicate = await _repo.duplicateSavedProject(projectId);
+          state = state.copyWith(
+            recentProjects: [duplicate, ...state.recentProjects],
+            isLoading: false,
+          );
+          return duplicate.id;
+        } catch (error) {
+          state = state.copyWith(
+              isLoading: false, error: 'Duplicate failed: $error');
+          rethrow;
+        }
+      });
 
   /// Import media into the current project — persists to DB + engine.
   Future<void> importMedia(
@@ -363,51 +393,51 @@ class ProjectNotifier extends StateNotifier<ProjectState> {
   }
 
   /// Save the current project to the engine (.epp format).
-  Future<bool> saveCurrentProject() async {
-    final project = state.currentProject;
-    if (project == null) return false;
+  Future<bool> saveCurrentProject() => _serialize(_saveCurrentProject);
+
+  Future<bool> _saveCurrentProject() async {
     try {
-      await _repo.updateProject(project);
+      await _ref.read(editorProvider.notifier).flushPendingTextEdits();
+      final project = state.currentProject;
+      if (project == null) return false;
+      // The durable timeline must succeed before publishing metadata.
       await _repo.saveProjectToEngine(project);
+      final saved = await _repo.getProject(project.id);
+      final refreshed = saved == null
+          ? project
+          : project.copyWith(
+              eppFilePath: saved.eppFilePath,
+              updatedAt: saved.updatedAt,
+            );
+      final recent = [
+        refreshed,
+        ...state.recentProjects.where((item) => item.id != project.id)
+      ];
+      state = state.copyWith(
+        currentProject: state.currentProject?.id == project.id
+            ? refreshed
+            : state.currentProject,
+        recentProjects: recent,
+        clearError: true,
+      );
       return true;
     } catch (e) {
       developer.log('saveCurrentProject failed: $e', name: 'ProjectNotifier');
+      state = state.copyWith(error: 'Could not save project: $e');
       return false;
     }
   }
 
-  /// Save a project and return its `.epp` timeline-backup path for sharing.
-  Future<String?> prepareProjectExport(ProjectModel project) async {
-    final currentProject = state.currentProject;
-    try {
-      if (currentProject?.id == project.id) {
-        if (!await saveCurrentProject()) return null;
-      } else {
-        if (currentProject != null && !await saveCurrentProject()) return null;
-
-        final exportProject = await _repo.getProject(project.id) ?? project;
-        try {
-          await _repo.activateProjectInEngine(exportProject);
-          await _repo.saveProjectToEngine(exportProject);
-        } finally {
-          if (currentProject != null) {
-            await _repo.activateProjectInEngine(currentProject);
-          }
-        }
-      }
-
-      final savedProject = await _repo.getProject(project.id);
-      return savedProject?.eppFilePath;
-    } catch (error, stackTrace) {
-      developer.log(
-        'prepareProjectExport failed',
-        name: 'ProjectNotifier',
-        error: error,
-        stackTrace: stackTrace,
-      );
-      return null;
-    }
-  }
+  /// Share the saved timeline without changing which project the engine owns.
+  Future<String?> prepareProjectExport(ProjectModel project) =>
+      _serialize(() async {
+        if (state.currentProject?.id == project.id &&
+            !await _saveCurrentProject()) return null;
+        final saved = await _repo.getProject(project.id);
+        final path = saved?.eppFilePath;
+        if (path == null || !await File(path).exists()) return null;
+        return path;
+      });
 
   /// Phase E.15: create a version-history snapshot of the current project.
   ///
@@ -416,9 +446,12 @@ class ProjectNotifier extends StateNotifier<ProjectState> {
   /// to this snapshot via the snapshot browser UI.
   ///
   /// Returns the snapshot ID, or `null` on failure.
-  Future<String?> createSnapshot() async {
+  Future<String?> createSnapshot() => _serialize(_createSnapshot);
+
+  Future<String?> _createSnapshot() async {
     if (state.currentProject == null) return null;
     try {
+      if (!await _saveCurrentProject()) return null;
       // Read the current .epp bytes from the engine's save location.
       final eppBytes =
           await _repo.readProjectEppBytes(state.currentProject!.id);
@@ -443,6 +476,40 @@ class ProjectNotifier extends StateNotifier<ProjectState> {
       return null;
     }
   }
+
+  Future<bool> restoreSnapshot(String projectId, String snapshotId) =>
+      _serialize(() async {
+        final current = state.currentProject;
+        if (current == null || current.id != projectId) return false;
+        final bytes = await ProjectSnapshots.read(projectId, snapshotId);
+        if (bytes == null || !await _saveCurrentProject()) return false;
+        final backup = await _repo.readProjectEppBytes(projectId);
+        if (backup == null) return false;
+        await ProjectSnapshots.create(projectId, backup);
+        final temp = await getTemporaryDirectory();
+        final directory = await temp.createTemp('editors-restore-');
+        try {
+          final file = File(p.join(directory.path, 'snapshot.epp'));
+          await file.writeAsBytes(bytes, flush: true);
+          await _repo.loadProjectFromEngine(file.path);
+          await syncFromEngine();
+          if (!await _saveCurrentProject())
+            throw StateError('Could not save the restored timeline.');
+          return true;
+        } catch (error) {
+          try {
+            await _repo.activateProjectInEngine(current);
+            state = state.copyWith(currentProject: current);
+            await syncFromEngine();
+          } catch (_) {
+            state = state.copyWith(clearCurrentProject: true);
+          }
+          state = state.copyWith(error: 'Could not restore snapshot: $error');
+          return false;
+        } finally {
+          await directory.delete(recursive: true);
+        }
+      });
 
   /// Phase E.15: list all snapshots for the current project.
   Future<List<ProjectSnapshot>> listSnapshots() async {
@@ -491,7 +558,29 @@ class ProjectNotifier extends StateNotifier<ProjectState> {
                 trimEndMs: clipInfo.trimEndMs,
                 speed: clipInfo.speed,
                 opacity: clipInfo.opacity,
-                effects: existing?.effects ?? const [],
+                properties: Map.unmodifiable(clipInfo.properties),
+                effects: [
+                  for (var i = 0; i < clipInfo.effects.length; i++)
+                    EffectModel(
+                      id: clipInfo.effects[i].id,
+                      name: clipInfo.effects[i].name,
+                      effectType: clipInfo.effects[i].effectType,
+                      enabled: clipInfo.effects[i].enabled,
+                      order: clipInfo.effects[i].order,
+                      parameters: [
+                        for (final parameter in clipInfo.effects[i].parameters)
+                          EffectParameterModel(
+                            name: parameter.name,
+                            displayName: parameter.displayName,
+                            value: parameter.value,
+                            minValue: parameter.minValue,
+                            maxValue: parameter.maxValue,
+                            defaultValue: parameter.defaultValue,
+                            step: parameter.step,
+                          ),
+                      ],
+                    ),
+                ],
                 transitionIn: existing?.transitionIn,
                 transitionOut: existing?.transitionOut,
                 locked: existing?.locked ?? false,

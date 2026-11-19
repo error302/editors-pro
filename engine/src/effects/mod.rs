@@ -95,6 +95,12 @@ impl Effect {
         let param = self.parameters.iter_mut()
             .find(|p| p.name == name)
             .ok_or_else(|| format!("Parameter '{}' not found", name))?;
+        if name.starts_with("__look_") {
+            return Err("Look metadata must be changed through the look controls".into());
+        }
+        if !value.is_finite() || value < param.min_value || value > param.max_value {
+            return Err(format!("Parameter '{}' must be finite and between {} and {}", name, param.min_value, param.max_value));
+        }
         param.set_value(value);
         Ok(())
     }
@@ -202,6 +208,9 @@ impl EffectsPipeline {
     /// elsewhere and are NOT applied by this method.
     pub fn apply(&self, frame_data: &mut [u8], width: u32, height: u32) {
         for effect in self.enabled_effects() {
+            if filters::is_look_effect(effect) && effect.get_parameter("__look_intensity") == Some(0.0) {
+                continue;
+            }
             match effect.effect_type {
                 EffectType::Filter => {
                     // Look up the filter type by name

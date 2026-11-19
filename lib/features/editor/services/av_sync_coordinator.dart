@@ -13,55 +13,27 @@ import '../providers/editor_provider.dart';
 // Constants
 // ═══════════════════════════════════════════════════════════════════════════
 
-/// Synchronizes audio playback with the video preview timeline.
+/// Coordinates video timeline updates and queued native preview PCM.
 ///
-/// ## Architecture
+/// Video positions derive from elapsed wall-clock time and the project frame
+/// grid. This schedules frame requests; it does not guarantee display deadlines
+/// or a measured device-level synchronization tolerance.
 ///
-/// The sync coordinator runs a high-precision clock that drives both the
-/// video frame requests and the audio sample feeding. The video playhead
-/// position is the "master clock" — audio is slaved to it.
+/// Audio fetches are serialized and stale results are rejected after lifecycle
+/// changes. The player retains partial writes in a bounded queue. The default
+/// lookahead is 400ms; no hardware-latency estimate is currently collected for
+/// the optional adaptive-buffer calculation.
 ///
-/// ## Frame Timing Precision
+/// At 1x, drift checks compare AudioTrack's played-frame cursor with the video
+/// clock and re-prime after a large smoothed discrepancy. Small discrepancies
+/// are observed without destructive seeks. Native preview PCM remains at its
+/// fixed rate: adjusting chunk duration at other playback speeds does not
+/// implement time stretching or pitch correction, and synchronized non-1x
+/// audio is unsupported.
 ///
-/// Each frame's exact presentation timestamp (PTS) is computed from the
-/// timeline origin, elapsed wall-clock time, and the current playback
-/// speed. Frame boundaries are derived from the project frame rate so
-/// that every displayed frame lands on an exact grid point, eliminating
-/// sub-frame jitter.
-///
-/// ## Drift Correction — Weighted Moving Average
-///
-/// Audio and video can drift apart due to:
-/// - Variable frame decode latency
-/// - Audio buffer underruns/overruns
-/// - GC pauses on the Dart VM
-///
-/// Instead of a hard threshold + instant seek, the coordinator maintains
-/// an exponentially-weighted moving average (EWMA) of measured drift.
-/// Small corrections are applied every tick proportional to the smoothed
-/// drift, yielding gradual convergence without visible or audible jumps.
-/// A hard safety limit still exists to catch catastrophic desync.
-///
-/// ## Adaptive Buffer Strategy
-///
-/// Audio buffer sizes are dynamically adjusted based on the detected
-/// system audio latency. Higher-latency hardware receives a larger
-/// lookahead buffer to prevent underruns; low-latency setups keep the
-/// buffer small to minimise memory usage and seek responsiveness.
-///
-/// ## Playback Rate Handling
-///
-/// At non-1.0× speeds the coordinator adjusts both the video frame PTS
-/// computation and the audio time-stretch parameters so that pitch-
-/// corrected audio stays frame-locked with the video. The audio chunk
-/// duration is scaled by the inverse of the playback rate to deliver
-/// the correct number of samples per wall-clock second.
-///
-/// ## Seek Compensation
-///
-/// On seek, both audio and video snap to the nearest frame boundary
-/// before resuming, ensuring that the first displayed frame after a
-/// seek is perfectly aligned with the first audio sample played.
+/// Seeking snaps the requested timeline position to a project frame boundary,
+/// flushes old audio, and re-primes from that position. Hardware output latency
+/// still affects when the new samples become audible.
 class AvSyncCoordinator {
   AvSyncCoordinator(this._ref);
   final Ref _ref;
@@ -89,10 +61,6 @@ class AvSyncCoordinator {
   /// lower α makes it smoother. 0.2 is a good balance.
   static const double _ewmaAlpha = 0.2;
 
-  /// Maximum fraction of measured drift to correct per tick.
-  /// Prevents overcorrection oscillation.
-  static const double _maxCorrectionFraction = 0.4;
-
   // ── Adaptive Buffer ───────────────────────────────────────────────
 
   /// Minimum audio lookahead buffer in milliseconds.
@@ -118,6 +86,9 @@ class AvSyncCoordinator {
   // ── Internal State ────────────────────────────────────────────────
 
   Timer? _syncTimer;
+  int _audioEpoch = 0;
+  bool _audioFetchInFlight = false;
+  bool _driftCheckInFlight = false;
 
   /// Monotonically-increasing wall-clock origin for PTS calculations.
   DateTime? _playbackOrigin;
@@ -157,9 +128,6 @@ class AvSyncCoordinator {
   /// Number of latency samples collected so far.
   int _latencySampleCount = 0;
 
-  /// Sum of measured audio-write-to-playback delays (ms).
-  double _latencySampleSum = 0.0;
-
   /// Frame rate for PTS calculations. Can be updated from the project.
   double _frameRate = _defaultFrameRate;
 
@@ -186,6 +154,10 @@ class AvSyncCoordinator {
   Future<void> start() async {
     if (!_engineReady) return;
 
+    final epoch = ++_audioEpoch;
+    _syncTimer?.cancel();
+    _syncTimer = null;
+    _audioFetchInFlight = false;
     final editorState = _ref.read(editorProvider);
     final currentMs = editorState.currentTimeMs;
     final durationMs = editorState.durationMs;
@@ -197,6 +169,7 @@ class AvSyncCoordinator {
         sampleRate: 44100,
         channels: 2,
       );
+      if (epoch != _audioEpoch) return;
       if (!success) {
         developer.log(
           'Audio init failed — playback will be video-only',
@@ -205,11 +178,12 @@ class AvSyncCoordinator {
         return;
       }
       _audioInitialized = true;
-      _probeSystemLatency();
     }
 
-    // Set volume
+    await AudioPlayerService.instance.seekTo(currentMs);
     await AudioPlayerService.instance.setVolume(masterVolume);
+    if (epoch != _audioEpoch) return;
+    _audioPositionMs = currentMs;
 
     // ── Anchor the PTS origin ─────────────────────────────────────
     _playbackOrigin = DateTime.now();
@@ -218,9 +192,11 @@ class AvSyncCoordinator {
 
     // ── Prime the audio buffer ────────────────────────────────────
     await _primeAudioBuffer(currentMs, durationMs);
-
-    // Start audio playback
+    if (epoch != _audioEpoch) return;
+    // Anchor after decoding/priming so startup work does not advance video.
+    _playbackOrigin = DateTime.now();
     await AudioPlayerService.instance.play();
+    if (epoch != _audioEpoch) return;
 
     // ── Start the sync timer ──────────────────────────────────────
     _syncTickCount = 0;
@@ -245,6 +221,8 @@ class AvSyncCoordinator {
 
   /// Stop synchronized playback.
   Future<void> stop() async {
+    _audioEpoch++;
+    _audioFetchInFlight = false;
     _syncTimer?.cancel();
     _syncTimer = null;
     _playbackOrigin = null;
@@ -252,7 +230,7 @@ class AvSyncCoordinator {
     _lastSeekTime = null;
 
     if (_audioInitialized) {
-      AudioPlayerService.instance.stopSynchronizedPlayback();
+      await AudioPlayerService.instance.stop();
     }
 
     developer.log(
@@ -265,6 +243,8 @@ class AvSyncCoordinator {
 
   /// Pause synchronized playback.
   Future<void> pause() async {
+    _audioEpoch++;
+    _audioFetchInFlight = false;
     _syncTimer?.cancel();
     _syncTimer = null;
     _playbackOrigin = null;
@@ -281,12 +261,13 @@ class AvSyncCoordinator {
 
   /// Seek to a new position with frame-boundary snapping and re-priming.
   ///
-  /// Both audio and video snap to the nearest frame boundary before
-  /// resuming, so the first displayed frame is perfectly aligned with
-  /// the first audio sample.
+  /// Re-prime audio from the same snapped timeline position as video.
+  /// This does not guarantee exact presentation alignment on the device.
   Future<void> seekTo(int positionMs) async {
     if (!_audioInitialized) return;
 
+    final epoch = ++_audioEpoch;
+    _audioFetchInFlight = false;
     _seekInProgress = true;
     _lastSeekTime = DateTime.now();
 
@@ -296,6 +277,8 @@ class AvSyncCoordinator {
     // ── Pause audio during seek ───────────────────────────────────
     await AudioPlayerService.instance.pause();
     await AudioPlayerService.instance.seekTo(snappedMs);
+    if (epoch != _audioEpoch) return;
+    _audioPositionMs = snappedMs;
 
     // ── Re-anchor the PTS origin at the snapped position ──────────
     _playbackOrigin = DateTime.now();
@@ -305,6 +288,8 @@ class AvSyncCoordinator {
     // ── Re-prime the audio buffer from the snapped position ───────
     final editorState = _ref.read(editorProvider);
     await _primeAudioBuffer(snappedMs, editorState.durationMs);
+    if (epoch != _audioEpoch) return;
+    _playbackOrigin = DateTime.now();
 
     // ── Update the video playhead to the snapped position ─────────
     _ref.read(editorProvider.notifier).seekTo(snappedMs);
@@ -400,7 +385,7 @@ class AvSyncCoordinator {
       _playbackOrigin = now;
       _playbackOriginMs = snappedZero;
       _ref.read(editorProvider.notifier).seekTo(snappedZero);
-      _primeAudioBuffer(snappedZero, durationMs);
+      unawaited(seekTo(snappedZero));
       return;
     }
 
@@ -471,43 +456,9 @@ class AvSyncCoordinator {
   // Audio Buffer Management — Adaptive Strategy
   // ═══════════════════════════════════════════════════════════════════
 
-  /// Probe the system audio latency by measuring the round-trip time
-  /// of a small silent write. The result informs the adaptive buffer.
-  void _probeSystemLatency() {
-    // We estimate latency by writing a tiny silent buffer and measuring
-    // how long the platform takes to acknowledge it. This is a rough
-    // heuristic — the real latency is dominated by the AudioTrack buffer
-    // size on Android, but this gives us a usable signal.
-    () async {
-      try {
-        // Write 1ms of silence (44100 / 1000 * 2 channels = 88 samples)
-        final silenceSamples = Float32List(88);
-        final sw = Stopwatch()..start();
-        await AudioPlayerService.instance.writeSamples(silenceSamples);
-        sw.stop();
-        final roundTripMs = sw.elapsedMilliseconds.toDouble();
-
-        if (roundTripMs > 0) {
-          _latencySampleCount++;
-          _latencySampleSum += roundTripMs;
-
-          if (_latencySampleCount >= _latencyProbeMinSamples) {
-            _detectedLatencyMs = _latencySampleSum / _latencySampleCount;
-            developer.log(
-              'Detected audio latency: ${_detectedLatencyMs.toStringAsFixed(1)}ms '
-              '($_latencySampleCount samples)',
-              name: 'AvSyncCoordinator',
-            );
-          }
-        }
-      } catch (_) {
-        // Latency probe is best-effort; failures are safe to ignore.
-      }
-    }();
-  }
-
-  /// Dynamically adjust the buffer-ahead duration and chunk size based
-  /// on the detected system latency.
+  /// Apply the adaptive calculation only after latency samples exist.
+  /// No hardware-latency sampler currently supplies these inputs, so playback
+  /// retains its default lookahead rather than claiming measured adaptation.
   void _adaptBuffer() {
     if (_latencySampleCount < _latencyProbeMinSamples) return;
 
@@ -538,45 +489,50 @@ class AvSyncCoordinator {
   Future<void> _primeAudioBuffer(int startMs, int durationMs) async {
     if (!_engineReady || !_audioInitialized) return;
 
+    final epoch = _audioEpoch;
+    final length =
+        math.min(_audioBufferAheadMs, math.max(0, durationMs - startMs));
+    if (length == 0) return;
+    _audioFetchInFlight = true;
     try {
       final api = EngineService.instance.api;
       final samples = await api.mixAudioAtTime(
         startMs: BigInt.from(startMs),
-        durationMs: BigInt.from(_audioBufferAheadMs),
+        durationMs: BigInt.from(length),
       );
 
+      if (epoch != _audioEpoch) return;
       if (samples.isNotEmpty) {
         final floatSamples = Float32List.fromList(samples);
         await AudioPlayerService.instance.writeSamples(floatSamples);
-        _audioPositionMs = startMs + _audioBufferAheadMs;
+        if (epoch == _audioEpoch) _audioPositionMs = startMs + length;
       }
     } catch (e) {
       developer.log(
         'Prime audio buffer failed: $e',
         name: 'AvSyncCoordinator',
       );
+    } finally {
+      if (epoch == _audioEpoch) _audioFetchInFlight = false;
     }
   }
 
   /// Feed audio samples ahead of the current playhead position.
   ///
-  /// When the playback rate differs from 1.0×, the chunk duration
-  /// requested from the engine is adjusted: at 2× speed we need half
-  /// the wall-clock duration of samples (because they'll be played
-  /// back at double rate), while at 0.5× speed we need double the
-  /// wall-clock duration.
+  /// Chunk requests are scaled by the playback-speed setting, but PCM is
+  /// still played at the fixed preview sample rate. This request scaling
+  /// alone does not provide synchronized or pitch-corrected non-1x audio.
   void _feedAudioAhead(int playheadMs, int durationMs, double speed) {
-    if (!_engineReady || !_audioInitialized) return;
+    if (!_engineReady || !_audioInitialized || _audioFetchInFlight) return;
 
     final bufferEndMs = _audioPositionMs;
     // The amount of *timeline* time we need ahead of the playhead.
-    final neededAheadMs = playheadMs + _audioBufferAheadMs;
+    final neededAheadMs =
+        math.min(durationMs, playheadMs + _audioBufferAheadMs);
 
-    if (bufferEndMs < neededAheadMs && neededAheadMs < durationMs) {
-      // Scale the chunk duration by 1/speed so that the wall-clock
-      // fill rate matches the accelerated/decelerated playback.
-      // E.g. at 2×, we request half the timeline duration per chunk
-      // because the audio will be consumed twice as fast.
+    if (bufferEndMs < neededAheadMs) {
+      // Scale fetch granularity only. AudioTrack's playback rate is unchanged;
+      // this is not a time-stretch implementation.
       final scaledChunkMs =
           (_audioChunkMs / speed).round().clamp(50, _maxBufferAheadMs);
 
@@ -592,35 +548,37 @@ class AvSyncCoordinator {
 
   /// Fetch audio samples from the engine and write to the audio player.
   ///
-  /// When [speed] ≠ 1.0, the engine is asked for time-stretched audio
-  /// by requesting samples over the appropriate timeline range.
+  /// The native mixer receives a timeline range, without a playback-speed
+  /// argument. [speed] is diagnostic context; no time stretch is requested.
   void _fetchAndWriteAudio(int startMs, int durationMs, double speed) {
+    if (!_engineReady || !_audioInitialized || _audioFetchInFlight) return;
+    _audioFetchInFlight = true;
+    final epoch = _audioEpoch;
     () async {
-      if (!_engineReady || !_audioInitialized) return;
-
       try {
         final api = EngineService.instance.api;
 
-        // Request the engine to mix audio at the given timeline range.
-        // For non-1.0× speeds, the engine is expected to deliver
-        // time-stretched (pitch-corrected) audio matching the speed
-        // factor. The durationMs here is in *timeline* time; the
-        // engine maps that to the correct number of output samples.
+        // Fetch one non-overlapping source range. Native preview PCM is
+        // currently mixed at the fixed preview rate; no pitch-corrected
+        // playback-rate conversion is claimed here.
         final samples = await api.mixAudioAtTime(
           startMs: BigInt.from(startMs),
           durationMs: BigInt.from(durationMs),
         );
 
+        if (epoch != _audioEpoch) return;
         if (samples.isNotEmpty) {
           final floatSamples = Float32List.fromList(samples);
           await AudioPlayerService.instance.writeSamples(floatSamples);
-          _audioPositionMs = startMs + durationMs;
+          if (epoch == _audioEpoch) _audioPositionMs = startMs + durationMs;
         }
       } catch (e) {
         developer.log(
           'Audio feed failed at ${startMs}ms (speed=${speed}x): $e',
           name: 'AvSyncCoordinator',
         );
+      } finally {
+        if (epoch == _audioEpoch) _audioFetchInFlight = false;
       }
     }();
   }
@@ -629,74 +587,31 @@ class AvSyncCoordinator {
   // Drift Correction — Weighted Moving Average
   // ═══════════════════════════════════════════════════════════════════
 
-  /// Measure and correct drift between audio and video positions using
-  /// an exponentially-weighted moving average (EWMA).
-  ///
-  /// The EWMA smooths out transient spikes (e.g. GC pauses) while still
-  /// reacting to persistent drift. The correction applied per tick is
-  /// a fraction of the smoothed drift, ensuring gradual convergence
-  /// without visible or audible jumps.
-  ///
-  /// A hard safety limit catches catastrophic desync and forces an
-  /// immediate seek correction.
-  void _correctDrift(int videoPositionMs, double speed) {
-    if (!_audioInitialized) return;
-
-    final audioPos = AudioPlayerService.instance.currentPositionMs;
-    // Positive drift means audio is ahead of video.
-    final rawDriftMs = (audioPos - videoPositionMs).toDouble();
-
-    // ── Update EWMA ───────────────────────────────────────────────
-    _smoothedDriftMs =
-        _ewmaAlpha * rawDriftMs + (1.0 - _ewmaAlpha) * _smoothedDriftMs;
-
-    final absSmoothed = _smoothedDriftMs.abs();
-
-    // ── Hard safety limit: immediate seek correction ──────────────
-    if (absSmoothed > _driftHardLimitMs) {
-      _driftExceededCount++;
-
-      final snappedVideo = _snapToFrameBoundary(videoPositionMs);
-      AudioPlayerService.instance.seekTo(snappedVideo);
-      _audioPositionMs = snappedVideo;
-      _totalDriftCorrectionMs += _smoothedDriftMs.abs().round();
-
-      // Reset EWMA after a hard correction to avoid lingering bias.
-      _smoothedDriftMs = 0.0;
-
-      developer.log(
-        'Hard A/V drift correction: ${_smoothedDriftMs.toStringAsFixed(1)}ms '
-        '(audio ${audioPos}ms vs video ${videoPositionMs}ms) — seeked to ${snappedVideo}ms',
-        name: 'AvSyncCoordinator',
-        level: 900, // warning level
-      );
-      return;
-    }
-
-    // ── Soft correction: proportional to smoothed drift ───────────
-    if (absSmoothed > _driftToleranceMs) {
-      _driftExceededCount++;
-
-      // Apply a fraction of the smoothed drift as a position nudge.
-      // The correction direction opposes the drift.
-      final correctionMs = (_smoothedDriftMs * _maxCorrectionFraction).round();
-
-      if (correctionMs != 0) {
-        // Nudge the audio position by seeking a small amount.
-        final correctedAudioPos = _snapToFrameBoundary(audioPos - correctionMs);
-        AudioPlayerService.instance.seekTo(correctedAudioPos);
-        _audioPositionMs = correctedAudioPos;
-        _totalDriftCorrectionMs += correctionMs.abs();
-
-        // Partially decay the EWMA so we don't over-correct next tick.
-        _smoothedDriftMs *= 1.0 - _maxCorrectionFraction;
+  /// Compare against AudioTrack's played-frame cursor, never queued samples.
+  /// Small differences are observed; only sustained large drift re-primes audio.
+  Future<void> _correctDrift(int videoPositionMs, double speed) async {
+    if (!_audioInitialized || _driftCheckInFlight || speed != 1.0) return;
+    _driftCheckInFlight = true;
+    final epoch = _audioEpoch;
+    try {
+      final audioPos =
+          await AudioPlayerService.instance.refreshPlaybackPosition();
+      if (audioPos == null || epoch != _audioEpoch || _playbackOrigin == null)
+        return;
+      final currentVideoMs = _computeCurrentPts(DateTime.now(), speed);
+      final drift = (audioPos - currentVideoMs).toDouble();
+      _smoothedDriftMs =
+          _ewmaAlpha * drift + (1 - _ewmaAlpha) * _smoothedDriftMs;
+      if (_smoothedDriftMs.abs() > _driftToleranceMs) _driftExceededCount++;
+      if (_smoothedDriftMs.abs() > _driftHardLimitMs) {
+        _totalDriftCorrectionMs += _smoothedDriftMs.abs().round();
+        _smoothedDriftMs = 0;
+        await seekTo(_snapToFrameBoundary(currentVideoMs));
       }
+    } finally {
+      _driftCheckInFlight = false;
     }
   }
-
-  // ═══════════════════════════════════════════════════════════════════
-  // Helpers
-  // ═══════════════════════════════════════════════════════════════════
 
   bool get _engineReady => EngineService.instance.isInitialized;
 }

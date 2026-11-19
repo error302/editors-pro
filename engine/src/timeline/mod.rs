@@ -7,6 +7,7 @@
 pub mod advanced_trim;
 pub mod clip;
 pub mod command;
+pub mod edit;
 pub mod keyframe;
 pub mod speed_curve;
 pub mod track;
@@ -186,36 +187,37 @@ impl Timeline {
             .map(|(_, c)| c.clone())
             .ok_or_else(|| format!("Clip {} not found", clip_id))?;
 
-        // Validate split point is within the clip
-        if time_ms <= original.start_ms || time_ms >= original.start_ms + original.effective_duration() {
-            return Err("Split point must be within the clip's range".to_string());
-        }
-
-        // Remove the original clip
-        self.remove_clip(clip_id);
-
-        // Calculate split
-        let left_duration = time_ms - original.start_ms;
-        let right_duration = original.effective_duration() - left_duration;
-
-        // Create left part
-        let mut left_clip = original.clone();
-        left_clip.id = uuid::Uuid::new_v4().to_string();
-        left_clip.duration_ms = left_duration;
-
-        // Create right part
-        let mut right_clip = original.clone();
-        right_clip.id = uuid::Uuid::new_v4().to_string();
-        right_clip.start_ms = time_ms;
-        right_clip.duration_ms = right_duration;
-        right_clip.trim_start_ms = original.trim_start_ms + left_duration;
+        let track = self.find_track(&track_id).ok_or("Track not found")?;
+        if track.locked { return Err("Track is locked".into()); }
+        for clip in self.tracks.iter().flat_map(|t| &t.clips) { clip.checked_end_ms()?; }
+        let (left_clip, right_clip) = original.split_at(time_ms)?;
 
         let left_clone = left_clip.clone();
         let right_clone = right_clip.clone();
 
-        // Add both clips to the track
-        self.add_clip_to_track(&track_id, left_clip)?;
-        self.add_clip_to_track(&track_id, right_clip)?;
+        // Validate first, then replace in one track publication. No fallible
+        // source-range operation occurs after the original is removed.
+        let mut candidate = track.clone();
+        for neighbor in &mut candidate.clips {
+            if neighbor.id == original.id { continue; }
+            for link in [&mut neighbor.transition_in, &mut neighbor.transition_out].into_iter().flatten() {
+                if link.from_clip_id != original.id && link.to_clip_id != original.id { continue; }
+                if neighbor.properties.get("locked").and_then(serde_json::Value::as_bool) == Some(true) {
+                    return Err("A linked neighboring clip is locked".into());
+                }
+                if link.from_clip_id == original.id { link.from_clip_id = right_clone.id.clone(); }
+                if link.to_clip_id == original.id { link.to_clip_id = left_clone.id.clone(); }
+                if let Some(boundary) = [&left_clone.transition_in, &right_clone.transition_out]
+                    .into_iter().flatten().find(|b| b.from_clip_id == link.from_clip_id && b.to_clip_id == link.to_clip_id) {
+                    link.id = boundary.id.clone();
+                }
+            }
+        }
+        candidate.remove_clip(clip_id);
+        candidate.add_clip(left_clip);
+        candidate.add_clip(right_clip);
+        *self.find_track_mut(&track_id).ok_or("Track not found")? = candidate;
+        self.recalculate_duration();
 
         Ok((left_clone, right_clone))
     }

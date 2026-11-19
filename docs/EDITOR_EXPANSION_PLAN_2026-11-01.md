@@ -1,0 +1,97 @@
+# Editors Pro effects and reusable edits expansion
+
+Research date: 1 November 2026. This is a source review and implementation roadmap. Vendor functionality below comes from official documentation; it has not been integrated, licensed or tested in this app. No purchase, signup, asset download or public deployment was performed. The code observations describe the working tree inspected during this session; parallel implementation may supersede individual findings.
+
+## Recommended direction
+
+Keep the existing Flutter UI and Rust/FFmpeg renderer for the immediate work. First make the available controls render correctly, then let users save their own supported effect stacks locally. Expand to project templates and a community library in separate phases. A large effects catalog is useful only when the saved project, preview and exported video reproduce the same edit.
+
+Use original recipes, commissioned assets with explicit app redistribution rights, and carefully selected permissively licensed shaders. Evaluate a commercial SDK only for a defined gap, such as face AR or a complete template editor. Running two independent editing engines without an explicit conversion contract would create incompatible projects and previews.
+
+CapCut is a product reference, not an effects supply license. Its current non-US Materials License Agreement is dated 22 January 2026. Sections 1 and 4 restrict transfer/sublicensing, standalone distribution, external editing and competing services; other uses require separate written agreement. A commercial-use label permits specified uses of finished content and does not grant an editor vendor blanket rights to redistribute the underlying materials. US users have separate terms. Do not copy/extract CapCut packs into this app. [CapCut agreement](https://www.capcut.com/clause/material-license-agreement?lang=en)
+
+## Where effects can come from
+
+| Source | Actual fit | Custom/reusable work | Constraints and recommendation |
+| --- | --- | --- | --- |
+| **Existing Rust engine + FFmpeg** | Lowest migration cost; preserves current projects and local rendering. FFmpeg is a media/filter foundation, not a ready-made CapCut library. | Versioned app-owned JSON recipes can store supported effect parameters and later clip timelines. | Engineering/device QA is the principal cost. FFmpeg is LGPL 2.1+ by default, with GPL options affecting the resulting build; audit the exact shipped binaries and preserve required notices/source/build information. Codec/patent questions remain separate. [Official legal guidance](https://ffmpeg.org/legal.html) |
+| **GL Transitions** | Concrete open shader source for two-input transitions; official collection now includes Rust/WGSL and Android AGSL targets. | Parameterized transitions can become app-owned recipes with attribution metadata. | Repository states MIT except two BSD transitions; inspect each selected file/license and pin a revision. Check target compatibility metadata and device behavior. Not a whole editor; Android AGSL route requires Android 13+, while Rust/WGSL needs its own supported GPU/fallback path. [Official repository](https://github.com/gl-transitions/gl-transitions) |
+| **IMG.LY CE.SDK** | Flutter integration with native mobile editing engine; paid embedding candidate if replacing a substantial editing subsystem is justified. | Template scenes support placeholders/constraints. Scene string or self-contained archive are documented ways to save reusable designs. | Keep vendor project format as a separate engine adapter unless conversion is proven. Standard licenses validate online; offline validation is enterprise. Licensing covers app identifiers/platforms and requires a current quote. [Flutter docs](https://img.ly/docs/cesdk/flutter/), [templates](https://support.img.ly/how-to-create-templates-for-users-to-edit-in-ce-sdk), [licensing](https://support.img.ly/how-does-img.ly-licensing-work) |
+| **Banuba Video Editor SDK** | Flutter Android/iOS SDK for a ready-made mobile editor, filters, transitions and AR. Official Flutter installation lists Android 8+ and iOS 15+. | Template consumption exists in Flutter. **Template Builder is documented as iOS-only**, version 1.51.3+, and needs separate license enablement. | Core editor is documented to work offline; remote templates, assets and optional services need separate verification. Custom template delivery also requires an agreement. Do not assume Android creator publishing comes with the Flutter wrapper. [Installation/offline statement](https://docs.banuba.com/ve-pe-sdk/docs/flutter/ve_installation/), [template restrictions](https://docs.banuba.com/ve-pe-sdk/docs/flutter/video_templates_guide/) |
+| **BytePlus Effects / archived VE SDK** | Effects SDK is a possible licensed native AR/filter component. A Flutter VE integration document exists. | Requires a vendor-defined asset/license and project contract. | The inspected Flutter VE documentation is under **Video Editor (Archive)** and uses an older Android toolchain; this is not evidence of current supported commercial availability. Effects mobile licenses bind app ID, expiry and matching material files. Obtain current support, terms and package evidence before selecting it. [Archived Flutter VE docs](https://docs.byteplus.com/en/docs/byteplus-video-editor-sdk/docs-integration-guide-with-ui-flutter-ve-sdk), [Effects licensing](https://docs.byteplus.com/id/docs/effects/docs-about-license) |
+| **MLT** | Open multimedia editing framework with producers, filters, transitions and consumers. Useful architectural reference or a separately evaluated desktop/server path. | Projects and services can express reusable compositions. | Core is LGPL; selected modules/dependencies require their own review. Introducing another engine, native dependencies and Android packaging is substantial work. No reviewed source establishes a maintained drop-in Flutter Android integration. [Framework docs](https://www.mltframework.org/docs/framework/), [official source/license](https://github.com/mltframework/mlt) |
+
+No reliable implementation budget should be inferred from an old SDK blog post. Current Banuba homepage describes MAU pricing while an older white paper describes flat platform licensing: get a written current quote. IMG.LY pricing also depends on the proposed platform/plan. Compare Android/iOS entitlement, offline startup, export/MAU billing, effect updates, asset rights, AI inference charges, support and license-expiry behavior. [Banuba current pricing FAQ](https://www.banuba.com/), [IMG.LY product/licensing discussion](https://img.ly/products/video-sdk/)
+
+### Stock assets are a different purchase
+
+An MP4 overlay, font, LUT, sticker, audio file or After Effects template is not an executable effect SDK. After Effects/Premiere templates require their host and cannot simply become native Rust effects.
+
+An ordinary stock subscription generally licenses a finished output, not an editable asset library for all app users. For example, Envato Elements' current license prohibits redistributing items in tools/templates/source files and using items in on-demand services. It also has special font/add-on restrictions. A standard subscription is therefore not a ready-made in-app effects catalog license. [Envato terms, revised 6 October 2026](https://help.elements.envato.com/hc/en-us/articles/360000628966-Envato-Elements-License)
+
+Pexels permits editing photos/video and some app/template uses, but forbids redistribution on stock/wallpaper platforms. A proposed searchable media library must satisfy the actual integration/API terms; a free download alone does not settle that design. It is source footage, not effects or music. [Pexels license](https://www.pexels.com/license/)
+
+For a native downloadable pack, record an explicit right to distribute original asset files to end users, let users modify them, include them in editable templates, cache offline, and export commercial works in the intended territories. Commission original graphics/overlays and use verified CC0/permissive content where practical. Store the exact license/version, author, source URL and attribution alongside each asset; do not infer rights from “royalty-free.” Music needs explicit rights for both recording and composition and for the intended publishing destinations.
+
+## Capability matrix from the inspected source
+
+“Wired” means a UI/native call path exists. “Rendered” means the canonical current-frame/export path reads the saved property. Neither alone establishes physical-device behavior. Earlier device evidence is limited to the workflow recorded in `EDITOR_WORKFLOW_VERIFICATION_2026-11-01.md`; this review ran no builds or device tests.
+
+| Area | Source capability | Material gap / gate |
+| --- | --- | --- |
+| Cut, trim, delete, move | Toolbar/timeline call native bridge and command history; decode uses trim offset and active clip intervals. | Confirm correct two resulting clip IDs, boundary frames, undo, save/reopen and audio sync on real moving footage. Do not count presence of toolbar buttons as proof. |
+| Speed | Inspector and Speed tab write `SpeedCurve`; decode reads `speed_at`. | Source timestamp currently multiplies elapsed time by instantaneous speed. A varying ramp needs integrated source-time mapping. Audio mixing currently uses unretimed source offsets. Constant speed and variable ramp have different evidence requirements; pitch-corrected speed audio is not established. |
+| Transform | Native compositor reads position/scale/rotation/opacity keyframes. | Inspector flip writes `scale_x`/`scale_y`, while native allowlist has only `position_x`, `position_y`, `scale`, `rotation`, `opacity`. Preview drag treats a delta as an absolute value. Local transform display state needs hydration and time/unit semantics. |
+| Keyframes | Native CRUD, interpolation and renderer use exist; graph/Inspector routes are wired. | Validate project-time versus clip-time convention, selection hydration, move/split/trim behavior, duplicate times and exported animation. Text-track transform keyframes are not consumed by the same video-layer transform loop. |
+| Transitions | Inspector picker/native catalog persist transition metadata. | Inspected `get_frame` and `compose_video_layers` do not read `transition_in`/`transition_out`; an `EffectsPipeline` transition logs instead of composing two sources. Gate until adjacent clips, source handles, duration rules and shared export render exist. |
+| Looks and adjustments | Native catalog, filter parameters, look intensity, bypass and reset feed a canonical CPU effect pipeline shared with export; active LUT is applied after composition. | Eight built-in looks already have prior documented output evidence. Other catalog entries need parameter-specific output verification. GPU availability does not prove equivalent parameter semantics. |
+| Audio | Native decode/mix and H.264/AAC export path exist; track volume, pan, solo, EQ and ducking state are read. | Existing documented fixtures show real sound at 1x; speed audio and long/lifecycle exports remain distinct. Audio source envelopes currently default in mixing; a fade widget/module alone is not evidence of timeline fades. |
+| Text/manual captions | Native text property contract and rasterization are shared with preview/export; SRT parser/import bridge exists. | Verify manual timing/edit UX, languages/shaping, multiline and subtitle import independently. Prior photo/red-text output proves that specific fixture. |
+| Automatic captions | Experimental setting gates the AutoCaption UI. | `TranscriptionEngine::transcribe()` still calls `simulate_transcription`; it does not recognize speech. Never present generated sample sentences as a real transcript. Requires actual inference/provider plus consent, model/license and timing tests. |
+| Scopes | Scopes tab refresh obtains a current native frame and computes scopes, then opens a dialog. | On-demand analysis, not live per-frame scopes. This is an analysis tool, so “not an export mutation” is not a reason to call it fake. |
+| Pro panels | Stabilization, noise reduction, lens correction, grain and multicam widget/module files exist. | No widget instantiations found in current editor routes. Files and `PRO_TOOLS.md` inventory do not establish an exposed or export-backed feature. Masking/tracking/sky replacement similarly need an end-to-end bridge/render path audit before promotion. |
+| Built-in project templates | Browser/provider calls `instantiate_template`; native builder can construct a candidate timeline. | Bridge computes builder result and discards it, then creates a blank project. Provider returns an ID without durable database adoption. A success toast is not successful template instantiation. Gate the current create action until timeline/media/repository transaction is implemented. |
+
+Relevant inspected files: `lib/features/editor/presentation/editor_screen.dart`, `widgets/inspector_panel.dart`, `widgets/effect_catalog.dart`, `widgets/auto_caption.dart`, `providers/editor_provider.dart`; `engine/src/api/{mod.rs,bridge_api.rs}`, `renderer/mod.rs`, `effects/mod.rs`, `audio/transcription.rs`, `timeline/{clip.rs,keyframe.rs}`, `template/builder.rs`; `lib/features/templates/providers/template_provider.dart`.
+
+The current left panel exposes Media, Audio, Effects, Text, Speed, Keyframes, Mixer, Scopes, Markers, LUTs and EQ. Effects currently contains Looks and Adjustments. Transition entry is in Inspector. Orphan advanced panel files should not be added as functional tabs until their saved state reaches preview and export.
+
+## Delivery phases and acceptance criteria
+
+### 1. Local reusable effect stacks
+
+Save a selected visual clip's supported stack as a named local recipe. Reapply to another selected visual clip through one atomic native command and one undo entry. Show a local “My presets” list; support rename/delete and a useful empty state. Keep user media, local file paths, cloud identifiers and downloaded licensed assets out of the preset.
+
+Use a versioned schema containing ID, name, timestamps, engine schema version, effect IDs/types, ordered parameters, enabled state and resource requirements. Validate against a native capability allowlist, finite bounded values, supported versions and payload limits before committing. Reject an entire unsupported stack and preserve the destination clip; do not silently drop edits. Persist atomically and report storage errors. Applying should refresh the rendered paused frame and participate in existing save/import/navigation barriers.
+
+Acceptance: create from an edited clip, restart app, apply to different owned media, inspect visible output, save/reopen, undo/redo, export and independently decode the result. Cover corrupt/unknown schema, nonvisual selection, deleted preset, interrupted write and project-switch races. This phase is local reuse, not a public marketplace or an asset-redistribution service.
+
+### 2. Reliable creative primitives
+
+Resolve editing semantics before increasing catalog breadth: trim/split identity, absolute transforms and flips, shared keyframe time convention, integrated retiming, audio speed policy and actual two-input transitions. Select a small set of reproducible original recipes: monochrome, film color, vignette, flash/fade, push/zoom and title animation. Each recipe must declare supported engine capabilities and a reference preview rendered by that engine.
+
+Introduce a capability registry that separates available, unsupported and experimental features. Populate UI from engine capability/version information; show a concrete explanation for unavailable tools. Keep simulated transcription out of real production results. Implement real captions as a separate milestone with actual speech, word/segment timing, language coverage and export checks.
+
+Acceptance: one deterministic project per primitive, saved round-trip plus preview/export frame comparisons at boundaries and midpoints; real video/audio fixtures; Android ARM64 device coverage and bounded performance/memory checks. Preserve older project schema behavior.
+
+### 3. Local project templates
+
+“Save as template” is different from saving a single effect stack. Let creators choose replaceable media slots, duration/aspect constraints, text variables and locked elements. Clone the full supported timeline into a versioned package with normalized times, regenerated entity IDs, engine requirements and explicit asset references. Strip user-specific paths and private media by default.
+
+Implement builder output adoption as one repository transaction: durable media import → validate all assignments → construct independent project/timeline IDs → write native saved project → adopt database metadata → navigate. On failure preserve the original project and do not announce a new one. Replace absolute paths with content hashes and a media resolver. Render a real cover and sample preview; slot blanks must be explicit, not silently exported as unintended black clips.
+
+Acceptance: create template from a real edited project; fill slots with different media; verify timing, text, filters, supported transitions and audio; save/reopen; remove original project without breaking the new one; exercise short/missing media and rollback. No publishing backend is needed for local creation and reuse.
+
+### 4. Community publishing library
+
+Build this only as an explicit platform milestone, after local formats and rendering are stable. Publishing requires authenticated ownership, creator permission to redistribute each included resource, editable-template rights, attribution, revocation/expiry policy and a rights manifest. Keep private and published copies distinct. A user must actively choose to publish.
+
+Use immutable package revisions and content hashes, signed/validated manifests, schema migrations and engine compatibility ranges. Store metadata separately from binary objects and render trusted previews in an isolated worker. Enforce archive extraction/path/size limits, media probing and download quotas. Accept declarative recipes and approved assets; do not execute arbitrary uploaded shaders/code in the app.
+
+Provide review/moderation state, report/takedown flow, blocked asset handling, creator attribution/remix lineage, search, favorites, usage counters, deletion and download cache controls. Define how old saved projects behave if an asset is withdrawn; avoid breaking private edits through an unrelated catalog update. Add music/licensed packs only under agreements covering this exact distribution model.
+
+Acceptance: author publishes an owned package; another account downloads, replaces slots and exports; unauthorized edits/downloads fail; invalid packages and withdrawn versions are handled honestly. Public hosting, paid vendors and purchases require separate concrete decisions; none is implemented by this research document.
+
+## SDK evaluation gate if a vendor is pursued
+
+Evaluate a bounded proof of concept on the actual supported Android/iOS versions with owned media. Require matching preview/export, saved editable scenes, custom templates, local/offline startup, font/language behavior, source-media privacy, cancellation, background lifecycle, low-memory performance and APK native library compatibility. Resolve app distribution, asset redistribution, user-created template rights, billing and license expiry in writing. Vendor marketing parity claims do not replace these checks or guarantee parity with all CapCut features.

@@ -874,6 +874,15 @@ impl EditorsProEngineApi {
         })
     }
 
+    /// Atomically update a subset of the persisted text fields.
+    pub fn update_text_overlay(
+        &self, clip_id: String, content: Option<String>, font_family: Option<String>,
+        font_size: Option<f32>, color_hex: Option<String>, position_x: Option<f32>, position_y: Option<f32>,
+    ) -> Result<(), String> {
+        self.with_engine_recovery(|engine| engine.update_text_overlay(&clip_id, content.as_deref(),
+            font_family.as_deref(), font_size, color_hex.as_deref(), position_x, position_y))
+    }
+
     /// Get the list of available fonts.
     ///
     /// Returns a list of `FontInfo` objects describing each font
@@ -1000,6 +1009,10 @@ impl EditorsProEngineApi {
     /// Apply a filter preset to a clip (replaces all existing effects).
     pub fn apply_filter_preset(&self, clip_id: String, preset_id: String) -> Result<(), String> {
         self.with_engine_recovery(|engine| engine.apply_filter_preset(&clip_id, &preset_id))
+    }
+
+    pub fn set_filter_look(&self, clip_id: String, preset_id: String, intensity: f32, enabled: bool) -> Result<(), String> {
+        self.with_engine_recovery(|engine| engine.set_filter_look(&clip_id, &preset_id, intensity, enabled))
     }
 
     // ─── Transition Operations ─────────────────────────────────────────

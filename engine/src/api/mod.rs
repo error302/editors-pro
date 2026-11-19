@@ -9,6 +9,7 @@ pub mod commands;
 pub mod export_status;
 pub mod ffi_dispatch;
 pub mod managers;
+pub mod project_preview;
 
 #[cfg(test)]
 mod bridge_api_tests;
@@ -122,14 +123,8 @@ pub struct EditorsProEngine {
     last_loudness_analysis_ms: std::sync::atomic::AtomicU64,
 }
 
-/// Phase F.4: per-track mixer state not yet on TrackInfo.
-#[derive(Debug, Clone, Default)]
-pub struct TrackMixerState {
-    /// -1.0 = full left, 0.0 = center, +1.0 = full right.
-    pub pan: f32,
-    /// When true, all non-soloed tracks are muted during mixing.
-    pub solo: bool,
-}
+/// Kept at the public API path for compatibility with existing native callers.
+pub use crate::project::TrackMixerState;
 
 impl EditorsProEngine {
     /// Create a new engine instance
@@ -196,6 +191,8 @@ impl EditorsProEngine {
             None => Project::new(name),
         };
 
+        project.settings.validate_for_rendering().map_err(EngineError::InvalidState)?;
+
         // Add default tracks
         project
             .timeline_mut()
@@ -207,9 +204,7 @@ impl EditorsProEngine {
             .timeline_mut()
             .add_track(TrackType::Text, Some("Text".to_string()));
 
-        let info = ProjectInfo::from_project(&project);
-        self.project = Some(project);
-        self.command_history.clear();
+        let info = self.activate_project_runtime(project);
 
         log::info!("Created project: {}", name);
         Ok(info)
@@ -467,34 +462,34 @@ impl EditorsProEngine {
         }
 
         // First, gather the information we need from the project (immutable borrow)
-        let frame_request = {
+        let frame_requests = {
             let project = self
                 .project
                 .as_ref()
                 .ok_or_else(|| EngineError::InvalidState("No project open".to_string()))?;
 
-            // Find the active video clip at this time
-            let video_clips = project.timeline().tracks_of_type(TrackType::Video);
-            let active_clip = video_clips
-                .iter()
-                .flat_map(|t| t.clips.iter())
-                .find(|c| c.contains_time(time_ms));
-
-            active_clip.and_then(|clip| {
-                project
-                    .find_media_asset(&clip.asset_id)
-                    .map(|asset| (clip.clone(), asset.file_path.clone(), asset.media_type))
-            })
+            let mut tracks: Vec<_> = project.timeline().tracks.iter()
+                .filter(|track| track.visible && track.track_type == TrackType::Video)
+                .collect();
+            tracks.sort_by_key(|track| std::cmp::Reverse(track.order_index));
+            let mut requests = Vec::new();
+            for track in tracks {
+                for clip in &track.clips {
+                    if !clip.contains_time(time_ms) { continue; }
+                    let asset = project.find_media_asset(&clip.asset_id).ok_or_else(||
+                        EngineError::DecoderError(format!("Missing media for clip {}", clip.id)))?;
+                    requests.push((clip.clone(), asset.file_path.clone(), asset.media_type));
+                }
+            }
+            requests
         };
 
-        let video_frame = if let Some((clip, file_path, media_type)) = frame_request {
-            Some(
-                self.decode_asset_frame(&clip, &file_path, media_type, time_ms)
-                    .map_err(EngineError::DecoderError)?,
-            )
-        } else {
-            None
-        };
+        let mut layers = Vec::with_capacity(frame_requests.len());
+        for (clip, file_path, media_type) in frame_requests {
+            let decoded = self.decode_asset_frame(&clip, &file_path, media_type, time_ms)
+                .map_err(EngineError::DecoderError)?;
+            layers.push((clip.id, decoded));
+        }
 
         // Compose the frame with all layers
         let project = self
@@ -503,7 +498,7 @@ impl EditorsProEngine {
             .ok_or_else(|| EngineError::InvalidState("No project open".to_string()))?;
         let mut composed = self
             .renderer
-            .compose_frame(project.timeline(), time_ms, video_frame);
+            .compose_video_layers(project.timeline(), time_ms, layers);
 
         // Phase F.5: apply the active LUT if one is set.
         if let Some(lut) = &self.active_lut {
@@ -584,8 +579,24 @@ impl EditorsProEngine {
         settings: ExportSettings,
         progress_callback: &dyn Fn(ExportProgress),
     ) -> Result<ExportResult, String> {
+        self.export_video_internal(output_path, settings, None, true, progress_callback)
+    }
+
+    /// A saved-project preview owns its engine, cancellation and progress.
+    /// It must never set or consume the foreground export's global signals.
+    pub fn export_preview_video(
+        &mut self, output_path: &str, settings: ExportSettings, max_duration_ms: u64,
+        progress_callback: &dyn Fn(ExportProgress),
+    ) -> Result<ExportResult, String> {
+        self.export_video_internal(output_path, settings, Some(max_duration_ms), false, progress_callback)
+    }
+
+    fn export_video_internal(
+        &mut self, output_path: &str, settings: ExportSettings, duration_limit: Option<u64>,
+        report_global_status: bool, progress_callback: &dyn Fn(ExportProgress),
+    ) -> Result<ExportResult, String> {
         let project = self.project.as_ref().ok_or("No project open")?;
-        let duration_ms = project.timeline().duration_ms;
+        let duration_ms = project.timeline().duration_ms.min(duration_limit.unwrap_or(u64::MAX));
 
         if duration_ms == 0 {
             return Err("Timeline is empty — nothing to export".to_string());
@@ -593,7 +604,7 @@ impl EditorsProEngine {
 
         let pipeline = ExportPipeline::new(settings.clone());
         let total_frames = pipeline.total_frames(duration_ms);
-        let _status_guard = export_status::ExportStatusGuard::begin(total_frames);
+        let _status_guard = report_global_status.then(|| export_status::ExportStatusGuard::begin(total_frames));
 
         log::info!(
             "Starting export: {} frames ({}ms @ {}fps) → {}",
@@ -633,7 +644,7 @@ impl EditorsProEngine {
             if self
                 .export_canceled
                 .load(std::sync::atomic::Ordering::Relaxed)
-                || EXTERNAL_EXPORT_CANCEL_REQUESTED.load(std::sync::atomic::Ordering::Acquire)
+                || (report_global_status && EXTERNAL_EXPORT_CANCEL_REQUESTED.load(std::sync::atomic::Ordering::Acquire))
             {
                 log::info!(
                     "Export canceled by user at frame {}/{}",
@@ -729,36 +740,7 @@ impl EditorsProEngine {
     /// This is the same logic as `get_frame()` but returns only the
     /// RGBA data without PNG encoding, which is what the encoder needs.
     fn render_export_frame(&mut self, time_ms: u64) -> Result<crate::decoder::FrameData, String> {
-        // Gather clip info from the project
-        let frame_request = {
-            let project = self.project.as_ref().ok_or("No project open")?;
-
-            let video_clips = project.timeline().tracks_of_type(TrackType::Video);
-            let active_clip = video_clips
-                .iter()
-                .flat_map(|t| t.clips.iter())
-                .find(|c| c.contains_time(time_ms));
-
-            active_clip.and_then(|clip| {
-                project
-                    .find_media_asset(&clip.asset_id)
-                    .map(|asset| (clip.clone(), asset.file_path.clone(), asset.media_type))
-            })
-        };
-
-        let video_frame = if let Some((clip, file_path, media_type)) = frame_request {
-            Some(self.decode_asset_frame(&clip, &file_path, media_type, time_ms)?)
-        } else {
-            None
-        };
-
-        // Compose the frame
-        let project = self.project.as_ref().ok_or("No project open")?;
-        let composed = self
-            .renderer
-            .compose_frame(project.timeline(), time_ms, video_frame);
-
-        Ok(composed)
+        self.get_frame(time_ms).map_err(|error| error.to_string())
     }
 
     /// Undo the last action
@@ -775,22 +757,57 @@ impl EditorsProEngine {
         Ok(())
     }
 
-    /// Save the current project
-    pub fn save_project(&mut self, path: &str) -> Result<(), String> {
-        let project = self.project.as_ref().ok_or("No project open")?;
-        let file_path = PathBuf::from(path);
-        project.save_as_epp(&file_path)?;
-        Ok(())
+    /// Capture edits that live outside the timeline without persisting decoded caches.
+    fn snapshot_render_state(&self) -> crate::project::ProjectRenderState {
+        crate::project::ProjectRenderState {
+            active_lut: self.active_lut.clone(),
+            active_lut_intensity: self.active_lut_intensity,
+            track_mixer_state: self.track_mixer_state.clone(),
+            track_eq_settings: self.track_eq_settings.clone(),
+            ducking_configs: self.ducking_configs.clone(),
+        }
     }
 
-    /// Load a project from file
-    pub fn load_project(&mut self, path: &str) -> Result<ProjectInfo, String> {
-        let file_path = PathBuf::from(path);
-        let project = Project::load_from_epp(&file_path)?;
+    /// Called only after validation, so failed loads leave the open project untouched.
+    fn activate_project_runtime(&mut self, project: Project) -> ProjectInfo {
+        let saved = project.render_state.clone().unwrap_or_default();
+        self.decoder.close();
+        self.audio_decoder.close();
+        self.current_file_path = None;
+        self.audio_cache.clear();
+        self.frame_cache.clear();
+        self.proxy_manager.clear();
+        if let Ok(mut reading) = self.last_loudness.lock() { *reading = None; }
+        self.last_loudness_analysis_ms.store(0, std::sync::atomic::Ordering::Relaxed);
+        self.export_canceled.store(false, std::sync::atomic::Ordering::Relaxed);
+        self.active_lut = saved.active_lut;
+        self.active_lut_intensity = saved.active_lut_intensity;
+        self.track_mixer_state = saved.track_mixer_state;
+        self.track_eq_settings = saved.track_eq_settings;
+        self.ducking_configs = saved.ducking_configs;
+        self.renderer.set_canvas_size(project.settings.width, project.settings.height);
         let info = ProjectInfo::from_project(&project);
         self.project = Some(project);
         self.command_history.clear();
-        Ok(info)
+        info
+    }
+
+    /// Save the complete current visual/audio editing state.
+    pub fn save_project(&mut self, path: &str) -> Result<(), String> {
+        self.project.as_ref().ok_or("No project open")?.settings.validate_for_rendering()?;
+        let saved = self.snapshot_render_state();
+        saved.validate()?;
+        let project = self.project.as_mut().ok_or("No project open")?;
+        project.render_state = Some(saved);
+        project.save_as_epp(&PathBuf::from(path))
+    }
+
+    /// Load a project, restoring its own state or legacy defaults without cache leakage.
+    pub fn load_project(&mut self, path: &str) -> Result<ProjectInfo, String> {
+        let project = Project::load_from_epp(&PathBuf::from(path))?;
+        project.settings.validate_for_rendering()?;
+        if let Some(saved) = &project.render_state { saved.validate()?; }
+        Ok(self.activate_project_runtime(project))
     }
 
     /// Get information about the current project
@@ -825,8 +842,8 @@ impl EditorsProEngine {
             .to_lowercase();
 
         match ext.as_str() {
-            "mp4" | "avi" | "mov" | "mkv" | "webm" | "flv" | "wmv" | "3gp" => MediaType::Video,
-            "mp3" | "wav" | "aac" | "flac" | "ogg" | "m4a" | "wma" => MediaType::Audio,
+            "mp4" | "m4v" | "avi" | "mov" | "mkv" | "webm" | "flv" | "wmv" | "3gp" | "mpg" | "mpeg" | "ts" => MediaType::Video,
+            "mp3" | "wav" | "aac" | "flac" | "ogg" | "opus" | "m4a" | "wma" => MediaType::Audio,
             "jpg" | "jpeg" | "png" | "gif" | "bmp" | "webp" | "svg" => MediaType::Image,
             _ => MediaType::Video, // Default to video
         }
@@ -861,7 +878,7 @@ impl EditorsProEngine {
             .timeline()
             .find_clip(clip_id)
             .ok_or_else(|| format!("Clip {} not found", clip_id))?;
-        effect.order = clip.effects.len() as u32;
+        effect.order = clip.effects.iter().map(|e| e.order).max().map_or(0, |v| v.saturating_add(1));
 
         let effect_info = EffectInfo::from_effect(&effect);
 
@@ -1033,20 +1050,13 @@ impl EditorsProEngine {
             .transcribe(&file_path, &config, None)
     }
 
-    /// Toggle the enabled state of an effect on a clip
+    /// Toggle an effect with complete undo support.
     pub fn toggle_effect(&mut self, clip_id: &str, effect_id: &str) -> Result<(), String> {
         let project = self.project.as_mut().ok_or("No project open")?;
-        let clip = project
-            .timeline_mut()
-            .find_clip_mut(clip_id)
-            .ok_or_else(|| format!("Clip {} not found", clip_id))?;
-        let effect = clip
-            .effects
-            .iter_mut()
-            .find(|e| e.id == effect_id)
-            .ok_or_else(|| format!("Effect {} not found", effect_id))?;
-        effect.toggle_enabled();
-        log::info!("Toggled effect {} on clip {}", effect_id, clip_id);
+        let (_, clip) = project.timeline().find_clip(clip_id).ok_or("Clip not found")?;
+        let mut effects = clip.effects.clone();
+        effects.iter_mut().find(|e| e.id == effect_id).ok_or("Effect not found")?.toggle_enabled();
+        self.command_history.execute(Box::new(crate::timeline::command::ReplaceClipEffectsCommand::new(clip_id.into(), effects)), project.timeline_mut())?;
         Ok(())
     }
 
@@ -1110,36 +1120,37 @@ impl EditorsProEngine {
             .collect()
     }
 
-    /// Apply a filter preset to a clip (replaces all existing effects)
+    /// Compatibility entry point: replace only the look group at full strength.
     pub fn apply_filter_preset(&mut self, clip_id: &str, preset_id: &str) -> Result<(), String> {
-        let project = self.project.as_mut().ok_or("No project open")?;
-
-        let preset = crate::effects::filters::FilterPreset::built_in_presets()
-            .into_iter()
-            .find(|p| p.id == preset_id)
-            .ok_or_else(|| format!("Preset {} not found", preset_id))?;
-
-        let effects = preset.to_effects();
-
-        // Remove all existing effects first
-        let clip = project
-            .timeline_mut()
-            .find_clip_mut(clip_id)
-            .ok_or_else(|| format!("Clip {} not found", clip_id))?;
-        clip.effects.clear();
-
-        // Add the preset effects
-        for effect in effects {
-            let command = AddEffectCommand::new(clip_id.to_string(), effect);
-            self.command_history
-                .execute(Box::new(command), project.timeline_mut())?;
-        }
-
-        log::info!("Applied preset {} to clip {}", preset_id, clip_id);
-        Ok(())
+        self.set_filter_look(clip_id, preset_id, 1.0, true)
     }
 
-    // ─── Transition Operations ─────────────────────────────────────────
+    /// Replace/reset a look as one undo operation, preserving all manual effects.
+    pub fn set_filter_look(&mut self, clip_id: &str, preset_id: &str, intensity: f32, enabled: bool) -> Result<(), String> {
+        if !intensity.is_finite() || !(0.0..=1.0).contains(&intensity) {
+            return Err("Look intensity must be a finite number from 0 to 1".into());
+        }
+        let mut generated = if preset_id.is_empty() {
+            Vec::new()
+        } else {
+            crate::effects::filters::FilterPreset::built_in_presets().into_iter()
+                .find(|p| p.id == preset_id).ok_or_else(|| format!("Preset {} not found", preset_id))?
+                .to_effects_with_intensity(intensity, enabled)?
+        };
+        let project = self.project.as_mut().ok_or("No project open")?;
+        let (_, clip) = project.timeline().find_clip(clip_id).ok_or("Clip not found")?;
+        let mut ordered = clip.effects.clone();
+        ordered.sort_by_key(|e| e.order);
+        let insertion = ordered.iter().position(crate::effects::filters::is_look_effect)
+            .unwrap_or(ordered.len());
+        let mut effects: Vec<_> = ordered.into_iter().filter(|e| !crate::effects::filters::is_look_effect(e)).collect();
+        effects.splice(insertion.min(effects.len())..insertion.min(effects.len()), generated.drain(..));
+        for (index, effect) in effects.iter_mut().enumerate() {
+            effect.order = index as u32;
+        }
+        self.command_history.execute(Box::new(crate::timeline::command::ReplaceClipEffectsCommand::new(clip_id.into(), effects)), project.timeline_mut())?;
+        Ok(())
+    }
 
     /// Add a transition between two clips
     ///
@@ -1252,176 +1263,97 @@ impl EditorsProEngine {
 
     // ─── Text Clip Operations ──────────────────────────────────────────
 
-    /// Add a text clip to a text track
+    /// Add text using the same persisted contract consumed by preview and export.
     pub fn add_text_clip(
-        &mut self,
-        track_id: &str,
-        text: &str,
-        font_family: &str,
-        font_size: f32,
-        color_hex: &str,
-        position_x: f32,
-        position_y: f32,
-        start_ms: u64,
-        duration_ms: u64,
+        &mut self, track_id: &str, text: &str, font_family: &str, font_size: f32,
+        color_hex: &str, position_x: f32, position_y: f32, start_ms: u64, duration_ms: u64,
     ) -> Result<ClipInfo, String> {
+        use crate::effects::text_render::{canonical_font_family, validate_text_values};
+        validate_text_values(text, font_family, font_size, color_hex, position_x, position_y)?;
+        if duration_ms == 0 || start_ms.checked_add(duration_ms).is_none() {
+            return Err("Text clip must have a valid positive duration".into());
+        }
         let project = self.project.as_mut().ok_or("No project open")?;
-
-        // Verify the track exists and is a text track
-        let track = project
-            .timeline()
-            .find_track(track_id)
-            .ok_or_else(|| format!("Track {} not found", track_id))?;
+        let track = project.timeline().find_track(track_id).ok_or_else(|| format!("Track {} not found", track_id))?;
         if track.track_type != TrackType::Text {
             return Err(format!("Track {} is not a text track", track_id));
         }
-
-        // Create a new clip with text overlay data stored in properties
         let mut clip = Clip::new("__text__", start_ms, duration_ms);
-
-        // Store text properties in the clip's custom properties map
-        clip.set_property(
-            "text_type".into(),
-            serde_json::Value::String("text_overlay".into()),
-        );
-        clip.set_property("content".into(), serde_json::Value::String(text.into()));
-        clip.set_property(
-            "font_family".into(),
-            serde_json::Value::String(font_family.into()),
-        );
-        clip.set_property("font_size".into(), serde_json::json!(font_size));
-        clip.set_property(
-            "color_hex".into(),
-            serde_json::Value::String(color_hex.into()),
-        );
-        clip.set_property("position_x".into(), serde_json::json!(position_x));
-        clip.set_property("position_y".into(), serde_json::json!(position_y));
-
-        let clip_info = ClipInfo::from_clip(&clip, track_id);
-        let command = AddClipCommand::new(track_id.to_string(), clip);
-        self.command_history
-            .execute(Box::new(command), project.timeline_mut())?;
-
-        log::info!(
-            "Added text clip '{}' to track {} at {}ms",
-            text,
-            track_id,
-            start_ms
-        );
-        Ok(clip_info)
+        for (key, value) in [
+            ("text_type", serde_json::json!("text_overlay")),
+            ("content", serde_json::json!(text)),
+            ("font_family", serde_json::json!(canonical_font_family(font_family).unwrap())),
+            ("font_size", serde_json::json!(font_size)),
+            ("color_hex", serde_json::json!(color_hex.to_ascii_uppercase())),
+            ("position_x", serde_json::json!(position_x)),
+            ("position_y", serde_json::json!(position_y)),
+        ] { clip.set_property(key, value); }
+        let info = ClipInfo::from_clip(&clip, track_id);
+        self.command_history.execute(Box::new(AddClipCommand::new(track_id.into(), clip)), project.timeline_mut())?;
+        Ok(info)
     }
 
-    /// Set text position on a text clip
-    pub fn set_text_position(
-        &mut self,
-        clip_id: &str,
-        position_x: f32,
-        position_y: f32,
+    /// Partial text updates are validated before mutation and form one undo step.
+    pub fn update_text_overlay(
+        &mut self, clip_id: &str, content: Option<&str>, font_family: Option<&str>,
+        font_size: Option<f32>, color_hex: Option<&str>, position_x: Option<f32>, position_y: Option<f32>,
     ) -> Result<(), String> {
+        use crate::effects::text_render::{canonical_font_family, validate_text_values, TextOverlay};
+        use crate::timeline::command::CommandResult;
+        use crate::timeline::Timeline;
+        use std::collections::HashMap;
+        #[derive(Debug)]
+        struct UpdateTextCommand {
+            id: String,
+            before: HashMap<String, serde_json::Value>,
+            after: HashMap<String, serde_json::Value>,
+        }
+        impl Command for UpdateTextCommand {
+            fn execute(&mut self, timeline: &mut Timeline) -> Result<CommandResult, String> {
+                timeline.find_clip_mut(&self.id).ok_or("Text clip no longer exists")?.properties = self.after.clone();
+                Ok(CommandResult { success: true, message: "Text updated".into(), affected_clip_ids: vec![self.id.clone()] })
+            }
+            fn undo(&mut self, timeline: &mut Timeline) -> Result<CommandResult, String> {
+                timeline.find_clip_mut(&self.id).ok_or("Text clip no longer exists")?.properties = self.before.clone();
+                Ok(CommandResult { success: true, message: "Text update undone".into(), affected_clip_ids: vec![self.id.clone()] })
+            }
+            fn description(&self) -> String { "Update text overlay".into() }
+        }
         let project = self.project.as_mut().ok_or("No project open")?;
-        let clip = project
-            .timeline_mut()
-            .find_clip_mut(clip_id)
-            .ok_or_else(|| format!("Clip {} not found", clip_id))?;
-
-        // Verify this is a text clip
-        let is_text = clip
-            .get_property("text_type")
-            .map(|v| v.as_str() == Some("text_overlay"))
-            .unwrap_or(false);
-        if !is_text {
+        let (_, clip) = project.timeline().find_clip(clip_id).ok_or_else(|| format!("Clip {} not found", clip_id))?;
+        if clip.get_property("text_type").and_then(|value| value.as_str()) != Some("text_overlay") {
             return Err(format!("Clip {} is not a text clip", clip_id));
         }
-
-        clip.set_property("position_x".into(), serde_json::json!(position_x));
-        clip.set_property("position_y".into(), serde_json::json!(position_y));
-
-        log::info!(
-            "Set text position on clip {} to ({:.2}, {:.2})",
-            clip_id,
-            position_x,
-            position_y
-        );
+        let current = TextOverlay::from_properties(&clip.properties);
+        validate_text_values(content.unwrap_or(&current.content), font_family.unwrap_or(&current.font_family),
+            font_size.unwrap_or(current.font_size), color_hex.unwrap_or(&current.color.hex),
+            position_x.unwrap_or(current.position.x), position_y.unwrap_or(current.position.y))?;
+        let mut after = clip.properties.clone();
+        if let Some(value) = content { after.insert("content".into(), serde_json::json!(value)); }
+        if let Some(value) = font_family { after.insert("font_family".into(), serde_json::json!(canonical_font_family(value).unwrap())); }
+        if let Some(value) = font_size { after.insert("font_size".into(), serde_json::json!(value)); }
+        if let Some(value) = color_hex { after.insert("color_hex".into(), serde_json::json!(value.to_ascii_uppercase())); }
+        if let Some(value) = position_x { after.insert("position_x".into(), serde_json::json!(value)); }
+        if let Some(value) = position_y { after.insert("position_y".into(), serde_json::json!(value)); }
+        if after != clip.properties {
+            let command = UpdateTextCommand { id: clip_id.into(), before: clip.properties.clone(), after };
+            self.command_history.execute(Box::new(command), project.timeline_mut())?;
+        }
         Ok(())
     }
 
-    /// Set text style on a text clip
-    pub fn set_text_style(
-        &mut self,
-        clip_id: &str,
-        font_family: &str,
-        font_size: f32,
-        color_hex: &str,
-    ) -> Result<(), String> {
-        let project = self.project.as_mut().ok_or("No project open")?;
-        let clip = project
-            .timeline_mut()
-            .find_clip_mut(clip_id)
-            .ok_or_else(|| format!("Clip {} not found", clip_id))?;
-
-        // Verify this is a text clip
-        let is_text = clip
-            .get_property("text_type")
-            .map(|v| v.as_str() == Some("text_overlay"))
-            .unwrap_or(false);
-        if !is_text {
-            return Err(format!("Clip {} is not a text clip", clip_id));
-        }
-
-        clip.set_property(
-            "font_family".into(),
-            serde_json::Value::String(font_family.into()),
-        );
-        clip.set_property("font_size".into(), serde_json::json!(font_size));
-        clip.set_property(
-            "color_hex".into(),
-            serde_json::Value::String(color_hex.into()),
-        );
-
-        log::info!(
-            "Set text style on clip {}: family={}, size={:.1}, color={}",
-            clip_id,
-            font_family,
-            font_size,
-            color_hex
-        );
-        Ok(())
+    pub fn set_text_position(&mut self, clip_id: &str, position_x: f32, position_y: f32) -> Result<(), String> {
+        self.update_text_overlay(clip_id, None, None, None, None, Some(position_x), Some(position_y))
     }
 
-    /// Get available fonts
+    pub fn set_text_style(&mut self, clip_id: &str, font_family: &str, font_size: f32, color_hex: &str) -> Result<(), String> {
+        self.update_text_overlay(clip_id, None, Some(font_family), Some(font_size), Some(color_hex), None, None)
+    }
+
     pub fn get_available_fonts(&self) -> Vec<FontInfo> {
-        vec![
-            FontInfo {
-                name: "DejaVu Sans".into(),
-                family: "sans-serif".into(),
-                style: "Regular".into(),
-                is_builtin: true,
-            },
-            FontInfo {
-                name: "DejaVu Sans Bold".into(),
-                family: "sans-serif".into(),
-                style: "Bold".into(),
-                is_builtin: true,
-            },
-            FontInfo {
-                name: "DejaVu Serif".into(),
-                family: "serif".into(),
-                style: "Regular".into(),
-                is_builtin: true,
-            },
-            FontInfo {
-                name: "DejaVu Serif Bold".into(),
-                family: "serif".into(),
-                style: "Bold".into(),
-                is_builtin: true,
-            },
-            FontInfo {
-                name: "DejaVu Sans Mono".into(),
-                family: "monospace".into(),
-                style: "Regular".into(),
-                is_builtin: true,
-            },
-        ]
+        crate::effects::text_render::SUPPORTED_TEXT_FONTS.iter().map(|(name, family, style)| FontInfo {
+            name: (*name).into(), family: (*family).into(), style: (*style).into(), is_builtin: true,
+        }).collect()
     }
 
     /// Import subtitles from an SRT file
@@ -1784,6 +1716,7 @@ impl EditorsProEngine {
                         trim_end_ms: c.trim_end_ms,
                         speed: c.speed(),
                         opacity: c.opacity,
+                        properties: c.properties.clone(),
                         effects: c.effects.iter().map(EffectInfo::from_effect).collect(),
                         transition_in: c
                             .transition_in
@@ -2528,6 +2461,10 @@ pub struct ClipInfo {
     pub effects_count: usize,
     pub has_transition_in: bool,
     pub has_transition_out: bool,
+    #[serde(default)]
+    pub properties: std::collections::HashMap<String, serde_json::Value>,
+    #[serde(default)]
+    pub effects: Vec<EffectInfo>,
 }
 
 impl ClipInfo {
@@ -2545,6 +2482,8 @@ impl ClipInfo {
             effects_count: clip.effects.len(),
             has_transition_in: clip.transition_in.is_some(),
             has_transition_out: clip.transition_out.is_some(),
+            properties: clip.properties.clone(),
+            effects: clip.effects.iter().map(EffectInfo::from_effect).collect(),
         }
     }
 }
@@ -2583,6 +2522,8 @@ pub struct ClipStateDto {
     pub trim_end_ms: u64,
     pub speed: f32,
     pub opacity: f32,
+    #[serde(default)]
+    pub properties: std::collections::HashMap<String, serde_json::Value>,
     pub effects: Vec<EffectInfo>,
     pub transition_in: Option<TransitionInfo>,
     pub transition_out: Option<TransitionInfo>,

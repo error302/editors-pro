@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:editors_pro/app.dart';
 import 'package:editors_pro/core/services/engine_service.dart';
 import 'package:editors_pro/core/services/project_repository.dart';
@@ -107,10 +109,13 @@ void main() {
     Future<void> pumpApp(
       WidgetTester tester, {
       List<ProjectModel> projects = const [],
+      Map<String, Object> preferenceValues = const {},
+      Future<String?> Function(String)? legacyReader,
     }) async {
       SharedPreferences.setMockInitialValues({
         'onboarding_completed': true,
         'settings_theme_mode': 'dark',
+        ...preferenceValues,
       });
       final preferences = await SharedPreferences.getInstance();
       await tester.pumpWidget(
@@ -120,6 +125,9 @@ void main() {
               (ref) => _FakeProjectRepository(projects: projects),
             ),
             sharedPreferencesProvider.overrideWithValue(preferences),
+            settingsProvider.overrideWith((ref) => SettingsNotifier(
+              preferences, readLegacyPreference: legacyReader,
+            )),
           ],
           child: const EditorsProApp(),
         ),
@@ -135,7 +143,7 @@ void main() {
     testWidgets('shows the project home screen', (tester) async {
       await pumpApp(tester);
       // The home screen shows the app title in the header.
-      expect(find.text('EDITORS-PRO'), findsOneWidget);
+      expect(find.text('EDITORS PRO'), findsOneWidget);
     });
 
     testWidgets('dark theme is applied', (tester) async {
@@ -222,6 +230,43 @@ void main() {
       expect(find.text('New Project'), findsOneWidget);
     });
 
+    testWidgets('repeated taps while settings load open one project dialog',
+        (tester) async {
+      final loading = Completer<String?>();
+      await pumpApp(tester, legacyReader: (_) => loading.future);
+      await tester.tap(find.text('New Project'));
+      await tester.tap(find.text('New Project'));
+      loading.complete(null);
+      await tester.pumpAndSettle();
+      expect(find.byType(AlertDialog), findsOneWidget);
+    });
+
+    testWidgets('Android Back returns from Settings to projects', (tester) async {
+      await pumpApp(tester);
+      await tester.tap(find.byTooltip('Settings'));
+      await tester.pumpAndSettle();
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      expect(find.text('New Project'), findsOneWidget);
+    });
+
+    testWidgets('new project uses saved resolution and 120 fps defaults',
+        (tester) async {
+      await pumpApp(tester, preferenceValues: {
+        'settings_default_resolution': '720p',
+        'settings_default_fps': 120.0,
+      });
+      await tester.tap(find.text('New Project'));
+      await tester.pumpAndSettle();
+      expect(find.text('1280 x 720  ·  120 fps'), findsOneWidget);
+      await tester.tap(find.text('Create'));
+      await tester.pumpAndSettle();
+      final container = ProviderScope.containerOf(
+          tester.element(find.byType(MaterialApp).first));
+      final project = container.read(projectProvider).currentProject!;
+      expect((project.width, project.height, project.fps), (1280, 720, 120));
+    });
+
     testWidgets('project setup fits a phone and creates the chosen format',
         (tester) async {
       tester.view.physicalSize = const Size(393, 852);
@@ -242,7 +287,9 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('720p'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('60 fps'));
+      await tester.tap(find.byKey(const ValueKey('new-project-fps')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('60 fps').last);
       await tester.pumpAndSettle();
 
       expect(find.text('720 x 1280  ·  60 fps'), findsOneWidget);

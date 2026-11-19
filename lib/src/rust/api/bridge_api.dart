@@ -132,6 +132,8 @@ class ClipStateInfo {
   final int trimEndMs;
   final double speed;
   final double opacity;
+  final Map<String, dynamic> properties;
+  final List<EffectInfo> effects;
 
   const ClipStateInfo({
     required this.id,
@@ -142,6 +144,8 @@ class ClipStateInfo {
     this.trimEndMs = 0,
     this.speed = 1.0,
     this.opacity = 1.0,
+    this.properties = const {},
+    this.effects = const [],
   });
 
   factory ClipStateInfo.fromJson(Map<String, dynamic> json) => ClipStateInfo(
@@ -153,6 +157,11 @@ class ClipStateInfo {
         trimEndMs: (json['trim_end_ms'] as num?)?.toInt() ?? 0,
         speed: (json['speed'] as num?)?.toDouble() ?? 1.0,
         opacity: (json['opacity'] as num?)?.toDouble() ?? 1.0,
+        properties:
+            Map<String, dynamic>.from(json['properties'] as Map? ?? const {}),
+        effects: (json['effects'] as List? ?? const [])
+            .map((e) => EffectInfo.fromJson(e as Map<String, dynamic>))
+            .toList(),
       );
 }
 
@@ -165,6 +174,8 @@ class ClipInfo {
   final int durationMs;
   final int trimStartMs;
   final int trimEndMs;
+  final Map<String, dynamic> properties;
+  final List<EffectInfo> effects;
 
   const ClipInfo({
     required this.id,
@@ -174,6 +185,8 @@ class ClipInfo {
     required this.durationMs,
     this.trimStartMs = 0,
     this.trimEndMs = 0,
+    this.properties = const {},
+    this.effects = const [],
   });
 
   factory ClipInfo.fromJson(Map<String, dynamic> json) => ClipInfo(
@@ -184,6 +197,11 @@ class ClipInfo {
         durationMs: json['duration_ms'] as int,
         trimStartMs: json['trim_start_ms'] as int? ?? 0,
         trimEndMs: json['trim_end_ms'] as int? ?? 0,
+        properties:
+            Map<String, dynamic>.from(json['properties'] as Map? ?? const {}),
+        effects: (json['effects'] as List? ?? const [])
+            .map((e) => EffectInfo.fromJson(e as Map<String, dynamic>))
+            .toList(),
       );
 }
 
@@ -416,6 +434,7 @@ class EffectInfo {
   final String name;
   final String effectType;
   final bool enabled;
+  final int order;
   final List<EffectParameterInfo> parameters;
 
   const EffectInfo({
@@ -423,6 +442,7 @@ class EffectInfo {
     required this.name,
     required this.effectType,
     this.enabled = true,
+    this.order = 0,
     this.parameters = const [],
   });
 
@@ -431,6 +451,7 @@ class EffectInfo {
         name: json['name'] as String,
         effectType: json['effect_type'] as String,
         enabled: json['enabled'] as bool? ?? true,
+        order: (json['order'] as num?)?.toInt() ?? 0,
         parameters: (json['parameters'] as List?)
                 ?.map((e) =>
                     EffectParameterInfo.fromJson(e as Map<String, dynamic>))
@@ -447,6 +468,7 @@ class EffectParameterInfo {
   final double minValue;
   final double maxValue;
   final double defaultValue;
+  final double step;
 
   const EffectParameterInfo({
     required this.name,
@@ -455,6 +477,7 @@ class EffectParameterInfo {
     required this.minValue,
     required this.maxValue,
     required this.defaultValue,
+    this.step = 0.01,
   });
 
   factory EffectParameterInfo.fromJson(Map<String, dynamic> json) =>
@@ -465,6 +488,7 @@ class EffectParameterInfo {
         minValue: (json['min_value'] as num).toDouble(),
         maxValue: (json['max_value'] as num).toDouble(),
         defaultValue: (json['default_value'] as num).toDouble(),
+        step: (json['step'] as num?)?.toDouble() ?? 0.01,
       );
 }
 
@@ -473,41 +497,49 @@ class FilterTypeInfo {
   final String name;
   final String displayName;
   final String category;
+  final String icon;
   final List<EffectParameterInfo> parameters;
 
-  const FilterTypeInfo({
-    required this.name,
-    required this.displayName,
-    required this.category,
-    this.parameters = const [],
-  });
+  const FilterTypeInfo(
+      {required this.name,
+      required this.displayName,
+      required this.category,
+      this.icon = 'filter',
+      this.parameters = const []});
 
-  factory FilterTypeInfo.fromJson(Map<String, dynamic> json) => FilterTypeInfo(
-        name: json['name'] as String,
-        displayName: json['display_name'] as String,
-        category: json['category'] as String,
-        parameters: (json['parameters'] as List?)
-                ?.map((e) =>
-                    EffectParameterInfo.fromJson(e as Map<String, dynamic>))
-                .toList() ??
-            [],
-      );
+  factory FilterTypeInfo.fromJson(Map<String, dynamic> json) {
+    final name = json['name'] as String;
+    return FilterTypeInfo(
+      name: name,
+      displayName: json['display_name'] as String? ?? name,
+      category: json['category'] as String? ??
+          switch (name) {
+            'Brightness' || 'Contrast' || 'Saturation' => 'Adjust',
+            'Hue' || 'Temperature' => 'Color',
+            'Chroma Key' => 'Keying',
+            _ => 'Stylize',
+          },
+      icon: json['icon'] as String? ?? json['icon_key'] as String? ?? 'filter',
+      parameters: (json['parameters'] as List?)
+              ?.map((e) =>
+                  EffectParameterInfo.fromJson(e as Map<String, dynamic>))
+              .toList() ??
+          [],
+    );
+  }
 }
 
-/// Filter preset info
+/// A recipe returned by the running native engine.
 class FilterPresetInfo {
   final String id;
   final String name;
   final String description;
   final List<EffectParameterInfo> parameters;
-
-  const FilterPresetInfo({
-    required this.id,
-    required this.name,
-    required this.description,
-    this.parameters = const [],
-  });
-
+  const FilterPresetInfo(
+      {required this.id,
+      required this.name,
+      required this.description,
+      this.parameters = const []});
   factory FilterPresetInfo.fromJson(Map<String, dynamic> json) =>
       FilterPresetInfo(
         id: json['id'] as String,
@@ -1259,6 +1291,19 @@ class EditorsProEngineApi {
     return ClipInfo.fromJson(result as Map<String, dynamic>);
   }
 
+  /// Atomic timeline edit; the returned clip is the resulting selection.
+  Future<ClipInfo?> editClip({required String clipId, required String operation, BigInt? timeMs}) async {
+    final value = await _call<dynamic>('edit_clip', {
+      'clip_id': clipId, 'operation': operation,
+      if (timeMs != null) 'time_ms': timeMs.toString(),
+    });
+    return value == null ? null : ClipInfo.fromJson(value as Map<String, dynamic>);
+  }
+
+  /// Replace the visual adjustment stack as one undo operation.
+  Future<void> applyEffectRecipe({required String clipId, required String recipeJson}) =>
+      _call<void>('apply_effect_recipe', {'clip_id': clipId, 'recipe_json': recipeJson});
+
   /// Trim a clip by adjusting its in/out points.
   Future<void> trimClip({
     required String clipId,
@@ -1651,18 +1696,28 @@ class EditorsProEngineApi {
         .toList();
   }
 
-  /// Apply a filter preset to a clip (replaces all existing effects).
-  Future<void> applyFilterPreset({
-    required String clipId,
-    required String presetId,
-  }) async {
-    return await _call<void>('apply_filter_preset', {
+  /// Apply a look without removing manual adjustments or chroma key.
+  Future<void> applyFilterPreset(
+          {required String clipId, required String presetId}) =>
+      setFilterLook(clipId: clipId, presetId: presetId);
+
+  /// One committed gesture creates one undo operation. Empty ID resets the look.
+  Future<void> setFilterLook(
+      {required String clipId,
+      required String presetId,
+      double intensity = 1.0,
+      bool enabled = true}) async {
+    if (!intensity.isFinite || intensity < 0 || intensity > 1) {
+      throw ArgumentError.value(
+          intensity, 'intensity', 'Must be between 0 and 1');
+    }
+    return await _call<void>('set_filter_look', {
       'clip_id': clipId,
       'preset_id': presetId,
+      'intensity': intensity,
+      'enabled': enabled,
     });
   }
-
-  // ─── Transition Operations ───────────────────────────────────────
 
   /// Add a transition to a clip.
   Future<TransitionInfo> addTransition({
@@ -1765,6 +1820,27 @@ class EditorsProEngineApi {
       'font_family': fontFamily,
       'font_size': fontSize,
       'color_hex': colorHex,
+    });
+  }
+
+  /// Atomically change text fields, preserving values omitted by the caller.
+  Future<void> updateTextOverlay({
+    required String clipId,
+    String? content,
+    String? fontFamily,
+    double? fontSize,
+    String? colorHex,
+    double? positionX,
+    double? positionY,
+  }) async {
+    return await _call<void>('update_text_overlay', {
+      'clip_id': clipId,
+      if (content != null) 'content': content,
+      if (fontFamily != null) 'font_family': fontFamily,
+      if (fontSize != null) 'font_size': fontSize,
+      if (colorHex != null) 'color_hex': colorHex,
+      if (positionX != null) 'position_x': positionX,
+      if (positionY != null) 'position_y': positionY,
     });
   }
 
@@ -2895,4 +2971,54 @@ Future<void> setActiveLut({
 /// Clear the active LUT. Frames will be returned without LUT processing.
 Future<void> clearActiveLut() async {
   await RustLib.instance.api._call<dynamic>('clear_active_lut', {});
+}
+
+// Saved-project preview jobs execute outside the active editing engine.
+Future<Map<String, dynamic>> inspectSavedProject(
+    {required String projectPath}) async {
+  final value = await RustLib.instance.api
+      ._call<dynamic>('inspect_saved_project', {'project_path': projectPath});
+  return (value as Map).cast<String, dynamic>();
+}
+
+Future<Map<String, dynamic>> startProjectPreview({
+  required String projectPath,
+  required String coverPath,
+  String? videoPath,
+}) async {
+  final value =
+      await RustLib.instance.api._call<dynamic>('start_project_preview', {
+    'project_path': projectPath,
+    'cover_path': coverPath,
+    'video_path': videoPath,
+  });
+  return (value as Map).cast<String, dynamic>();
+}
+
+Future<Map<String, dynamic>> projectPreviewStatus(
+    {required String jobId}) async {
+  final value = await RustLib.instance.api
+      ._call<dynamic>('project_preview_status', {'job_id': jobId});
+  return (value as Map).cast<String, dynamic>();
+}
+
+Future<void> releaseProjectPreview({required String jobId}) async {
+  await RustLib.instance.api
+      ._call<dynamic>('release_project_preview', {'job_id': jobId});
+}
+
+Future<Map<String, dynamic>> cloneSavedProject({
+  required String sourcePath,
+  required String outputPath,
+  required String projectId,
+  required String name,
+}) async {
+  final value =
+      await RustLib.instance.api._call<dynamic>('clone_saved_project', {
+    'source_path': sourcePath,
+    'output_path': outputPath,
+    'project_id': projectId,
+    'name': name,
+  });
+  return (value as Map).cast<String, dynamic>();
 }

@@ -8,13 +8,16 @@ import 'package:go_router/go_router.dart';
 import 'package:path/path.dart' as p;
 
 import '../../../core/constants/app_icons.dart';
+import '../../../core/constants/frame_rates.dart';
 import '../../../core/extensions/context_extensions.dart';
 import '../../../core/services/storage_service.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/app_icon.dart';
 import '../../../data/models/project_model.dart';
 import '../../projects/providers/project_provider.dart';
+import '../../settings/providers/settings_provider.dart';
 import '../providers/export_provider.dart';
+import 'social_share_panel.dart';
 
 /// Export screen — Configure and export the final video.
 ///
@@ -41,6 +44,9 @@ class _ExportScreenState extends ConsumerState<ExportScreen>
   String _selectedPreset = '1080p';
   String _selectedCodec = 'H.264';
   String _selectedFormat = 'MP4';
+  double _selectedFps = 30;
+  bool _defaultsLoaded = false;
+  String? _defaultsError;
   bool _isSavingToGallery = false;
   bool _savedToGallery = false;
   late AnimationController _pulseController;
@@ -52,6 +58,44 @@ class _ExportScreenState extends ConsumerState<ExportScreen>
       vsync: this,
       duration: const Duration(milliseconds: 1200),
     )..repeat(reverse: true);
+    unawaited(Future<void>.microtask(_loadDefaults));
+  }
+
+  Future<void> _loadDefaults() async {
+    if (!mounted) return;
+    try {
+      await ref.read(settingsProvider.notifier).ensureLoaded();
+      if (!mounted) return;
+      final settings = ref.read(settingsProvider);
+      final project = ref.read(currentProjectProvider);
+      final matching = ExportPreset.all.where((preset) =>
+          preset.width == project?.width && preset.height == project?.height);
+      setState(() {
+        _selectedPreset = project == null
+            ? settings.defaultResolution
+            : matching.isEmpty
+                ? 'Project'
+                : matching.first.name;
+        _selectedFps = project?.fps ?? settings.defaultFps;
+        _selectedCodec = settings.defaultCodec;
+        _defaultsLoaded = true;
+      });
+    } catch (_) {
+      if (mounted)
+        setState(() => _defaultsError =
+            'Could not load export defaults. Reopen this screen to try again.');
+    }
+  }
+
+  (int, int, int) get _outputSettings {
+    if (_selectedPreset == 'Project') {
+      final project = ref.read(currentProjectProvider)!;
+      return (project.width, project.height, 10000);
+    }
+    final preset = ExportPreset.all.firstWhere(
+        (preset) => preset.name == _selectedPreset,
+        orElse: () => ExportPreset.all[1]);
+    return (preset.width, preset.height, preset.bitrateKbps);
   }
 
   @override
@@ -68,10 +112,13 @@ class _ExportScreenState extends ConsumerState<ExportScreen>
     final presets = ref.watch(exportPresetsProvider);
 
     return PopScope(
-      canPop: !exportState.isExporting,
+      canPop: false,
       onPopInvokedWithResult: (didPop, _) {
-        if (!didPop && exportState.isExporting) {
+        if (didPop) return;
+        if (exportState.isExporting) {
           _showCancelDialog(context);
+        } else {
+          context.go('/editor/${widget.projectId}');
         }
       },
       child: Scaffold(
@@ -122,6 +169,32 @@ class _ExportScreenState extends ConsumerState<ExportScreen>
               const SizedBox(height: 12),
               _buildPresetSelector(context, presets),
               const SizedBox(height: 24),
+              _buildSectionHeading(context, 'Frame rate'),
+              const SizedBox(height: 12),
+              DropdownButton<double>(
+                key: const ValueKey('export-frame-rate'),
+                isExpanded: true,
+                value: _selectedFps,
+                items: {...supportedProjectFrameRates, _selectedFps}
+                    .map((fps) => DropdownMenuItem(
+                        value: fps,
+                        child: Text(
+                            '${fps.toStringAsFixed(fps % 1 == 0 ? 0 : 2)} fps')))
+                    .toList(),
+                onChanged: (fps) => setState(() => _selectedFps = fps!),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                  'High frame rates depend on the selected resolution and this device. Preview playback uses a lower frame rate.',
+                  style: context.textTheme.bodySmall),
+              if (_selectedFps > 60) ...[
+                const SizedBox(height: 8),
+                Text(
+                  'For TikTok, export at 60 fps or lower. Keep 120 fps for a high frame rate master or slow-motion editing.',
+                  style: context.textTheme.bodySmall,
+                ),
+              ],
+              const SizedBox(height: 24),
               _buildSectionHeading(context, 'Codec'),
               const SizedBox(height: 12),
               _buildCodecSelector(),
@@ -132,6 +205,7 @@ class _ExportScreenState extends ConsumerState<ExportScreen>
               const SizedBox(height: 24),
               _buildExportSummary(context),
               const SizedBox(height: 28),
+              if (_defaultsError != null) Text(_defaultsError!),
             ],
 
             // ── Status section ───────────────────────────────────────
@@ -270,10 +344,23 @@ class _ExportScreenState extends ConsumerState<ExportScreen>
     List<ExportPreset> presets,
   ) {
     final cardWidth = (MediaQuery.of(context).size.width - 40 - 10) / 2;
+    final project = ref.watch(currentProjectProvider);
+    final choices = [
+      if (project != null &&
+          !presets.any((preset) =>
+              preset.width == project.width && preset.height == project.height))
+        ExportPreset(
+            name: 'Project',
+            width: project.width,
+            height: project.height,
+            bitrateKbps: 10000,
+            description: 'Keep project dimensions'),
+      ...presets,
+    ];
     return Wrap(
       spacing: 10,
       runSpacing: 10,
-      children: presets.map((preset) {
+      children: choices.map((preset) {
         final isSelected = _selectedPreset == preset.name;
         return GestureDetector(
           onTap: () => setState(() => _selectedPreset = preset.name),
@@ -350,11 +437,6 @@ class _ExportScreenState extends ConsumerState<ExportScreen>
           label: Text('H.265'),
           tooltip: 'Better compression',
         ),
-        ButtonSegment(
-          value: 'VP9',
-          label: Text('VP9'),
-          tooltip: 'Web optimized',
-        ),
       ],
       selected: {_selectedCodec},
       onSelectionChanged: (sel) => setState(() => _selectedCodec = sel.first),
@@ -368,7 +450,6 @@ class _ExportScreenState extends ConsumerState<ExportScreen>
       style: _segmentedButtonStyle(),
       segments: const [
         ButtonSegment(value: 'MP4', label: Text('MP4')),
-        ButtonSegment(value: 'WebM', label: Text('WebM')),
         ButtonSegment(value: 'MOV', label: Text('MOV')),
       ],
       selected: {_selectedFormat},
@@ -404,17 +485,11 @@ class _ExportScreenState extends ConsumerState<ExportScreen>
   // ── Export Summary ──────────────────────────────────────────────
 
   Widget _buildExportSummary(BuildContext context) {
-    final presetMap = {
-      '720p': (1280, 720, 5000),
-      '1080p': (1920, 1080, 10000),
-      '4K': (3840, 2160, 40000),
-      'Social Vertical': (1080, 1920, 8000),
-      'Social Square': (1080, 1080, 6000),
-    };
-    final (w, h, bitrate) = presetMap[_selectedPreset] ?? (1920, 1080, 10000);
+    final (w, h, bitrate) = _outputSettings;
     final estimatedSizeMb = (bitrate * 60 / 8 / 1024).round();
 
     return Container(
+      key: const ValueKey('export-summary'),
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: AppTheme.surfaceVariant,
@@ -442,6 +517,11 @@ class _ExportScreenState extends ConsumerState<ExportScreen>
           ),
           const SizedBox(height: 12),
           _SummaryRow(label: 'Resolution', value: '$w × $h'),
+          const _SummaryDivider(),
+          _SummaryRow(
+              label: 'Frame rate',
+              value:
+                  '${_selectedFps.toStringAsFixed(_selectedFps % 1 == 0 ? 0 : 2)} fps'),
           const _SummaryDivider(),
           _SummaryRow(label: 'Codec', value: _selectedCodec),
           const _SummaryDivider(),
@@ -473,7 +553,8 @@ class _ExportScreenState extends ConsumerState<ExportScreen>
         child: Material(
           color: Colors.transparent,
           child: InkWell(
-            onTap: _startExport,
+            key: const ValueKey('export-submit'),
+            onTap: _defaultsLoaded ? _startExport : null,
             borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
             child: const Center(
               child: Row(
@@ -869,12 +950,8 @@ class _ExportScreenState extends ConsumerState<ExportScreen>
             const SizedBox(height: 12),
           ],
 
-          // Share Video button (accent gradient, full width)
-          _buildGradientButton(
-            onTap: () => ref.read(exportProvider.notifier).shareExportedFile(),
-            icon: AppIcons.share,
-            label: 'Share Video',
-          ),
+          if (state.outputPath != null)
+            SocialSharePanel(filePath: state.outputPath!),
           const SizedBox(height: 12),
 
           // Export Again button (outlined, full width)
@@ -1029,6 +1106,9 @@ class _ExportScreenState extends ConsumerState<ExportScreen>
           preset: _selectedPreset,
           codec: _selectedCodec,
           format: _selectedFormat,
+          fps: _selectedFps,
+          customWidth: _outputSettings.$1,
+          customHeight: _outputSettings.$2,
         );
   }
 
